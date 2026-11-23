@@ -8,6 +8,8 @@ historical details are in
 
 - Stop reinstalling an unchanged macOS system menu on every editor cursor update,
   which previously dismissed the open File menu and made items unclickable.
+- Keep the forced in-app menu visible in full screen when "Force Nota menu when
+  maximized or full screen" is on (do not zen-hide it under the screen edge).
 - Added extension API v2.4 table snapshots, temporary rendering, undoable writes
   and localized context actions.
 - Added the `nota.sheet-formulas` extension with Excel-compatible references,

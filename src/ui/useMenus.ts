@@ -167,6 +167,26 @@ export function effectiveMenuRenderer(
   return forceWhenExpanded && expanded ? "nota" : configured;
 }
 
+/**
+ * Whether the shell should use zen (immersive) chrome hiding.
+ *
+ * Full screen alone used to always set `data-zen`, which slides the in-window
+ * menu off-screen into a 6px peek. That fights "Force Nota menu when maximized
+ * or full screen": on macOS the system menu is already gone in full screen, and
+ * zen then also hides the forced Nota bar — so nothing is clickable. Keep zen
+ * for Focus Mode; skip it when we are forcing the Nota menu for an expanded
+ * window that prefers the system menu.
+ */
+export function zenChromeActive(
+  focusMode: boolean,
+  fullscreen: boolean,
+  forcingNotaMenu: boolean,
+): boolean {
+  if (focusMode) return true;
+  if (fullscreen && !forcingNotaMenu) return true;
+  return false;
+}
+
 
 
 

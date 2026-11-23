@@ -12,6 +12,7 @@ import {
 } from "../src/ui/commands";
 import { buildNativeTree, nativeMenuPayloadKey } from "../src/ui/nativeMenu";
 import { recentItem, recentPath } from "../src/ui/recentMenu";
+import { effectiveMenuRenderer, zenChromeActive } from "../src/ui/useMenus";
 
 let pass = 0;
 let fail = 0;
@@ -214,6 +215,17 @@ testCase("identical native menu trees share a stable payload key", () => {
     nativeMenuPayloadKey(a) !== nativeMenuPayloadKey(changed),
     "enabling a previously disabled item must change the fingerprint",
   );
+});
+
+testCase("force Nota menu skips zen chrome but keeps focus zen", () => {
+  assertValue(effectiveMenuRenderer("system", true, true) === "nota", "expanded+force must override system");
+  assertValue(effectiveMenuRenderer("system", true, false) === "system", "windowed system stays system");
+  assertValue(effectiveMenuRenderer("nota", true, true) === "nota", "nota stays nota when expanded");
+  // Default nota users (Windows/Linux): fullscreen still zen — forcingNotaMenu is false.
+  assertValue(zenChromeActive(false, true, false) === true, "plain fullscreen still uses zen");
+  assertValue(zenChromeActive(false, true, true) === false, "forcing Nota menu must not zen-hide the bar");
+  assertValue(zenChromeActive(true, true, true) === true, "focus mode still zens even while forcing");
+  assertValue(zenChromeActive(false, false, false) === false, "windowed non-focus is not zen");
 });
 
 console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);

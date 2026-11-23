@@ -50,7 +50,7 @@ import { useExternalChanges } from "@/ui/useExternalChanges";
 import { useClipboard } from "@/ui/useClipboard";
 import { useFindBar } from "@/ui/useFindBar";
 import { useFocusSession } from "@/ui/useFocusSession";
-import { effectiveMenuRenderer, useMenus } from "@/ui/useMenus";
+import { effectiveMenuRenderer, useMenus, zenChromeActive } from "@/ui/useMenus";
 import type { CommandState } from "@/editor/command-state";
 import { useDocTheme, useDocThemeSlot } from "@/ui/useDocTheme";
 import { useUiStyles } from "@/ui/useUiStyles";
@@ -701,6 +701,16 @@ export default function App() {
 
 
 
+  const configuredMenuRenderer = settings?.appearance.menu_renderer ?? "nota";
+  const forceNotaWhenExpanded = settings?.appearance.force_nota_menu_when_expanded ?? true;
+  const expandedWindow = maximized || fullscreen;
+  // System menu is gone in macOS full screen; force_nota switches to the in-app
+  // bar. Zen chrome would hide that bar in a 6px peek under the screen edge
+  // (where the OS also steals hover) — so skip zen while forcing Nota menu.
+  const forcingNotaMenu =
+    forceNotaWhenExpanded && expandedWindow && configuredMenuRenderer === "system";
+  const zenChrome = zenChromeActive(focusMode, fullscreen, forcingNotaMenu);
+
   const { disabledCommands, menuChecks, usingNativeMenu } = useMenus({
 
 
@@ -735,7 +745,11 @@ export default function App() {
 
 
     documentTheme: slot.id,
-    menuRenderer: effectiveMenuRenderer(settings?.appearance.menu_renderer ?? "nota", settings?.appearance.force_nota_menu_when_expanded ?? true, maximized || fullscreen),
+    menuRenderer: effectiveMenuRenderer(
+      configuredMenuRenderer,
+      forceNotaWhenExpanded,
+      expandedWindow,
+    ),
     onNativePick,
     developerMode: settings?.general.debug_mode ?? false,
     webviewDefaultShortcuts: settings?.general.webview_default_shortcuts ?? false,
@@ -783,11 +797,12 @@ export default function App() {
     onTableAction: (pluginId: string, command: string, actionId: string) =>
       void plugin.configure(pluginId, command, { actionId }),
   };
+
   return (
     <ErrorBoundary>
       {
                                            }
-      <div className="app" data-zen={immersive || undefined} data-settings-only={settingsOnly || aboutOnly || undefined}>
+      <div className="app" data-zen={zenChrome || undefined} data-settings-only={settingsOnly || aboutOnly || undefined}>
         {
 
                                                       }

@@ -6,6 +6,9 @@ historical details are in
 
 ## 0.17.0-beta
 
+- Declare `libc` under Unix target dependencies so macOS builds can compile
+  `window_registry::process_alive` (`kill(pid, 0)`), which previously failed
+  when `libc` was Linux-only.
 - Added extension API v2.4 table snapshots, temporary rendering, undoable writes
   and localized context actions.
 - Added the `nota.sheet-formulas` extension with Excel-compatible references,

@@ -67,6 +67,7 @@ podman exec -u 0 tauri-dev dnf install -y gcc gcc-c++ make pkgconf-pkg-config \
 | `similar` | `3` | ⚠️ **零引用**，见 §1.4 |
 | `shlex` | `1` | ⚠️ **零引用**，见 §1.4 |
 | `tauri-build` | `2`（`[build-dependencies]`） | 构建期代码生成，`build.rs` 里就一句 `tauri_build::build()` |
+| `libc` | `0.2`（`[target.'cfg(unix)'.dependencies]`） | `window_registry::process_alive`：Unix 上用 `kill(pid, 0)` 清掉已死进程的窗口登记。⚠️ **不要**挂在 `target_os = "linux"` 下——macOS 也是 `unix`，Linux-only 声明会让本机 macOS `cargo check` 报 `cannot find crate \`libc\`` |
 
 #### `mlua` 的四个 feature，每一个都是必需的
 

@@ -471,7 +471,7 @@ export default function App() {
 
 
 
-  const { immersive, focusMode, splitReplaceDedicatedNote, fullscreen, maximized, toggleFullscreen } = useImmersive({
+  const { focusMode, splitReplaceDedicatedNote, fullscreen, maximized, toggleFullscreen } = useImmersive({
     hasFloatingLayer:
       settingsWindow.open ||
       confirmReq !== null ||

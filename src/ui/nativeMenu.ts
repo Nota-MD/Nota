@@ -77,6 +77,18 @@ export function buildNativeTree(
   });
 }
 
+/**
+ * Stable fingerprint for a native menu payload.
+ *
+ * macOS dismisses an open system menu whenever `AppHandle::set_menu` replaces
+ * the whole tree. Callers must skip `nativeMenu.apply` when this key is
+ * unchanged — otherwise cursor/`commandState` churn rebuilds an identical menu
+ * and the bar flickers (File opens then vanishes).
+ */
+export function nativeMenuPayloadKey(nodes: readonly NativeMenuNode[]): string {
+  return JSON.stringify(nodes);
+}
+
 function toNode(
   entry: MenuEntry,
   disabled: ReadonlySet<string>,

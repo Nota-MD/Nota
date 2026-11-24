@@ -112,10 +112,12 @@ testCase("最大化或全屏时按设置强制使用 Nota 菜单", () => {
   );
   assertValue(immersive.includes("isMaximized()"), "没有读取窗口最大化状态");
   assertValue(hooks.includes("effectiveMenuRenderer"), "没有统一的菜单渲染覆盖判据");
+  assertValue(hooks.includes("zenChromeActive"), "缺少强制 Nota 菜单时跳过 zen 的判据");
   assertValue(
-    app.includes("maximized || fullscreen"),
+    app.includes("maximized || fullscreen") || app.includes("expandedWindow"),
     "最大化/全屏没有接到菜单渲染器",
   );
+  assertValue(app.includes("zenChromeActive"), "全屏强制 Nota 菜单没有接到 zen 判据");
   assertValue(
     appCss.includes(".app[data-zen=\"true\"] .zen-top:hover .toolbar"),
     "全屏时鼠标移到窗口顶端不会唤回自绘顶栏",

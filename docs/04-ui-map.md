@@ -566,8 +566,15 @@ the picker's top stays within 1.5px of the code block's painted bottom edge.
 📌 **2026-11-08 macOS expanded-window fallback:** 外观 → 显示菜单栏新增
 「最大化或全屏时强制使用 Nota 菜单」，默认开启。窗口最大化或真正全屏时，
 前端用 `isMaximized()` / `isFullscreen()` 的窗口镜像覆盖实际菜单渲染器为自绘；
-退出后恢复用户保存的 `menu_renderer`，不修改设置值。真正全屏时顶栏仍由
-`.zen-top` 收起为顶部 6px 唤回带，鼠标移到窗口最上方即可滑下自绘菜单。
+退出后恢复用户保存的 `menu_renderer`，不修改设置值。
+
+📌 **2026-11-23：强制 Nota 菜单时不要 zen 藏顶栏。** 旧写法是全屏一律
+`data-zen`，把 `.zen-top` 收成 6px 唤回带。那和「强制 Nota 菜单」打架：
+macOS 全屏里系统菜单本来就没了，再 zen 藏自绘栏 = 什么都点不到
+（屏幕顶缘还被系统抢 hover）。`ui/useMenus.ts::zenChromeActive`：
+专注模式仍 zen；**仅当** `menu_renderer=system` 且 force 开关开着、窗口
+已最大化/全屏时，跳过 zen，让强制出来的自绘栏常显。默认 `menu_renderer=nota`
+的 Windows / Linux 用户全屏仍走原来的 zen，行为不变。
 
 ```text
 MENUS (唯一真源，和上面同一份)
@@ -581,6 +588,13 @@ MENUS (唯一真源，和上面同一份)
 ⚠️ **`apply()` 在原生菜单创建失败时返回 `Ok(false)`，不是报错**。前端拿这个返回值
 决定要不要隐藏自绘菜单栏（`TopBar` 的 `hideMenuBar`）——**只有后端说真挂上了
 才隐藏**。所以任何平台万一挂失败，退化到自绘菜单，而不是"一个菜单都没有"。
+
+⚠️ **macOS：相同载荷不得再次 `set_menu`**（2026-11-23）。`AppHandle::set_menu`
+会拆掉当前打开的系统菜单。光标/`commandState` 一抖，`disabledCommands` 就是
+**新的 `Set` 身份**，effect 会再跑——若树的 enabled/checked **内容没变**却仍
+`apply`，顶栏 File 会闪开又闪关、点不进去。`ui/nativeMenu.ts::nativeMenuPayloadKey`
+＋ `ui/useMenus.ts` 里对上次成功指纹的跳过（并短防抖）钉住这件事；单测在
+`tests/menu-features.test.ts`。
 
 ⚠️ **代码用 `cfg!` 不用 `#[cfg]`**，所以这份代码在 Linux 上也照样过类型检查。
 不这么写的话，macOS 专属的代码在开发机上**从来没被编译过**——
@@ -1846,8 +1860,10 @@ Promise 式问答，第五个框）；怎么写全在 `editor/link-edit.ts`（�
 用的是**直接子元素**排除法，最后那两个孩子没在排除名单里，**所以插件预览态下它们照画**
 ——这是有意的（预览的是正文，不是把下栏也藏了）。
 
-判据是 `.app` 上**一个**属性：`data-zen`（`专注 ∨ 全屏`，`undefined` = 这个属性不出现）。
-CSS 在 `styles/app.css` 的「沉浸模式」一节，状态与三条出口在 `ui/useImmersive.ts`。
+判据是 `.app` 上**一个**属性：`data-zen`（由 `zenChromeActive(专注, 全屏, 正在强制Nota菜单)`
+算出：`专注 ∨ (全屏 ∧ ¬正在强制Nota菜单)`，`undefined` = 这个属性不出现）。
+CSS 在 `styles/app.css` 的「沉浸模式」一节；全屏/专注状态仍在 `ui/useImmersive.ts`，
+是否挂 `data-zen` 由 `App.tsx` 调 `zenChromeActive`（见 §2.3 菜单栏那段 2026-11-23 注）。
 ⚠️ **只有这一个属性**：两条模式各挂一个 class 的话，CSS 里每一条规则都要写两遍，
 而"只写了其中一条"这种错没人看得出来。
 

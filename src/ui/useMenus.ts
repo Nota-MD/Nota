@@ -28,7 +28,7 @@
 
 
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
@@ -50,7 +50,7 @@ import {
   shouldBlockBrowserShortcut,
 } from "@/ui/browser-shortcuts";
 import { walkMenuItems, type MenuItemSpec, type MenuSpec } from "@/ui/commands";
-import { buildNativeTree } from "@/ui/nativeMenu";
+import { buildNativeTree, nativeMenuPayloadKey } from "@/ui/nativeMenu";
 
 
 
@@ -165,6 +165,26 @@ export function effectiveMenuRenderer(
   expanded: boolean,
 ): MenuBarRenderer {
   return forceWhenExpanded && expanded ? "nota" : configured;
+}
+
+/**
+ * Whether the shell should use zen (immersive) chrome hiding.
+ *
+ * Full screen alone used to always set `data-zen`, which slides the in-window
+ * menu off-screen into a 6px peek. That fights "Force Nota menu when maximized
+ * or full screen": on macOS the system menu is already gone in full screen, and
+ * zen then also hides the forced Nota bar — so nothing is clickable. Keep zen
+ * for Focus Mode; skip it when we are forcing the Nota menu for an expanded
+ * window that prefers the system menu.
+ */
+export function zenChromeActive(
+  focusMode: boolean,
+  fullscreen: boolean,
+  forcingNotaMenu: boolean,
+): boolean {
+  if (focusMode) return true;
+  if (fullscreen && !forcingNotaMenu) return true;
+  return false;
 }
 
 
@@ -491,22 +511,30 @@ export function useMenus(w: MenuWiring): MenuState {
 
   const [usingNativeMenu, setUsingNativeMenu] = useState(false);
 
-
-
-
-
-
-
-
-
-
+  /** Last successfully installed native-menu fingerprint (`nativeMenuPayloadKey`). */
+  const lastNativeMenuKey = useRef<string | null>(null);
+  /** Trailing debounce so rapid identical-intent updates coalesce before set_menu. */
+  const nativeMenuApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const language2 = useLanguage();
 
+  useEffect(() => {
+    return () => {
+      if (nativeMenuApplyTimer.current !== null) {
+        clearTimeout(nativeMenuApplyTimer.current);
+        nativeMenuApplyTimer.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
     if (menuRenderer !== "system" || !menuBarOpen) {
+      if (nativeMenuApplyTimer.current !== null) {
+        clearTimeout(nativeMenuApplyTimer.current);
+        nativeMenuApplyTimer.current = null;
+      }
+      lastNativeMenuKey.current = null;
       void api.nativeMenu
         .apply([])
         .then(() => {
@@ -520,23 +548,43 @@ export function useMenus(w: MenuWiring): MenuState {
         alive = false;
       };
     }
-    void api.nativeMenu
-      .apply(buildNativeTree(menus, disabledCommands, menuChecks, themes, documentTheme))
-      .then((ok) => {
-        if (alive) setUsingNativeMenu(ok);
-      })
-      .catch((e) => {
 
-        console.error("[nota] Native menu unavailable; using the HTML menu bar", e);
-        if (alive) setUsingNativeMenu(false);
-      });
+    const tree = buildNativeTree(menus, disabledCommands, menuChecks, themes, documentTheme);
+    const key = nativeMenuPayloadKey(tree);
+    // macOS closes any open system menu on every AppHandle::set_menu. Cursor
+    // updates rebuild `disabledCommands` with a new Set identity even when the
+    // enabled/checked payload is unchanged — skipping identical keys stops the
+    // File-menu flicker recorded on macOS.
+    if (key === lastNativeMenuKey.current) {
+      if (nativeMenuApplyTimer.current !== null) {
+        clearTimeout(nativeMenuApplyTimer.current);
+        nativeMenuApplyTimer.current = null;
+      }
+      return;
+    }
+
+    if (nativeMenuApplyTimer.current !== null) {
+      clearTimeout(nativeMenuApplyTimer.current);
+    }
+    nativeMenuApplyTimer.current = setTimeout(() => {
+      nativeMenuApplyTimer.current = null;
+      if (key === lastNativeMenuKey.current) return;
+      void api.nativeMenu
+        .apply(tree)
+        .then((ok) => {
+          if (!alive) return;
+          if (ok) lastNativeMenuKey.current = key;
+          setUsingNativeMenu(ok);
+        })
+        .catch((e) => {
+          console.error("[nota] Native menu unavailable; using the HTML menu bar", e);
+          if (alive) setUsingNativeMenu(false);
+        });
+    }, 100);
+
     return () => {
       alive = false;
     };
-
-
-
-
   }, [menus, disabledCommands, menuChecks, themes, documentTheme, menuRenderer, menuBarOpen, language2]);
 
 

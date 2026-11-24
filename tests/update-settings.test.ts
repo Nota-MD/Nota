@@ -87,7 +87,10 @@ testCase("菜单栏默认 Nota 自绘，外观设置可切系统原生", () => {
   assertValue(pane.includes('label={t("Menu bar rendering")}'), "外观页没有菜单样式选项");
   assertValue(pane.includes("<Select") && pane.includes('{ value: "system", label: t("System native") }'), "菜单样式必须使用下拉框");
   assertValue(pane.includes('label: t("Nota (self-drawn)")'), "默认选项没有说明为 Nota 自绘");
-  assertValue(hooks.includes('menuRenderer !== "system"'), "菜单钩子没有尊重渲染设置");
+  assertValue(hooks.includes('menuRenderer === "system"'), "菜单钩子没有尊重渲染设置");
+  assertValue(hooks.includes("nativeMenuSignature"), "原生菜单没有稳定签名，可能反复重建闪烁");
+  assertValue(hooks.includes("appliedNativeMenu"), "原生菜单没有跳过重复应用");
+  assertValue(hooks.includes("window.setTimeout"), "原生菜单状态变化没有合并到单帧更新");
 });
 
 testCase("最大化或全屏时按设置强制使用 Nota 菜单", () => {
@@ -147,9 +150,8 @@ testCase("设置界面支持铺满、内嵌和独立窗口", () => {
   assertValue(css.includes('.settings-shell[data-settings-window-style="full"]'), "缺少铺满样式");
   assertValue(windowCommand.includes("nota_window_open_settings"), "缺少独立设置窗口命令");
   assertValue(
-    windowCommand.includes("crate::cli::SETTINGS_WINDOW_FLAG") &&
-      windowCommand.includes("crate::proc::background_command"),
-    "独立设置窗口没有像调试窗口一样启动独立进程",
+    windowCommand.includes("window_host::launch(WindowRole::Settings"),
+    "独立设置窗口没有走统一窗口宿主",
   );
   assertValue(
     !windowCommand.includes("create_settings_window"),
@@ -158,8 +160,10 @@ testCase("设置界面支持铺满、内嵌和独立窗口", () => {
   assertValue(windowCommand.includes("nota_window_open_about"), "关于窗口没有复用呈现方式");
   assertValue(windowCommand.includes("nota_window_prepare_about"), "关于窗口没有预热");
   assertValue(
-    read("src-tauri", "src", "lib.rs").includes('window.location.replace(\'index.html?settings=1\')'),
-    "设置进程没有导航到独立设置页面",
+    read("src-tauri", "src", "window_host.rs").includes(
+      'Self::Settings => "settings.html"',
+    ),
+    "统一窗口宿主没有设置页面入口",
   );
   assertValue(
     read("src-tauri", "src", "lib.rs").includes('window.label() == "about"'),

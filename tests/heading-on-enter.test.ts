@@ -392,6 +392,26 @@ testCase("待成块段落在正文头退格：删掉 `# ` 并保留正文", () =
   equal(next.doc.textContent, "Nota", "没有删掉完整的标题前缀");
 });
 
+testCase("`# ` 只有前缀时退格只删除空格", () => {
+  const paragraph = schema.nodes.paragraph!.create(null, schema.text("# "));
+  const document = schema.nodes.doc!.create(null, [paragraph]);
+  const state = EditorState.create({
+    schema,
+    doc: document,
+    selection: TextSelection.create(document, 3),
+  });
+  let next = state;
+  const handled = lineFirstBackCell(false)(
+    state,
+    (tr) => {
+      next = state.apply(tr);
+    },
+    { editable: true } as never,
+  );
+  assertion(handled, "只有标题前缀时退格没有接管");
+  equal(next.doc.textContent, "#", "退格把整个标题前缀都删掉了");
+});
+
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"─".repeat(64)}`);

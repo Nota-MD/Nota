@@ -149,7 +149,7 @@ export function PersistentTableComputedOverlay({ active, documentKey }: Props) {
   if (!active || boxes.length === 0) return null;
   return createPortal(
     <>
-      {boxes.filter((box) => !box.selected).map((box) => (
+      {boxes.map((box) => (
         <div
           key={box.ref}
           className={computedValueClass(box)}

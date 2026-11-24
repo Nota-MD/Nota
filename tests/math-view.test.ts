@@ -686,8 +686,12 @@ await testCase("行内公式只有 `$` 弱化，源码保持强调色，预览�
     "LaTeX 主题的段落断行规则仍会拆开行内公式",
   );
   assertion(
-    /\.nota-math-editing\.nota-math-inline \.nota-math-panel\s*\{[^}]*display:\s*inline-flex;[^}]*width:\s*max-content/s.test(css),
-    "行内公式面板没有收紧到实际内容宽度",
+    /\.nota-math-editing\.nota-math-inline \.nota-math-panel\s*\{[^}]*display:\s*inline;[^}]*width:\s*auto/s.test(css),
+    "行内公式面板没有与正文共用同一行盒",
+  );
+  assertion(
+    !/\.nota-math-delim\s*\{[^}]*animation:/s.test(css),
+    "行内公式分隔符仍在重复播放入场动画",
   );
   assertion(
     /\.nota-math-preview\.nota-math-preview-floating\s*\{[^}]*position:\s*fixed;[^}]*transform:\s*translateX\(-50%\);[^}]*align-items:\s*center;[^}]*justify-content:\s*center/s.test(css),

@@ -13,11 +13,14 @@ pub async fn nota_table_snapshot_sync(
 ) -> Result<()> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        {
+        let accepted = {
             let mut bridge = state.table_bridge.lock().unwrap();
-            bridge.sync_snapshot(snapshot.clone());
-        }
-        if let Some(snapshot) = snapshot {
+            bridge.sync_snapshot(snapshot.clone())
+        };
+        if accepted {
+            let Some(snapshot) = snapshot else {
+                return Ok(());
+            };
             let plugins = loop {
                 let guard = state.plugins.lock().unwrap();
                 if guard.is_ready() {

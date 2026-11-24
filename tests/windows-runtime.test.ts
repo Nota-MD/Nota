@@ -25,7 +25,7 @@ const read = (path: string) => readFileSync(path, "utf8");
 
 console.log("\n【Windows 运行时入口】");
 
-testCase("日志与警报窗口各有独立 HTML 入口", () => {
+testCase("Utility windows use dedicated HTML entries", () => {
   for (const [path, marker] of [
     ["focus-alarm.html", 'data-window="focus-alarm"'],
   ]) {
@@ -37,36 +37,41 @@ testCase("日志与警报窗口各有独立 HTML 入口", () => {
   contains(debugLog, 'data-window="debug-log"', "debug-log.html");
   contains(debugLog, 'src="/src/debug-log.tsx"', "日志页独立轻量入口");
   contains(read("src/debug-log.tsx"), "<DebugLogWindow />", "独立日志入口挂载");
-  const rust = read("src-tauri/src/commands/window.rs");
-  contains(rust, "DEBUG_WINDOW_FLAG", "调试窗口必须在独立进程中启动");
-  contains(rust, "SETTINGS_WINDOW_FLAG", "设置窗口必须在独立进程中启动");
-  contains(rust, "background_command", "独立窗口没有使用无控制台的进程启动器");
-  if (rust.includes("create_settings_window")) {
-    throw new Error("Windows 仍在主进程内创建辅助设置 WebView");
-  }
-  const cli = read("src-tauri/src/cli.rs");
-  contains(cli, 'pub const SETTINGS_WINDOW_FLAG: &str = "--settings-window"', "缺少设置窗口进程参数");
+  const settings = read("settings.html");
+  contains(settings, 'data-window="settings"', "settings.html");
+  contains(settings, 'src="/src/settings-window.tsx"', "设置页独立轻量入口");
+  contains(read("src/settings-window.tsx"), "<SettingsWindow />", "独立设置入口挂载");
+  const about = read("about.html");
+  contains(about, 'data-window="about"', "about.html");
+  contains(about, 'src="/src/about-window.tsx"', "关于页独立轻量入口");
+  contains(read("src/about-window.tsx"), "<AboutWindow />", "独立关于入口挂载");
+  contains(
+    read("src/ui/useDocThemeInventory.ts"),
+    "useEffect(() => {",
+    "设置等辅助窗口没有自动扫描文档主题",
+  );
+  contains(
+    read("src/ui/SettingsWindow.tsx"),
+    "api.frontendReady()",
+    "独立设置页没有启动扩展发现握手",
+  );
   const windowCommand = read("src-tauri/src/commands/window.rs");
-  contains(
-    windowCommand,
-    '#[cfg(not(target_os = "windows"))]\n#[tauri::command]\npub fn nota_window_open_settings(app: tauri::AppHandle)',
-    "非 Windows 设置窗口快速路径丢失",
-  );
-  contains(
-    windowCommand,
-    '#[cfg(target_os = "windows")]\n#[tauri::command]\npub fn nota_window_open_settings(_app: tauri::AppHandle)',
-    "Windows 设置窗口没有走独立进程",
-  );
-  contains(
-    windowCommand,
-    "open_settings_process(true)",
-    "Windows 没有直接启动设置进程",
-  );
-  contains(
-    windowCommand,
-    "open_settings_process(false)",
-    "非 Windows 设置窗口缺少进程回退",
-  );
+  const runtime = read("src-tauri/src/lib.rs");
+  const host = read("src-tauri/src/window_host.rs");
+  for (const role of ["Editor", "Settings", "About", "DebugLog"]) {
+    contains(host, role, `统一窗口角色缺少 ${role}`);
+  }
+  contains(host, "READY_ENV", "独立窗口缺少 ready 握手");
+  contains(host, "READY_TIMEOUT", "独立窗口缺少 ready 超时");
+  contains(host, "NOTA_WINDOW_ROLE", "独立窗口缺少环境变量角色兜底");
+  contains(host, "background_command", "统一窗口模块没有使用后台进程启动器");
+  contains(windowCommand, "window_host::launch(WindowRole::Settings", "设置命令未走统一窗口模块");
+  contains(windowCommand, "window_host::launch(WindowRole::About", "关于命令未走统一窗口模块");
+  contains(windowCommand, "window_host::launch(WindowRole::DebugLog", "日志命令未走统一窗口模块");
+  contains(windowCommand, "window_host::launch(WindowRole::Editor", "新窗口命令未走统一窗口模块");
+  if (windowCommand.includes("WebviewWindowBuilder")) {
+    throw new Error("独立窗口命令仍直接创建 WebviewWindow");
+  }
   contains(
     windowCommand,
     "pub fn nota_window_prepare_settings(_app: tauri::AppHandle)",
@@ -74,22 +79,35 @@ testCase("日志与警报窗口各有独立 HTML 入口", () => {
   );
   contains(
     windowCommand,
-    "fn ensure_settings_window",
-    "非 Windows 设置窗口创建入口丢失",
+    "pub fn nota_window_prepare_about(_app: tauri::AppHandle)",
+    "Windows 关于窗口预热没有变成无操作",
   );
-  const ipc = read("src/bridge/ipc.ts");
-  contains(ipc, "prepareSettings: () => invoke", "前端没有设置窗口预热接口");
-  const utility = read("src/ui/useUtilityWindows.tsx");
-  contains(utility, "api.window.prepareSettings()", "启动后没有预热设置窗口");
-  contains(utility, "}, 700)", "设置窗口预热没有延后到启动稳定之后");
-  const runtime = read("src-tauri/src/lib.rs");
-  contains(runtime, "opens_debug_window || standalone_settings_window", "设置进程仍会撞上主实例");
-  contains(runtime, "index.html?settings=1", "设置进程没有独立页面导航");
+  contains(runtime, "window_host::current_role", "运行入口没有读取统一窗口角色");
+  contains(runtime, "window_host::signal_ready", "子进程页面加载后没有报告 ready");
   contains(
     runtime,
-    'standalone_settings_window && window.label() == "main"',
+    "role.page()",
+    "子进程没有根据窗口角色加载页面",
+  );
+  if (runtime.includes("index.html?settings=1")) {
+    throw new Error("设置进程仍会先启动完整编辑器页面");
+  }
+  contains(
+    runtime,
+    "standalone_settings_window",
+    "设置进程没有独立的最小初始化分支",
+  );
+  contains(
+    runtime,
+    'PathBuf::from("nota-settings-webview")',
+    "设置子进程与主程序共用了 WebView2 数据目录",
+  );
+  contains(
+    runtime,
+    'utility_window && window.label() == "main"',
     "独立设置进程的原生关闭按钮没有退出该进程",
   );
+  contains(read("src-tauri/src/settings_watch.rs"), "settings reloaded from external window", "设置子进程修改没有同步回主进程");
   const alarm = read("src-tauri/src/focus/alarm.rs");
   contains(alarm, 'WebviewUrl::App("focus-alarm.html"', "警报窗口不得依赖 fragment");
 });
@@ -104,7 +122,7 @@ testCase("动态模块使用相对基址且不依赖 Vite 预加载包装", () =
   const vite = read("vite.config.ts");
   contains(vite, 'base: "./"', "相对资源基址");
   contains(vite, "modulePreload: false", "关闭不稳定的 modulepreload");
-  for (const entry of ["main", "debugLog", "focusAlarm"]) {
+  for (const entry of ["main", "about", "settings", "debugLog", "focusAlarm"]) {
     contains(vite, `${entry}:`, `多页面入口 ${entry}`);
   }
   if (vite.includes("help: fileURLToPath")) throw new Error("帮助页仍被构建");
@@ -122,6 +140,16 @@ testCase("Windows 便携版由无提权的 Nota 单文件启动器承载，并�
   contains(recipe, "NOTA_BUILD_ID", "构建脚本没有为便携缓存生成唯一标识");
   const updateManifest = read("tools/make-update-manifest.mjs");
   contains(updateManifest, "_x64-portable\\.(?:exe|zip)", "更新清单不认单文件便携 EXE");
+});
+
+testCase("diagnostic console build tails the shared log from an independent process", () => {
+  const cargo = read("src-tauri/Cargo.toml");
+  const main = read("src-tauri/src/main.rs");
+  contains(cargo, "diagnostic-console = []", "diagnostic build feature");
+  contains(main, "Get-Content -LiteralPath", "live log console");
+  contains(main, '"-NoExit"', "console remains open after startup");
+  contains(main, "set_debug_mode(true)", "diagnostic build does not enable full logging");
+  contains(main, '"--settings-window"', "utility children would spawn extra consoles");
 });
 
 testCase("Linux GTK4 dialog helper keeps a Windows-targetable entry point", () => {

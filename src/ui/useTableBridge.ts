@@ -34,12 +34,22 @@ export function useTableBridge({
     let active = true;
     let frame = 0;
     let attempts = 0;
+    let mutations: MutationObserver | null = null;
     const publishTables = () => {
+      frame = 0;
       if (!active) return;
       const tables = Array.from(
         root.current?.querySelectorAll<HTMLTableElement>(".ProseMirror table") ?? [],
       );
       if (tables.length > 0) {
+        if (!mutations && root.current) {
+          mutations = new MutationObserver(() => schedule());
+          mutations.observe(root.current, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+          });
+        }
         const origin: TableSnapshot["active"] = { row: 0, column: 0 };
         const selection: TableSnapshot["selection"] = {
           top: 0,
@@ -50,7 +60,13 @@ export function useTableBridge({
         void (async () => {
           for (const table of tables) {
             if (!active) return;
-            const snapshot = snapshotForTable(table, documentId, selection, origin);
+            const snapshot = snapshotForTable(
+              table,
+              documentId,
+              selection,
+              origin,
+              true,
+            );
             if (snapshot) await api.table.syncSnapshot(snapshot);
           }
           if (active) window.dispatchEvent(new Event("nota-table-snapshots-ready"));
@@ -60,10 +76,14 @@ export function useTableBridge({
       attempts += 1;
       if (attempts < 120) frame = requestAnimationFrame(publishTables);
     };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(publishTables);
+    };
     frame = requestAnimationFrame(publishTables);
     return () => {
       active = false;
       cancelAnimationFrame(frame);
+      mutations?.disconnect();
       void api.table.syncSnapshot(null);
     };
   }, [documentId, enabled, root]);

@@ -48,6 +48,13 @@ function literalTextWithoutEscapes(): textHandler {
   return (node, parent) => {
     let value = node.value ?? "";
     const parentNode = parent as TextNodeLike | undefined;
+    if (!parentNode || !("type" in parentNode) || parentNode.type !== "code") {
+      value = value.replace(
+        /^(#{1,6})([ \u00a0]+)/,
+        (_match: string, markers: string, spaces: string) =>
+          markers + spaces.replaceAll("\u00a0", " "),
+      );
+    }
     if (parentNode?.type === "tableCell" && value.includes("|")) {
       // A literal cell separator would split one GFM cell into several cells.
       // Use a character reference rather than inserting a backslash.

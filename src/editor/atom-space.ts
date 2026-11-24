@@ -174,7 +174,14 @@ interface MdastNode {
 
 
 
-const inlineAtom = new Set(["inlineMath", "image", "break"]);
+const inlineAtom = new Set([
+  "inlineMath",
+  "image",
+  "break",
+  "notaSyntax",
+  "notaEscape",
+  "notaLiteral",
+]);
 
 
 

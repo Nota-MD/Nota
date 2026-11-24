@@ -86,10 +86,9 @@
 
 .editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-panel {
   position: relative;
-  display: inline-flex;
-  width: max-content;
+  display: inline;
+  width: auto;
   max-width: none;
-  align-items: baseline;
   gap: 0;
   vertical-align: baseline;
 }
@@ -216,18 +215,20 @@
 
 
 .editor-mount .ProseMirror .nota-math-delim {
+  display: inline;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
   font-family: inherit;
   font-size: 1em;
   line-height: inherit;
+  vertical-align: baseline;
   white-space: nowrap;
   color: var(--fg-faint);
   user-select: none;
 
 
   pointer-events: none;
-
-
-  animation: nota-math-delim-in 0.16s ease-out;
 }
 
 .editor-mount .ProseMirror .nota-math-block .nota-math-delim {
@@ -287,17 +288,6 @@
   padding: 0;
   resize: none;
 }
-
-@keyframes nota-math-delim-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 0.55;
-  }
-}
-
-
 
 .editor-mount .ProseMirror .nota-math-source {
 

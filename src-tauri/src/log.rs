@@ -5,7 +5,6 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 
 static RUNTIME_GATE: AtomicBool = AtomicBool::new(false);
-static SESSION_HEADER_WRITTEN: AtomicBool = AtomicBool::new(false);
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn enabled() -> bool {
@@ -80,9 +79,9 @@ pub fn record(message: String) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let first = !SESSION_HEADER_WRITTEN.swap(true, Ordering::Relaxed);
     let too_large = std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 8 * 1024 * 1024);
-    let result = if first || too_large {
+    let needs_header = !path.exists() || too_large;
+    let result = if needs_header {
         let mut file = match std::fs::File::create(&path) {
             Ok(file) => file,
             Err(_) => return,

@@ -9,6 +9,9 @@ license = "BSD-2-Clause"
 repository = "https://github.com/nota/nota"
 default-run = "nota"
 
+[features]
+diagnostic-console = []
+
 [lib]
 # Keep application logic in the library so additional binaries can reuse it.
 name = "nota_lib"

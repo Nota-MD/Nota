@@ -511,81 +511,92 @@ export function useMenus(w: MenuWiring): MenuState {
 
   const [usingNativeMenu, setUsingNativeMenu] = useState(false);
 
-  /** Last successfully installed native-menu fingerprint (`nativeMenuPayloadKey`). */
-  const lastNativeMenuKey = useRef<string | null>(null);
-  /** Trailing debounce so rapid identical-intent updates coalesce before set_menu. */
-  const nativeMenuApplyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const language2 = useLanguage();
-
-  useEffect(() => {
-    return () => {
-      if (nativeMenuApplyTimer.current !== null) {
-        clearTimeout(nativeMenuApplyTimer.current);
-        nativeMenuApplyTimer.current = null;
-      }
-    };
-  }, []);
+  const nativeMenuActive = menuRenderer === "system" && menuBarOpen;
+  const nativeMenuTree = useMemo(
+    () =>
+      nativeMenuActive
+        ? buildNativeTree(menus, disabledCommands, menuChecks, themes, documentTheme)
+        : [],
+    [nativeMenuActive, menus, disabledCommands, menuChecks, themes, documentTheme, language2],
+  );
+  const nativeMenuSignature = useMemo(
+    () => nativeMenuPayloadKey(nativeMenuTree),
+    [nativeMenuTree],
+  );
+  const appliedNativeMenu = useRef({ signature: "", active: false });
 
   useEffect(() => {
     let alive = true;
-    if (menuRenderer !== "system" || !menuBarOpen) {
-      if (nativeMenuApplyTimer.current !== null) {
-        clearTimeout(nativeMenuApplyTimer.current);
-        nativeMenuApplyTimer.current = null;
+    let timer = 0;
+    let serial = 0;
+
+    if (!nativeMenuActive) {
+      if (!appliedNativeMenu.current.active) {
+        setUsingNativeMenu(false);
+        return () => {
+          alive = false;
+        };
       }
-      lastNativeMenuKey.current = null;
+      const request = ++serial;
       void api.nativeMenu
         .apply([])
         .then(() => {
-          if (alive) setUsingNativeMenu(false);
+          if (!alive || request !== serial) return;
+          appliedNativeMenu.current = { signature: "", active: false };
+          setUsingNativeMenu(false);
         })
-        .catch((e) => {
-          console.warn("[nota] Could not clear the native menu", e);
-          if (alive) setUsingNativeMenu(false);
+        .catch((error) => {
+          console.warn("[nota] Could not clear the native menu", error);
+          if (!alive || request !== serial) return;
+          appliedNativeMenu.current = { signature: "", active: false };
+          setUsingNativeMenu(false);
         });
+      return () => {
+        alive = false;
+        serial += 1;
+      };
+    }
+
+    if (
+      appliedNativeMenu.current.active &&
+      appliedNativeMenu.current.signature === nativeMenuSignature
+    ) {
+      setUsingNativeMenu(true);
       return () => {
         alive = false;
       };
     }
 
-    const tree = buildNativeTree(menus, disabledCommands, menuChecks, themes, documentTheme);
-    const key = nativeMenuPayloadKey(tree);
-    // macOS closes any open system menu on every AppHandle::set_menu. Cursor
-    // updates rebuild `disabledCommands` with a new Set identity even when the
-    // enabled/checked payload is unchanged — skipping identical keys stops the
-    // File-menu flicker recorded on macOS.
-    if (key === lastNativeMenuKey.current) {
-      if (nativeMenuApplyTimer.current !== null) {
-        clearTimeout(nativeMenuApplyTimer.current);
-        nativeMenuApplyTimer.current = null;
-      }
-      return;
-    }
-
-    if (nativeMenuApplyTimer.current !== null) {
-      clearTimeout(nativeMenuApplyTimer.current);
-    }
-    nativeMenuApplyTimer.current = setTimeout(() => {
-      nativeMenuApplyTimer.current = null;
-      if (key === lastNativeMenuKey.current) return;
+    const request = ++serial;
+    timer = window.setTimeout(() => {
       void api.nativeMenu
-        .apply(tree)
+        .apply(nativeMenuTree)
         .then((ok) => {
-          if (!alive) return;
-          if (ok) lastNativeMenuKey.current = key;
+          if (!alive || request !== serial) return;
+          appliedNativeMenu.current = {
+            signature: ok ? nativeMenuSignature : "",
+            active: ok,
+          };
           setUsingNativeMenu(ok);
         })
-        .catch((e) => {
-          console.error("[nota] Native menu unavailable; using the HTML menu bar", e);
-          if (alive) setUsingNativeMenu(false);
+        .catch((error) => {
+          console.error(
+            "[nota] Native menu unavailable; using the HTML menu bar",
+            error,
+          );
+          if (!alive || request !== serial) return;
+          appliedNativeMenu.current = { signature: "", active: false };
+          setUsingNativeMenu(false);
         });
-    }, 100);
+    }, 60);
 
     return () => {
       alive = false;
+      serial += 1;
+      window.clearTimeout(timer);
     };
-  }, [menus, disabledCommands, menuChecks, themes, documentTheme, menuRenderer, menuBarOpen, language2]);
+  }, [nativeMenuActive, nativeMenuSignature, nativeMenuTree]);
 
 
 

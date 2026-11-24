@@ -1,6 +1,6 @@
 /** 主窗口只在编辑器可输入后显示。 */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 let pass = 0;
@@ -61,6 +61,28 @@ testCase("入口不再绘制 Nota 加载动画", () => {
   const html = readFileSync(join(process.cwd(), "index.html"), "utf8");
   assertValue(!html.includes('id="nota-boot"'), "仍有启动文字层");
   assertValue(!html.includes("html:not([data-booted]) #root"), "应用内容仍被启动层遮住");
+});
+
+testCase("the no-document state has no landing screen", () => {
+  const area = readFileSync(join(process.cwd(), "src/ui/EditorArea.tsx"), "utf8");
+  assertValue(!area.includes("@/ui/Home"), "EditorArea still imports the landing screen");
+  assertValue(!area.includes("<Home"), "EditorArea still renders the landing screen");
+  assertValue(!existsSync(join(process.cwd(), "src/ui/Home.tsx")), "Home.tsx still exists");
+  assertValue(!existsSync(join(process.cwd(), "src/styles/home.css")), "home.css still exists");
+});
+
+testCase("closing the final tab closes its editor window", () => {
+  const documents = readFileSync(join(process.cwd(), "src/ui/useDocuments.ts"), "utf8");
+  const area = readFileSync(join(process.cwd(), "src/ui/EditorArea.tsx"), "utf8");
+  assertValue(
+    documents.includes("if (list.length === 0) {") &&
+      documents.includes("await api.window.quit();"),
+    "closeDoc does not terminate the editor process when no tabs remain",
+  );
+  assertValue(
+    area.includes("else void closeDoc(activeDoc.id);"),
+    "the shared Vim close command no longer uses the final-tab close path",
+  );
 });
 
 testCase("编辑器聚焦后才宣告 ready", () => {

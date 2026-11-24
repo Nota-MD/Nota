@@ -705,10 +705,11 @@ export function useDocuments(w: documentWiring): documentApi {
         await api.doc.close(id);
         clearTableExtensionContent(Number(id));
         const list = await refreshDocs();
-
-
-
-        activateDocument(list.length ? list[list.length - 1]!.id : null);
+        if (list.length === 0) {
+          await api.window.quit();
+          return;
+        }
+        activateDocument(list[list.length - 1]!.id);
       } catch (e) {
         toast(String(e), "error");
       }

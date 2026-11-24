@@ -64,12 +64,14 @@ testCase("配色只有硬黑底白字", () => {
 
 testCase("日志窗口在独立进程启动，不再给主进程追加 WebView", () => {
   const rust = read("src-tauri/src/commands/window.rs");
+  const host = read("src-tauri/src/window_host.rs");
   const cli = read("src-tauri/src/cli.rs");
   const helper = read("src-tauri/src/debug_log.rs");
   contains(read("debug-log.html"), 'data-window="debug-log"', "日志入口标记");
   contains(read("debug-log.html"), 'src="/src/debug-log.tsx"', "日志页独立轻量入口");
   contains(read("src/debug-log.tsx"), "<DebugLogWindow />", "独立日志入口挂载");
-  contains(rust, ".arg(crate::cli::DEBUG_WINDOW_FLAG)", "独立日志进程");
+  contains(host, "WindowRole::DebugLog", "统一日志窗口角色");
+  contains(rust, "window_host::launch(WindowRole::DebugLog", "独立日志进程");
   const debugLogCommand = rust.slice(
     rust.indexOf("pub fn nota_window_open_debug_log"),
     rust.indexOf("pub fn nota_window_open_devtools"),
@@ -83,7 +85,7 @@ testCase("日志窗口在独立进程启动，不再给主进程追加 WebView",
   contains(helper, "open::that", "系统默认查看器");
 });
 
-testCase("Linux 调试窗口显式把 GTK 输入焦点交给 WebView", () => {
+testCase("统一窗口页加载后报告 ready 并显式把 GTK 输入焦点交给 WebView", () => {
   const rust = read("src-tauri/src/commands/window.rs");
   const lib = read("src-tauri/src/lib.rs");
   contains(
@@ -96,11 +98,7 @@ testCase("Linux 调试窗口显式把 GTK 输入焦点交给 WebView", () => {
     "commands::window::focus_linux_webview(&platform.inner())",
     "调试窗口没有 grab_focus，Rime/XIM 会拿不到输入上下文",
   );
-  contains(
-    lib,
-    "timeout_add_local_once",
-    "调试窗口没有在 XWayland 激活后重试聚焦",
-  );
+  contains(lib, "window_host::signal_ready", "统一窗口页面加载后没有报告 ready");
 });
 
 testCase("后端日志同时写入持久文件，并提供增量读取命令", () => {

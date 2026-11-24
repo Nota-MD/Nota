@@ -130,6 +130,7 @@
   --select-option-active-bg: var(--bg-active);
   --select-option-selected-bg: var(--accent);
   --select-option-selected-fg: var(--accent-fg);
+  --collapse-guide: var(--accent);
 
 
   --mark-hint-opacity: 0.45;

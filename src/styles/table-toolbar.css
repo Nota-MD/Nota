@@ -297,15 +297,11 @@
   position: fixed;
   z-index: var(--z-editor-widget, 24);
   box-sizing: border-box;
-  border: 1.5px solid var(--sheet-range-tone);
+  border: 1.5px dashed var(--sheet-range-tone);
   border-radius: 1px;
   background: color-mix(in srgb, var(--sheet-range-tone) 8%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sheet-range-tone) 24%, transparent);
   pointer-events: none;
-}
-
-.sheet-reference-box.is-range {
-  border-style: dashed;
 }
 
 .sheet-computed-value {

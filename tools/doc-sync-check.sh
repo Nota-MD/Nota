@@ -441,7 +441,6 @@ PAIRS=(
   "src/ui/ReviewPane.tsx                          04,05,02"
   "src/ui/ConfirmDialog.tsx                       04,02"
   "src/ui/DialogClose.tsx                         04"
-  "src/ui/Home.tsx                                04,10"
   "src/ui/StatusBar.tsx                           04"
   "src/ui/Toasts.tsx                              04"
   "src/ui/ErrorBoundary.tsx                       04"
@@ -488,7 +487,6 @@ PAIRS=(
   "src/ui/useSelectableUiText.ts                  03,04"
   "src/styles/menubar.css                         04"
   "src/styles/tabs-status.css                     04"
-  "src/styles/home.css                            04"
   "src/styles/toast.css                           04"
   "src/styles/sidebar.css                         04"
   # ⚠️ 2026-09-29：`editor.css` 945 行，按功能拆成三份（外壳 / 行内 / 块级）。

@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 
 import {
   cellLabel,
+  canReplaceFormulaReference,
   columnLabel,
   formulaTokens,
   insertFormulaReference,
+  isFormulaReferenceDraft,
 } from "@/ui/SpreadsheetTableOverlay";
 import {
   adaptiveSelectionPalette,
@@ -149,7 +151,9 @@ testCase("cell formula input keeps focus when clicked", () => {
   );
   assert(
     overlay.includes("const formulaActive = useRef(false)") &&
-      overlay.includes("if (formulaActive.current) return") &&
+      overlay.includes("formulaActive.current ||") &&
+      overlay.includes("contextSelectionFrozen.current ||") &&
+      overlay.includes("contextMenuOwnsFocus()") &&
       overlay.includes("formulaTarget.current?.row !== active.row"),
     "focusing the formula input can still unmount the spreadsheet overlay",
   );
@@ -160,9 +164,27 @@ testCase("cell formula input keeps focus when clicked", () => {
   );
   assert(
     toolbar.includes("const spreadsheetEditing = useRef(false)") &&
-      toolbar.includes("if (spreadsheetEditing.current) return") &&
+      toolbar.includes("if (spreadsheetEditing.current || contextMenuOwnsFocus()) return") &&
       overlay.includes("onFormulaActiveChange?.(true)"),
     "the parent table toolbar can still unmount while its formula input is active",
+  );
+  assert(
+    toolbar.includes("contextMenuOwnsFocus") &&
+      overlay.includes("contextMenuOwnsFocus") &&
+      toolbar.includes('closest("[data-context-menu]")') &&
+      overlay.includes('closest("[data-context-menu]")'),
+    "the table overlay can still disappear while the context menu owns focus",
+  );
+  assert(
+    overlay.includes("restoreFrozenSelection") &&
+      overlay.includes('closest("[data-context-menu]")') &&
+      overlay.includes('run("tableSelectRange"'),
+    "the context menu can still clear the frozen table selection",
+  );
+  assert(
+    overlay.includes("contextSelectionFrozen") &&
+      overlay.includes("contextSelectionFrozen.current = true"),
+    "secondary click does not freeze the selection before menu focus moves",
   );
 });
 
@@ -197,13 +219,22 @@ testCase("formula references use matching OnlyOffice-style colors", () => {
     );
   }
   assert(
-    tableCss.includes("border: 1.5px solid var(--sheet-range-tone)") &&
-      tableCss.includes("border-style: dashed"),
-    "cell references and ranges are not visually distinguished",
+    tableCss.includes("border: 1.5px dashed var(--sheet-range-tone)"),
+    "formula reference cells do not use a dashed tone border",
+  );
+  assert(
+    overlay.includes("const [referencePreview, setReferencePreview]") &&
+      overlay.includes("setReferencePreview(") &&
+      overlay.includes("sheet-reference-box is-preview"),
+    "formula reference clicks do not use a dedicated preview overlay",
   );
 });
 
 testCase("editing a formula can insert single cells and dragged ranges", () => {
+  assert(isFormulaReferenceDraft("=A1+B1"), "formula draft is not treated as reference mode");
+  assert(isFormulaReferenceDraft("  =SUM(A1:A2)"), "indented formula draft is not treated as reference mode");
+  assert(!isFormulaReferenceDraft("plain text"), "ordinary cell text incorrectly enters reference mode");
+
   const range = insertFormulaReference("=SUM()", 5, 5, {
     top: 1,
     left: 0,
@@ -222,9 +253,34 @@ testCase("editing a formula can insert single cells and dragged ranges", () => {
   assert(single.value === "=D4+1", "selected reference text was not replaced");
   assert(single.caret === 3, "caret did not stay after the single-cell reference");
 
+  const firstClick = insertFormulaReference("=A1+", 4, 4, {
+    top: 0,
+    left: 1,
+    bottom: 0,
+    right: 1,
+  });
+  const previous = { start: 4, end: firstClick.caret };
+  assert(
+    canReplaceFormulaReference(firstClick.value, firstClick.caret, firstClick.caret, previous),
+    "the trailing formula reference cannot be replaced by another click",
+  );
+  const secondClick = insertFormulaReference(
+    firstClick.value,
+    previous.start,
+    previous.end,
+    { top: 1, left: 1, bottom: 1, right: 1 },
+  );
+  assert(secondClick.value === "=A1+B2", `repeated cell clicks append instead of replace: ${secondClick.value}`);
+  assert(
+    !canReplaceFormulaReference("=A1+B1+", 8, 8, previous),
+    "ordinary typing after a reference still allows it to be replaced",
+  );
+
   assert(
     overlay.includes("referencing.current") &&
       overlay.includes("insertFormulaReference(") &&
+      overlay.includes("referenceRange.current") &&
+      overlay.includes("formulaTarget.current") &&
       overlay.includes("input.setSelectionRange(released.caret, released.caret)"),
     "formula editing does not keep focus while cells are clicked or dragged",
   );
@@ -248,6 +304,16 @@ testCase("spreadsheet overlays stay inside the editor viewport", () => {
   assert(overlay.includes("Math.min(viewport.bottom, box.top + box.height)"), "range box is not clipped to the editor");
   assert(overlay.includes("bottom <= top"), "row headers are not clipped at the editor boundary");
   assert(toolbar.includes("const topBoundary = Math.max("), "table toolbar can overlap front matter");
+  const area = read("src/ui/EditorArea.tsx");
+  assert(
+    area.includes("!(settings?.editor.spreadsheet_tables ?? false)"),
+    "spreadsheet mode still inherits the prose column width limit",
+  );
+  assert(
+    overlay.includes("formulaWidth") &&
+      overlay.includes("Math.min(viewport.right, window.innerWidth)"),
+    "formula bar still stops at the table width instead of using the editor width",
+  );
 });
 
 testCase("table extensions receive source snapshots and display-only results", () => {
@@ -255,6 +321,12 @@ testCase("table extensions receive source snapshots and display-only results", (
   const bridgeHook = read("src/ui/useTableBridge.ts");
   const snapshotHelper = read("src/ui/table-snapshot.ts");
   assert(overlay.includes("api.table.syncSnapshot(snapshot)"), "active table snapshot is not published");
+  assert(
+    overlay.includes("const publishSnapshot = () =>") &&
+      overlay.includes("publishSnapshot();") &&
+      overlay.includes("api.table.syncSnapshot(snapshot)"),
+    "table edits do not publish a fresh formula snapshot immediately",
+  );
   assert(snapshotHelper.includes("table.dataset.notaTableId = tableId"), "tables have no stable bridge identity");
   assert(bridge.includes("pub struct TableSnapshot"), "host snapshot shape is missing");
   assert(bridge.includes("pub struct TableWriteRequest"), "host write intent is missing");
@@ -269,6 +341,11 @@ testCase("table extensions receive source snapshots and display-only results", (
       persistent.includes("computedBoxesFor(table, payload.cells)") &&
       !persistent.includes("currentTable && currentRange"),
     "computed values do not survive after the caret leaves the table",
+  );
+  assert(
+    persistent.includes("{boxes.map((box) => (") &&
+      !persistent.includes("boxes.filter((box) => !box.selected)"),
+    "selecting a formula cell still hides its computed result",
   );
   assert(
     tableComputed.includes("paintedBackground(cell)") &&
@@ -288,12 +365,13 @@ testCase("table extensions receive source snapshots and display-only results", (
   assert(bridgeHook.includes('runCommand("tableSetCells"'), "extension write intent is not applied");
   assert(
     bridgeHook.includes('querySelectorAll<HTMLTableElement>(".ProseMirror table")') &&
-      bridgeHook.includes("snapshotForTable(table, documentId") &&
+      bridgeHook.includes("snapshotForTable(") &&
+      bridgeHook.includes("new MutationObserver") &&
       bridgeHook.includes("api.table.syncSnapshot(snapshot)") &&
       bridgeHook.includes('dispatchEvent(new Event("nota-table-snapshots-ready"))') &&
       persistent.includes("api.table.renders()") &&
       !overlay.includes("void api.table.syncSnapshot(null)"),
-    "opening a document does not publish its first table before the caret enters it",
+    "table formula snapshots stop updating after the caret leaves the table",
   );
 });
 
@@ -317,9 +395,10 @@ testCase("extension-rendered table content is included in save feedback", () => 
 testCase("formula source stays in the formula bar and errors are visible", () => {
   assert(
     persistent.includes("computedBoxesFor(table, payload.cells)") &&
-      persistent.includes("boxes.filter((box) => !box.selected)") &&
+      persistent.includes("{boxes.map((box) => (") &&
+      !persistent.includes("boxes.filter((box) => !box.selected)") &&
       !persistent.includes("table === currentTable"),
-    "a selected formula cell still reveals its source inside the table",
+    "a selected formula cell still reveals its source instead of the computed value",
   );
   assert(
     tableComputed.includes('/^#[A-Z0-9/?!]+$/i') &&

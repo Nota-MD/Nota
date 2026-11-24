@@ -137,7 +137,7 @@ body.sidebar-collapse-armed::before {
   width: 2px;
   background: repeating-linear-gradient(
     to bottom,
-    var(--danger) 0 6px,
+    var(--collapse-guide, var(--accent)) 0 6px,
     transparent 6px 11px
   );
   content: "";
@@ -764,8 +764,7 @@ body.sidebar-collapse-armed::before {
 
 .tree,
 .outline,
-.plugins,
-.home-plugins {
+.plugins {
   list-style: none;
   margin: 0;
   padding: 0;

@@ -29,6 +29,9 @@ pub struct TableRange {
 pub struct TableSnapshot {
     pub document_id: u64,
     pub table_id: String,
+    pub revision: u64,
+    #[serde(default)]
+    pub passive: bool,
     pub rows: Vec<Vec<String>>,
     pub selection: TableRange,
     pub active: TablePoint,
@@ -82,16 +85,36 @@ impl TableBridge {
         self.snapshot.clone()
     }
 
-    pub fn sync_snapshot(&mut self, snapshot: Option<TableSnapshot>) {
+    pub fn sync_snapshot(&mut self, snapshot: Option<TableSnapshot>) -> bool {
+        let Some(mut next) = snapshot else {
+            self.snapshot = None;
+            self.renders.clear();
+            return true;
+        };
+        if self.snapshot.as_ref().is_some_and(|current| {
+            current.document_id == next.document_id
+                && current.table_id == next.table_id
+                && current.revision >= next.revision
+        }) {
+            return false;
+        }
+        if next.passive {
+            if let Some(current) = self.snapshot.as_ref().filter(|current| {
+                current.document_id == next.document_id && current.table_id == next.table_id
+            }) {
+                next.selection = current.selection;
+                next.active = current.active;
+            }
+        }
         let same_document = self
             .snapshot
             .as_ref()
-            .zip(snapshot.as_ref())
-            .is_some_and(|(old, new)| old.document_id == new.document_id);
-        self.snapshot = snapshot;
+            .is_some_and(|old| old.document_id == next.document_id);
+        self.snapshot = Some(next);
         if !same_document {
             self.renders.clear();
         }
+        true
     }
 
     pub fn render(&mut self, plugin: &str, cells: BTreeMap<String, String>) -> Option<TableRender> {
@@ -195,6 +218,8 @@ mod tests {
         bridge.sync_snapshot(Some(TableSnapshot {
             document_id: 7,
             table_id: "table-1".to_owned(),
+            revision: 1,
+            passive: false,
             rows: vec![vec!["A".into()], vec!["B".into()]],
             selection: TableRange::default(),
             active: TablePoint::default(),
@@ -226,6 +251,8 @@ mod tests {
         bridge.sync_snapshot(Some(TableSnapshot {
             document_id: 7,
             table_id: "table-1".to_owned(),
+            revision: 1,
+            passive: false,
             rows: vec![vec!["A".into()], vec!["=SUM(A1)".into()]],
             selection: TableRange::default(),
             active: TablePoint::default(),
@@ -239,11 +266,71 @@ mod tests {
     }
 
     #[test]
+    fn stale_snapshots_cannot_replace_newer_table_content() {
+        let mut bridge = TableBridge::default();
+        let newer = TableSnapshot {
+            document_id: 7,
+            table_id: "7:0".to_owned(),
+            revision: 20,
+            passive: false,
+            rows: vec![vec!["=A1+B1".into()]],
+            selection: TableRange::default(),
+            active: TablePoint::default(),
+        };
+        let older = TableSnapshot {
+            revision: 19,
+            rows: vec![vec!["=A1".into()]],
+            ..newer.clone()
+        };
+        assert!(bridge.sync_snapshot(Some(newer)));
+        assert!(!bridge.sync_snapshot(Some(older)));
+        assert_eq!(
+            bridge.snapshot().unwrap().rows[0][0],
+            "=A1+B1",
+            "a stale async snapshot replaced the newest source"
+        );
+    }
+
+    #[test]
+    fn passive_table_refreshes_keep_the_active_overlay_selection() {
+        let mut bridge = TableBridge::default();
+        bridge.sync_snapshot(Some(TableSnapshot {
+            document_id: 7,
+            table_id: "7:0".to_owned(),
+            revision: 1,
+            passive: false,
+            rows: vec![vec!["1".into(), "2".into()]],
+            selection: TableRange {
+                top: 0,
+                left: 1,
+                bottom: 0,
+                right: 1,
+            },
+            active: TablePoint { row: 0, column: 1 },
+        }));
+        bridge.sync_snapshot(Some(TableSnapshot {
+            document_id: 7,
+            table_id: "7:0".to_owned(),
+            revision: 2,
+            passive: true,
+            rows: vec![vec!["1".into(), "3".into()]],
+            selection: TableRange::default(),
+            active: TablePoint::default(),
+        }));
+        let snapshot = bridge.snapshot().unwrap();
+        assert_eq!(snapshot.rows[0][1], "3");
+        assert_eq!(snapshot.selection.left, 1);
+        assert_eq!(snapshot.active.column, 1);
+    }
+
+    #[test]
     fn table_renders_survive_switching_tables_inside_one_document() {
         let mut bridge = TableBridge::default();
         bridge.sync_snapshot(Some(TableSnapshot {
             document_id: 7,
             table_id: "7:0".to_owned(),
+            revision: 1,
+            passive: false,
             rows: vec![vec!["=SUM(A1)".into()]],
             selection: TableRange::default(),
             active: TablePoint::default(),
@@ -255,6 +342,8 @@ mod tests {
         bridge.sync_snapshot(Some(TableSnapshot {
             document_id: 7,
             table_id: "7:1".to_owned(),
+            revision: 2,
+            passive: false,
             rows: vec![vec!["plain".into()]],
             selection: TableRange::default(),
             active: TablePoint::default(),
@@ -275,6 +364,8 @@ mod tests {
         bridge.sync_snapshot(Some(TableSnapshot {
             document_id: 8,
             table_id: "8:0".to_owned(),
+            revision: 3,
+            passive: false,
             rows: vec![vec!["plain".into()]],
             selection: TableRange::default(),
             active: TablePoint::default(),

@@ -1866,6 +1866,16 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "Vim native keyboard input enters insert mode and accepts text",
+    async run() {
+      await mount("", { vim: true });
+      await requestNativeKey("text-i");
+      await waitFor('.ProseMirror[data-vim-mode="insert"]');
+      await requestNativeKey("text-x");
+      assertEqual(serialized(), "x", "native Vim insert mode rejected physical keyboard input");
+    },
+  },
+  {
     name: "bracket pairing inserts, skips and wraps using one setting",
     async run() {
       await mount("", { autoPair: true });
@@ -2132,6 +2142,40 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       editor!.insertAtCursorPlace("Z");
       await nextFrames();
       assertEqual(serialized(), "Z$x$", "text before the formula was appended inside the formula");
+    },
+  },
+  {
+    name: "Backspace after inline math removes only the closing delimiter",
+    async run() {
+      await mount("$\\LaTeX$");
+      const input = await openInlineMath();
+      input.setSelectionRange(input.value.length, input.value.length);
+      press(input, "ArrowRight");
+      await nextFrames();
+
+      await requestNativeKey("backspace");
+      assertEqual(serialized(), "$\\LaTeX", "Backspace did not remove exactly the closing delimiter");
+      assert(
+        !document.querySelector(".nota-math-inline"),
+        "the unmatched formula source stayed atomic after its closing delimiter was removed",
+      );
+    },
+  },
+  {
+    name: "Delete before inline math removes only the opening delimiter",
+    async run() {
+      await mount("$\\LaTeX$");
+      const input = await openInlineMath();
+      input.setSelectionRange(0, 0);
+      press(input, "ArrowLeft");
+      await nextFrames();
+
+      await requestNativeKey("delete");
+      assertEqual(serialized(), "\\LaTeX$", "Delete did not remove exactly the opening delimiter");
+      assert(
+        !document.querySelector(".nota-math-inline"),
+        "the unmatched formula source stayed atomic after its opening delimiter was removed",
+      );
     },
   },
   {
@@ -3316,6 +3360,103 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "One space after a plain heading marker is preserved exactly once",
+    async run() {
+      const prose = await mount("");
+      await typeText("#");
+      await requestNativeKey("space");
+      assertEqual(serialized(), "# ", "the first space was not preserved once");
+      await requestNativeKey("backspace");
+      assertEqual(serialized(), "#", "one Backspace removed more than the heading space");
+      assertEqual(
+        prose.textContent,
+        "#",
+        "the editor view and serialized Markdown disagree after Backspace",
+      );
+    },
+  },
+  {
+    name: "Empty pending heading does not inherit a previous strong mark",
+    async run() {
+      await mount("");
+      await typeText("#");
+      await requestNativeKey("space");
+      await typeText("int");
+      assertEqual(serialized(), "# int", "the pending heading title was not inserted as plain text");
+      await requestNativeKey("backspace");
+      assertEqual(serialized(), "# in", "the first Backspace removed more than one title character");
+      await requestNativeKey("backspace");
+      assertEqual(serialized(), "# i", "the second Backspace removed more than one title character");
+      await requestNativeKey("backspace");
+      assertEqual(serialized(), "# ", "deleting the heading title removed the prefix");
+      await typeText("int");
+      assertEqual(
+        serialized(),
+        "# int",
+        "retyping a cleared heading inherited a ghost strong mark",
+      );
+    },
+  },
+  {
+    name: "Backspace removes one heading space even when several were typed",
+    async run() {
+      await mount("");
+      await typeText("#");
+      await requestNativeKey("space");
+      await requestNativeKey("space");
+      await requestNativeKey("space");
+      assertEqual(serialized(), "#   ", "multiple heading spaces were not preserved");
+      await requestNativeKey("backspace");
+      assertEqual(serialized(), "#  ", "Backspace removed more than one heading space");
+    },
+  },
+  {
+    name: "Inline math delimiters share the prose line box",
+    async run() {
+      await mount("$x$ price");
+      await sleep(220);
+      await openInlineMath();
+
+      const paragraph = document.querySelector<HTMLElement>(
+        ".ProseMirror p:has(.nota-math-inline)",
+      );
+      assert(paragraph, "paragraph containing inline math was not found");
+
+      const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+      let proseText: Text | null = null;
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (node.parentElement?.closest(".nota-math-inline")) continue;
+        const index = node.textContent?.indexOf("p") ?? -1;
+        if (index >= 0) {
+          proseText = node as Text;
+          break;
+        }
+      }
+      assert(proseText, "prose text was not found");
+      const range = document.createRange();
+      range.setStart(proseText, proseText.textContent!.indexOf("p"));
+      range.setEnd(proseText, proseText.textContent!.indexOf("p") + 1);
+
+      const literalRect = range.getBoundingClientRect();
+      const delimiter = await waitFor<HTMLElement>(
+        ".nota-math-inline.nota-math-editing .nota-math-delim",
+      );
+      const delimiterRect = delimiter.getBoundingClientRect();
+      const delimiterStyle = getComputedStyle(delimiter);
+      assert(
+        Math.abs(literalRect.height - delimiterRect.height) <= 1,
+        `prose and LaTeX delimiters use different heights: ${literalRect.height}px vs ${delimiterRect.height}px; ` +
+          `display=${delimiterStyle.display}; panel=${getComputedStyle(delimiter.parentElement!).display}; ` +
+          `root=${delimiter.closest(".nota-math-inline")?.className}; html=${delimiter.outerHTML}`,
+      );
+      assert(
+        Math.abs(literalRect.top - delimiterRect.top) <= 1 &&
+          Math.abs(literalRect.bottom - delimiterRect.bottom) <= 1,
+        `prose and LaTeX delimiters use different baselines: ${literalRect.top}/${literalRect.bottom} vs ${delimiterRect.top}/${delimiterRect.bottom}`,
+      );
+    },
+  },
+  {
     name: "trailing backslash stays compact before the closing dollar",
     async run() {
       await mount("$x$");
@@ -4039,15 +4180,44 @@ async function main(): Promise<void> {
   writeReport(results);
 }
 
-void main().catch((error: unknown) => {
-  resultReport.dataset.status = "failed";
-  resultReport.dataset.count = "0";
-  resultReport.dataset.report = encodeResult([
-    {
-      name: "E2E harness",
-      passed: false,
-      detail: error instanceof Error ? error.stack ?? error.message : String(error),
+if (new URLSearchParams(window.location.search).get("webkitProbe") === "1") {
+  Object.assign(window, {
+    __notaWebkitProbe: {
+      async mount(markdown = "", options: Parameters<typeof mount>[1] = {}) {
+        await mount(markdown, options);
+        return serialized();
+      },
+      markdown: serialized,
+      html: () => document.querySelector(".ProseMirror")?.innerHTML ?? "",
+      selectionRange: () => editor?.selectionRange() ?? null,
+      domSelection: () => {
+        const selection = window.getSelection();
+        return selection
+          ? {
+              anchor: selection.anchorOffset,
+              focus: selection.focusOffset,
+              anchorText: selection.anchorNode?.textContent ?? "",
+              anchorParent:
+                selection.anchorNode?.parentElement?.outerHTML ?? "",
+            }
+          : null;
+      },
+      setMarkdown: (markdown: string) => editor?.setMarkdown(markdown),
+      focus: () => editor?.focus(),
+      destroy: () => editor?.destroy(),
     },
-  ]);
-  resultReport.textContent = `FAIL E2E harness\n${String(error)}`;
-});
+  });
+} else {
+  void main().catch((error: unknown) => {
+    resultReport.dataset.status = "failed";
+    resultReport.dataset.count = "0";
+    resultReport.dataset.report = encodeResult([
+      {
+        name: "E2E harness",
+        passed: false,
+        detail: error instanceof Error ? error.stack ?? error.message : String(error),
+      },
+    ]);
+    resultReport.textContent = `FAIL E2E harness\n${String(error)}`;
+  });
+}

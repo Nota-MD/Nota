@@ -47,6 +47,8 @@ testCase("crossing the minimum arms a release guide", () => {
   equal(source.includes("if (commit && collapseArmed)"), true, "release-only collapse");
   const css = readFileSync("src/styles/dock.css", "utf8");
   equal(css.includes("body.dock-collapse-armed::after"), true, "right edge guide");
+  equal(css.includes("var(--collapse-guide, var(--accent))"), true, "edge guide follows theme accent");
+  equal(css.includes("var(--danger) 0 6px"), false, "edge guide must not be fixed danger red");
 });
 testCase("不是数就退回出厂值", () => {
   for (const strange of [NaN, Infinity, -Infinity]) equal(clampRightBarWidth(strange), rightBarWidthDefault, String(strange));

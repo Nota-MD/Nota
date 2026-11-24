@@ -118,7 +118,7 @@ body.dock-collapse-armed::after {
   width: 2px;
   background: repeating-linear-gradient(
     to bottom,
-    var(--danger) 0 6px,
+    var(--collapse-guide, var(--accent)) 0 6px,
     transparent 6px 11px
   );
   content: "";

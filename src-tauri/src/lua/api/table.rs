@@ -303,6 +303,8 @@ mod tests {
         let snapshot = TableSnapshot {
             document_id: 4,
             table_id: "t".into(),
+            revision: 1,
+            passive: false,
             rows: vec![
                 vec!["A1".into(), "B1".into()],
                 vec!["A2".into(), "B2".into()],

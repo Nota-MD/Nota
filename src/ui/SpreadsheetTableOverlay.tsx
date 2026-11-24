@@ -48,6 +48,7 @@ interface Layout {
   active: Point;
   box: { left: number; top: number; width: number; height: number };
   formulaTop: number;
+  formulaWidth: number;
 }
 
 interface ReferenceBox {
@@ -58,6 +59,16 @@ interface ReferenceBox {
   height: number;
   tone: number;
   range: boolean;
+}
+
+interface ReferencePreview {
+  range: Range;
+  box: ReferenceBox;
+}
+
+export interface FormulaReferenceInsertion {
+  start: number;
+  end: number;
 }
 
 interface FormulaToken {
@@ -116,6 +127,20 @@ export function insertFormulaReference(
     value: value.slice(0, start) + reference + value.slice(end),
     caret: start + reference.length,
   };
+}
+
+export function canReplaceFormulaReference(
+  draft: string,
+  selectionStart: number,
+  selectionEnd: number,
+  previous: FormulaReferenceInsertion | null,
+): previous is FormulaReferenceInsertion {
+  return Boolean(
+    previous &&
+      selectionStart === previous.end &&
+      selectionEnd === previous.end &&
+      previous.end === draft.length,
+  );
 }
 
 function cellPoint(element: Element | null): Point | null {
@@ -215,6 +240,51 @@ export function referenceBoxesFor(
     });
   }
   return boxes;
+}
+
+export function isFormulaReferenceDraft(value: string): boolean {
+  return /^\s*=/.test(value);
+}
+
+function referenceToneAt(
+  draft: string,
+  range: Range,
+  start: number,
+  end: number,
+): number {
+  const reference = rangeLabel(range);
+  const preview = draft.slice(0, start) + reference + draft.slice(end);
+  let position = 0;
+  for (const token of formulaTokens(preview)) {
+    if (token.kind === "reference" && position === start) return token.tone;
+    position += token.text.length;
+  }
+  return 0;
+}
+
+function referencePreviewFor(
+  table: HTMLTableElement,
+  range: Range,
+  draft: string,
+  start: number,
+  end: number,
+): ReferencePreview | null {
+  const startRect = table.rows[range.top]?.cells[range.left]?.getBoundingClientRect();
+  const endRect = table.rows[range.bottom]?.cells[range.right]?.getBoundingClientRect();
+  if (!startRect || !endRect) return null;
+  const tone = referenceToneAt(draft, range, start, end);
+  return {
+    range,
+    box: {
+      key: `preview-${rangeLabel(range)}`,
+      left: Math.min(startRect.left, endRect.left),
+      top: Math.min(startRect.top, endRect.top),
+      width: Math.max(startRect.right, endRect.right) - Math.min(startRect.left, endRect.left),
+      height: Math.max(startRect.bottom, endRect.bottom) - Math.min(startRect.top, endRect.top),
+      tone,
+      range: true,
+    },
+  };
 }
 
 function snapshotFor(
@@ -335,6 +405,7 @@ export function SpreadsheetTableOverlay({
   const layoutRef = useRef<Layout | null>(null);
   const [draft, setDraft] = useState("");
   const [referenceBoxes, setReferenceBoxes] = useState<ReferenceBox[]>([]);
+  const [referencePreview, setReferencePreview] = useState<ReferencePreview | null>(null);
   const [formulaComposing, setFormulaComposing] = useState(false);
   const anchor = useRef<Point | null>(null);
   const selection = useRef<Range | null>(null);
@@ -344,10 +415,15 @@ export function SpreadsheetTableOverlay({
   const formulaActive = useRef(false);
   const formulaTarget = useRef<Point | null>(null);
   const referencing = useRef(false);
+  const referenceRange = useRef<Range | null>(null);
+  const referenceStart = useRef(0);
+  const referenceEnd = useRef(0);
+  const lastReferenceInsertion = useRef<FormulaReferenceInsertion | null>(null);
   const lastSnapshot = useRef("");
   const lastRender = useRef<TableRenderPayload | null>(null);
   const dragging = useRef(false);
   const filling = useRef(false);
+  const contextSelectionFrozen = useRef(false);
 
   useLayoutEffect(() => {
     layoutRef.current = layout;
@@ -360,6 +436,9 @@ export function SpreadsheetTableOverlay({
     if (!visible) {
       formulaActive.current = false;
       formulaTarget.current = null;
+      referenceRange.current = null;
+      lastReferenceInsertion.current = null;
+      setReferencePreview(null);
       lastSnapshot.current = "";
       setLayout(null);
       return;
@@ -367,6 +446,9 @@ export function SpreadsheetTableOverlay({
     let frame = 0;
     let polling = 0;
     let lastGeometry = "";
+    const contextMenuOwnsFocus = () =>
+      document.activeElement instanceof Element &&
+      Boolean(document.activeElement.closest("[data-context-menu]"));
     const measure = () => {
       const selected = window.getSelection();
       const element =
@@ -378,7 +460,13 @@ export function SpreadsheetTableOverlay({
         // Focusing the native formula input can temporarily move the browser
         // selection out of the table. Keep the overlay mounted while that input
         // owns the interaction, otherwise React unmounts it on pointer focus.
-        if (formulaActive.current) return;
+        if (
+          formulaActive.current ||
+          contextSelectionFrozen.current ||
+          contextMenuOwnsFocus()
+        ) {
+          return;
+        }
         setLayout(null);
         return;
       }
@@ -465,6 +553,12 @@ export function SpreadsheetTableOverlay({
           contentTop + 4,
           Math.min(viewport.bottom - 30, tableRect.top - 62),
         ),
+        formulaWidth: Math.max(
+          280,
+          Math.min(viewport.right, window.innerWidth) -
+            Math.max(viewport.left, tableRect.left) -
+            8,
+        ),
       });
       if (
         !formulaActive.current ||
@@ -490,6 +584,24 @@ export function SpreadsheetTableOverlay({
       frame = 0;
       measure();
     };
+    const publishSnapshot = () => {
+      const current = layoutRef.current;
+      if (!current) return;
+      const table = activeTableFor(current);
+      const selected = window.getSelection();
+      const element =
+        selected?.anchorNode instanceof Element
+          ? selected.anchorNode
+          : selected?.anchorNode?.parentElement ?? null;
+      const active = cellPoint(element) ?? current.active;
+      const range = selection.current ?? current.selection;
+      const snapshot = snapshotFor(table, documentKey, range, active);
+      if (!snapshot) return;
+      const signature = JSON.stringify(snapshot);
+      if (signature === lastSnapshot.current) return;
+      lastSnapshot.current = signature;
+      void api.table.syncSnapshot(snapshot);
+    };
     const poll = () => {
       syncGeometry();
       const liveLayout = layoutRef.current;
@@ -510,10 +622,16 @@ export function SpreadsheetTableOverlay({
           }
         }
       }
+      publishSnapshot();
       polling = requestAnimationFrame(poll);
     };
     const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(measure);
+      if (!frame) {
+        frame = requestAnimationFrame(() => {
+          measure();
+          publishSnapshot();
+        });
+      }
     };
     schedule();
     polling = requestAnimationFrame(poll);
@@ -559,6 +677,12 @@ export function SpreadsheetTableOverlay({
     lastSnapshot.current = signature;
     void api.table.syncSnapshot(snapshot);
   }, [documentKey, layout, visible]);
+
+  useEffect(() => {
+    if (formulaActive.current && isFormulaReferenceDraft(draft)) return;
+    referenceRange.current = null;
+    setReferencePreview(null);
+  }, [draft]);
 
   useLayoutEffect(() => {
     if (!visible || !layout) {
@@ -618,36 +742,59 @@ export function SpreadsheetTableOverlay({
     };
     const down = (event: PointerEvent) => {
       if (event.button !== 0) return;
+      if (!(event.target instanceof Element) || !event.target.closest("[data-context-menu]")) {
+        contextSelectionFrozen.current = false;
+      }
       const table = activeTableFor(layout);
       const point = cellPoint(event.target as Element);
       if (!point) return;
-      if (formulaActive.current && formulaTarget.current) {
+      if (
+        formulaActive.current &&
+        formulaTarget.current &&
+        isFormulaReferenceDraft(draftRef.current)
+      ) {
         if (
           point.row === formulaTarget.current.row &&
           point.column === formulaTarget.current.column
         ) {
+          event.preventDefault();
+          event.stopPropagation();
+          requestAnimationFrame(() => formulaInput.current?.focus({ preventScroll: true }));
           return;
         }
         event.preventDefault();
         event.stopPropagation();
         anchor.current = point;
-        selection.current = normalizeRange(point, point);
-        paintRange(table, selection.current);
+        referenceRange.current = normalizeRange(point, point);
+        const input = formulaInput.current;
+        const selectionStart = input?.selectionStart ?? draftRef.current.length;
+        const selectionEnd = input?.selectionEnd ?? draftRef.current.length;
+        if (
+          canReplaceFormulaReference(
+            draftRef.current,
+            selectionStart,
+            selectionEnd,
+            lastReferenceInsertion.current,
+          )
+        ) {
+          referenceStart.current = lastReferenceInsertion.current.start;
+          referenceEnd.current = lastReferenceInsertion.current.end;
+        } else {
+          referenceStart.current = selectionStart;
+          referenceEnd.current = selectionEnd;
+        }
+        setReferencePreview(
+          referencePreviewFor(
+            table,
+            referenceRange.current,
+            draftRef.current,
+            referenceStart.current,
+            referenceEnd.current,
+          ),
+        );
         dragging.current = true;
         referencing.current = true;
         filling.current = false;
-        setLayout((current) => {
-          if (!current) return current;
-          const box = boxForRange(table, selection.current!);
-          return box
-            ? {
-                ...current,
-                selection: selection.current!,
-                active: formulaTarget.current!,
-                box,
-              }
-            : current;
-        });
         requestAnimationFrame(() => formulaInput.current?.focus({ preventScroll: true }));
         return;
       }
@@ -668,24 +815,53 @@ export function SpreadsheetTableOverlay({
     };
     const move = (event: PointerEvent) => {
       if (!dragging.current && !filling.current) return;
+      if (referencing.current && formulaTarget.current && formulaActive.current) {
+        const table = activeTableFor(layout);
+        const point = pointerPoint(table, event.clientX, event.clientY);
+        if (!point || !anchor.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+        referenceRange.current = normalizeRange(anchor.current, point);
+        setReferencePreview(
+          referencePreviewFor(
+            table,
+            referenceRange.current,
+            draftRef.current,
+            referenceStart.current,
+            referenceEnd.current,
+          ),
+        );
+        return;
+      }
       const point = updateFromPointer(event);
       if (point && (point.row !== anchor.current?.row || point.column !== anchor.current?.column)) {
         event.preventDefault();
       }
     };
     const up = (event: PointerEvent) => {
-      if (referencing.current && selection.current && formulaInput.current) {
+      if (
+        referencing.current &&
+        referenceRange.current &&
+        formulaInput.current &&
+        isFormulaReferenceDraft(draftRef.current)
+      ) {
         event.preventDefault();
         event.stopPropagation();
         const input = formulaInput.current;
         const released = insertFormulaReference(
           draftRef.current,
-          input.selectionStart ?? draftRef.current.length,
-          input.selectionEnd ?? draftRef.current.length,
-          selection.current,
+          referenceStart.current,
+          referenceEnd.current,
+          referenceRange.current,
         );
         draftRef.current = released.value;
         setDraft(released.value);
+        lastReferenceInsertion.current = {
+          start: referenceStart.current,
+          end: released.caret,
+        };
+        referenceRange.current = null;
+        setReferencePreview(null);
         referencing.current = false;
         dragging.current = false;
         requestAnimationFrame(() => {
@@ -718,6 +894,8 @@ export function SpreadsheetTableOverlay({
       dragging.current = false;
       filling.current = false;
       referencing.current = false;
+      referenceRange.current = null;
+      setReferencePreview(null);
     };
     const preserveSecondarySelection = (event: MouseEvent) => {
       if (event.button !== 2 || !selection.current) return;
@@ -726,10 +904,26 @@ export function SpreadsheetTableOverlay({
       event.preventDefault();
       event.stopPropagation();
     };
+    const preserveFormulaFocus = (event: MouseEvent) => {
+      if (
+        event.button !== 0 ||
+        !formulaActive.current ||
+        !formulaTarget.current ||
+        !isFormulaReferenceDraft(draftRef.current)
+      ) {
+        return;
+      }
+      const point = cellPoint(event.target as Element);
+      if (!point) return;
+      event.preventDefault();
+      event.stopPropagation();
+      requestAnimationFrame(() => formulaInput.current?.focus({ preventScroll: true }));
+    };
     const preserveContextSelection = (event: MouseEvent) => {
       if (!selection.current) return;
       const point = cellPoint(event.target as Element);
       if (!point || !rangeContains(selection.current, point)) return;
+      contextSelectionFrozen.current = true;
       event.preventDefault();
       event.stopPropagation();
       requestAnimationFrame(() => {
@@ -743,17 +937,41 @@ export function SpreadsheetTableOverlay({
         });
       });
     };
+    const restoreFrozenSelection = (event: FocusEvent) => {
+      const target = event.target;
+      if (
+        !selection.current ||
+        !(target instanceof Element) ||
+        !target.closest("[data-context-menu]")
+      ) {
+        return;
+      }
+      window.setTimeout(() => {
+        const range = selection.current;
+        if (!range) return;
+        run("tableSelectRange", {
+          tableRow: range.top,
+          tableColumn: range.left,
+          tableToRow: range.bottom,
+          tableToColumn: range.right,
+        });
+      }, 0);
+    };
     window.addEventListener("pointerdown", down, true);
     window.addEventListener("mousedown", preserveSecondarySelection, true);
+    window.addEventListener("mousedown", preserveFormulaFocus, true);
     document.addEventListener("contextmenu", preserveContextSelection, true);
     window.addEventListener("pointermove", move, true);
     window.addEventListener("pointerup", up, true);
+    document.addEventListener("focusin", restoreFrozenSelection, true);
     return () => {
       window.removeEventListener("pointerdown", down, true);
       window.removeEventListener("mousedown", preserveSecondarySelection, true);
+      window.removeEventListener("mousedown", preserveFormulaFocus, true);
       document.removeEventListener("contextmenu", preserveContextSelection, true);
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
+      document.removeEventListener("focusin", restoreFrozenSelection, true);
     };
   }, [layout, run, visible]);
 
@@ -767,7 +985,7 @@ export function SpreadsheetTableOverlay({
       tableText: draft,
     });
   };
-  const width = Math.max(280, layout.tableRect.width);
+  const width = layout.formulaWidth;
   const formulaLeft = Math.max(8, Math.min(layout.tableRect.left, window.innerWidth - width - 8));
   const highlightTokens = formulaTokens(draft);
   const applyLocalRange = (range: Range, active: Point) => {
@@ -829,7 +1047,10 @@ export function SpreadsheetTableOverlay({
               onFormulaActiveChange?.(true);
             }}
             onClick={(event) => event.stopPropagation()}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              lastReferenceInsertion.current = null;
+              setDraft(event.target.value);
+            }}
             onCompositionStart={() => setFormulaComposing(true)}
             onCompositionEnd={() => {
               requestAnimationFrame(() => setFormulaComposing(false));
@@ -844,6 +1065,9 @@ export function SpreadsheetTableOverlay({
               onFormulaActiveChange?.(false);
               commit();
               formulaTarget.current = null;
+              referenceRange.current = null;
+              lastReferenceInsertion.current = null;
+              setReferencePreview(null);
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
@@ -921,6 +1145,17 @@ export function SpreadsheetTableOverlay({
           }}
         />
       ))}
+      {referencePreview && (
+        <div
+          className={`sheet-reference-box is-preview sheet-tone-${referencePreview.box.tone}`}
+          style={{
+            left: referencePreview.box.left,
+            top: referencePreview.box.top,
+            width: referencePreview.box.width,
+            height: referencePreview.box.height,
+          }}
+        />
+      )}
       <div
         className="sheet-range-box"
         style={{

@@ -83,7 +83,7 @@ import { instantRender } from "./instant-render";
 
 
 import { inlineSyntaxNodePlugins, literalInlineInput, markHint } from "./mark-hint";
-import { inlineEscapeNodePlugins } from "./inline-escape";
+import { inlineEscapeNodePlugins, remarkInlineEscapePlugins } from "./inline-escape";
 import { compositionPruneGuard, linuxImeEnterGuard } from "./ime-guard";
 
 
@@ -699,7 +699,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
 
-    .use(readOnly ? [] : [...inlineSyntaxNodePlugins, ...inlineEscapeNodePlugins, markHint])
+    .use(readOnly ? [] : [...remarkInlineEscapePlugins, ...inlineSyntaxNodePlugins, ...inlineEscapeNodePlugins, markHint])
 
 
 

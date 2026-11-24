@@ -166,6 +166,8 @@ testCase("Crossing the minimum arms an edge guide and collapses only on release"
   equal(source.includes("if (commit && collapseArmed)"), true, "release-only collapse");
   const css = readFileSync("src/styles/sidebar.css", "utf8");
   equal(css.includes("body.sidebar-collapse-armed::before"), true, "left edge guide");
+  equal(css.includes("var(--collapse-guide, var(--accent))"), true, "edge guide follows theme accent");
+  equal(css.includes("var(--danger) 0 6px"), false, "edge guide must not be fixed danger red");
 });
 
 testCase("太窄 → 夹到最小：⚠️ 不能拖成 0", () => {

@@ -3,6 +3,8 @@ import { NodeSelection, Plugin, TextSelection } from "@milkdown/kit/prose/state"
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import { commonStyleCurrentKey } from "./math-current";
+import { mathDelimiterText } from "./math-delim";
+import { readSource } from "./math-view-source";
 
 export function inlineMathBeforeCaret(state: EditorState): number | null {
   const selection = state.selection;
@@ -58,12 +60,71 @@ export function inlineMathHitCaret(
   return null;
 }
 
+function enterInlineMathSource(
+  view: EditorView,
+  position: number,
+  side: "start" | "end",
+): boolean {
+  const formula = view.nodeDOM(position);
+  const source =
+    formula instanceof Element
+      ? formula.querySelector<HTMLInputElement>(".nota-math-source")
+      : null;
+  if (!source) return false;
+  source.focus();
+  const caret = side === "start" ? 0 : source.value.length;
+  source.setSelectionRange(caret, caret);
+  return true;
+}
+
+function removeInlineMathDelimiter(
+  view: EditorView,
+  position: number,
+  side: "opening" | "closing",
+): boolean {
+  const node = view.state.doc.nodeAt(position);
+  if (!node || node.type.name !== "math_inline") return false;
+
+  const literal =
+    side === "closing"
+      ? `${mathDelimiterText(node)}${readSource(node)}`
+      : `${readSource(node)}${mathDelimiterText(node, true)}`;
+  const text = view.state.schema.text(literal, node.marks);
+  const end = position + node.nodeSize;
+  const tr = view.state.tr.replaceWith(position, end, text);
+  const caret = side === "closing" ? position + text.nodeSize : position;
+  tr.setSelection(TextSelection.create(tr.doc, caret));
+  tr.setMeta(commonStyleCurrentKey, caret);
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+  return true;
+}
+
 /** Left from the text boundary after inline math enters its source editor. */
 export const inlineMathBoundaryEditing = $prose(
   () =>
     new Plugin({
       props: {
         handleKeyDown(view, event) {
+          if (
+            (event.key === "Backspace" || event.key === "Delete") &&
+            !event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey
+          ) {
+            const position =
+              event.key === "Backspace"
+                ? inlineMathBeforeCaret(view.state)
+                : inlineMathAfterCaret(view.state);
+            if (position === null) return false;
+            return removeInlineMathDelimiter(
+              view,
+              position,
+              event.key === "Backspace" ? "closing" : "opening",
+            );
+          }
+
           if (
             (event.key !== "ArrowLeft" && event.key !== "ArrowRight") ||
             event.shiftKey ||
@@ -78,15 +139,11 @@ export const inlineMathBoundaryEditing = $prose(
             ? inlineMathBeforeCaret(view.state)
             : inlineMathAfterCaret(view.state);
           if (position === null) return false;
-          const formula = view.nodeDOM(position);
-          const source = formula instanceof Element
-            ? formula.querySelector<HTMLInputElement>(".nota-math-source")
-            : null;
-          if (!source) return false;
-          source.focus();
-          const caret = enteringFromRight ? source.value.length : 0;
-          source.setSelectionRange(caret, caret);
-          return true;
+          return enterInlineMathSource(
+            view,
+            position,
+            enteringFromRight ? "end" : "start",
+          );
         },
       },
     }),

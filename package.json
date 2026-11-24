@@ -12,6 +12,7 @@
     "test": "bash tools/test-frontend.sh",
     "test:smoke": "bash tools/test-frontend.sh tests/source-language-policy.test.ts tests/blink-caret.test.ts tests/mark-hint-syntax.test.ts tests/inline-editing-rewrite.test.ts tests/ime-cursor.test.ts tests/keyboard-experience.test.ts tests/url-link.test.ts tests/update-contract.test.ts tests/windows-runtime.test.ts",
     "test:e2e": "node e2e/run.mjs",
+    "test:webkit": "bash tools/test-webkit.sh",
     "audit:identifiers": "node tools/ts-identifier-audit.mjs",
     "audit:language": "node tools/source-language-audit.mjs --check",
     "audit:pinyin": "node tools/pinyin-identifier-audit.mjs --check",

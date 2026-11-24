@@ -51,6 +51,9 @@ export function TableToolbar({
     let frame = 0;
     let polling = 0;
     let lastGeometry = "";
+    const contextMenuOwnsFocus = () =>
+      document.activeElement instanceof Element &&
+      Boolean(document.activeElement.closest("[data-context-menu]"));
     const standaloneImmediatelyFixedPosition = () => {
       frame = 0;
       const selection = window.getSelection();
@@ -59,7 +62,7 @@ export function TableToolbar({
         anchor instanceof Element ? anchor : anchor?.parentElement ?? null;
       const table = element?.closest<HTMLTableElement>(".ProseMirror table");
       if (!table) {
-        if (spreadsheetEditing.current) return;
+        if (spreadsheetEditing.current || contextMenuOwnsFocus()) return;
         setPosition(null);
         return;
       }

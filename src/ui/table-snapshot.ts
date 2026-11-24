@@ -1,5 +1,7 @@
 import type { TableSnapshot } from "@/bridge/ipc";
 
+let snapshotRevision = 0;
+
 export function tableIdentifier(
   table: HTMLTableElement,
   documentKey: string | number,
@@ -16,6 +18,7 @@ export function snapshotForTable(
   documentKey: string | number,
   selection: TableSnapshot["selection"],
   active: TableSnapshot["active"],
+  passive = false,
 ): TableSnapshot | null {
   const documentId = typeof documentKey === "number" ? documentKey : Number(documentKey);
   if (!Number.isSafeInteger(documentId)) return null;
@@ -24,6 +27,8 @@ export function snapshotForTable(
   return {
     documentId,
     tableId,
+    revision: ++snapshotRevision,
+    passive,
     rows: Array.from(table.rows, (row) =>
       Array.from(row.cells, (cell) => cell.textContent ?? ""),
     ),

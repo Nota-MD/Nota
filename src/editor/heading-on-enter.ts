@@ -385,6 +385,19 @@ export const lineFirstBackCell =
     }
 
     if (block.type.name !== "paragraph") return false;
+    const text = block.textContent;
+    if (
+      /^#{1,6}[ \u00a0]+$/.test(text) &&
+      $from.parentOffset === text.length
+    ) {
+      if (!dispatch) return true;
+      const start5 = $from.start($from.depth);
+      const space = start5 + text.length - 1;
+      const tr = state.tr.delete(space, space + 1);
+      tr.setSelection(TextSelection.create(tr.doc, space));
+      dispatch(tr);
+      return true;
+    }
     const prefix2 = atxPrefix(block.textContent, strict);
     if (!prefix2 || $from.parentOffset !== prefix2.lengthDegree) return false;
 
@@ -395,35 +408,6 @@ export const lineFirstBackCell =
     dispatch(tr.scrollIntoView());
     return true;
   };
-
-function preparePlainHeadingPrefix(view: EditorView): boolean {
-  if (!view.editable) return false;
-  const { $from, empty } = view.state.selection;
-  const paragraph2 = $from.parent;
-  const after = $from.nodeAfter;
-  if (
-    !empty ||
-    paragraph2.type.name !== "paragraph" ||
-    (after !== null && after.type.name !== "notaSyntax") ||
-    !/^#{1,6}$/.test(paragraph2.textContent)
-  ) {
-    return false;
-  }
-  const start5 = $from.before($from.depth);
-  const plain = paragraph2.type.create(
-    paragraph2.attrs,
-    view.state.schema.text(`${paragraph2.textContent} `),
-  );
-  const tr = view.state.tr.replaceWith(
-    start5,
-    start5 + paragraph2.nodeSize,
-    plain,
-  );
-  tr.setSelection(TextSelection.create(tr.doc, start5 + 3));
-  tr.setStoredMarks([]);
-  view.dispatch(tr.scrollIntoView());
-  return true;
-}
 
 
 
@@ -460,26 +444,99 @@ export const markTitleLineFirstBackCell = (strict: boolean) => $shortcut(() => (
 export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
   let bufferSave: { doc: PMNode; item: PendingDecoration[] } | null = null;
 
+  const insertPendingHeadingText = (
+    view: EditorView,
+    from: number,
+    to: number,
+    text: string,
+  ): boolean => {
+    const paragraph = view.state.doc.resolve(from).parent;
+    if (
+      paragraph.type.name !== "paragraph" ||
+      !/^#{1,6}[ \u00a0]*$/.test(paragraph.textContent) ||
+      from !== view.state.selection.from ||
+      to !== view.state.selection.to
+    ) {
+      return false;
+    }
+
+    const tr = view.state.tr.replaceWith(
+      from,
+      to,
+      view.state.schema.text(text),
+    );
+    const caret = from + text.length;
+    tr.setSelection(TextSelection.create(tr.doc, caret));
+    tr.setStoredMarks([]);
+    view.dispatch(tr.scrollIntoView());
+    view.focus();
+    const syncDomCaret = (): void => {
+      if (view.isDestroyed || !view.state.selection.empty) return;
+      const position = view.state.selection.from;
+      const domCaret = view.domAtPos(position, -1);
+      window.getSelection()?.setBaseAndExtent(
+        domCaret.node,
+        domCaret.offset,
+        domCaret.node,
+        domCaret.offset,
+      );
+    };
+    syncDomCaret();
+    requestAnimationFrame(syncDomCaret);
+    return true;
+  };
+
   return new Plugin({
     key: new PluginKey("nota-heading-on-enter"),
+    appendTransaction: (transactions, _oldState, newState) => {
+      if (!transactions.some((transaction) => transaction.docChanged || transaction.selectionSet)) {
+        return null;
+      }
+      const { $from, empty } = newState.selection;
+      const block = $from.parent;
+      if (
+        empty &&
+        block.type.name === "paragraph" &&
+        /^#{1,6}[ \u00a0]*$/.test(block.textContent) &&
+        (newState.storedMarks?.length ?? 0) > 0
+      ) {
+        return newState.tr.setStoredMarks([]);
+      }
+      return null;
+    },
     props: {
-      handleTextInput: (view, from, to, text4) =>
-        text4 === " " && from === to && preparePlainHeadingPrefix(view),
-      handleKeyDown: (view, event) => {
+      handleTextInput: (view, from, to, text) => {
         if (
-          event.key === " " &&
-          !event.shiftKey &&
+          view.composing ||
+          from !== to ||
+          !text ||
+          text === " " ||
+          text === "\u00a0"
+        ) {
+          return false;
+        }
+        return insertPendingHeadingText(view, from, to, text);
+      },
+      handleKeyDown: (view, event) => {
+        const { $from, empty } = view.state.selection;
+        if (
+          empty &&
+          $from.parent.type.name === "paragraph" &&
+          /^#{1,6}[ \u00a0]*$/.test($from.parent.textContent) &&
+          (view.state.storedMarks?.length ?? 0) > 0 &&
           !event.ctrlKey &&
           !event.metaKey &&
-          !event.altKey &&
-          !view.composing
+          !event.altKey
         ) {
-          if (preparePlainHeadingPrefix(view)) {
+          view.dispatch(view.state.tr.setStoredMarks([]));
+        }
+
+        if (event.key === "Backspace" && !event.shiftKey) {
+          if (lineFirstBackCell(strict)(view.state, (tr) => view.dispatch(tr), view)) {
             event.preventDefault();
             return true;
           }
         }
-
 
         if (
           event.key !== "Enter" ||
@@ -492,6 +549,46 @@ export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
           return false;
         }
         return returnCarBecomeMarkTitle(view, strict);
+      },
+      handleDOMEvents: {
+        beforeinput: (view, rawEvent) => {
+          const event = rawEvent as InputEvent;
+          if (
+            view.composing ||
+            event.isComposing ||
+            event.inputType !== "insertText" ||
+            !event.data ||
+            event.data === " " ||
+            event.data === "\u00a0" ||
+            !view.state.selection.empty
+          ) {
+            return false;
+          }
+          if (
+            !insertPendingHeadingText(
+              view,
+              view.state.selection.from,
+              view.state.selection.to,
+              event.data,
+            )
+          ) {
+            return false;
+          }
+          event.preventDefault();
+          return true;
+        },
+        compositionstart: (view) => {
+          const { $from, empty } = view.state.selection;
+          if (
+            empty &&
+            $from.parent.type.name === "paragraph" &&
+            /^#{1,6}[ \u00a0]*$/.test($from.parent.textContent) &&
+            (view.state.storedMarks?.length ?? 0) > 0
+          ) {
+            view.dispatch(view.state.tr.setStoredMarks([]));
+          }
+          return false;
+        },
       },
 
       decorations: (state) => {

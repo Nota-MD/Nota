@@ -36,6 +36,7 @@ pub mod remote;
 pub mod session;
 pub mod settings;
 pub mod settings_export;
+pub mod settings_watch;
 pub mod single_instance;
 pub mod spell;
 pub mod state;
@@ -50,6 +51,7 @@ pub mod update;
 pub mod upload;
 pub mod url_scheme;
 pub mod watch;
+pub mod window_host;
 pub mod window_registry;
 
 use std::sync::{Arc, Mutex};
@@ -138,8 +140,11 @@ fn match_only_webview_replace_store(app: &tauri::AppHandle) {
 fn match_only_webview_replace_store(_app: &tauri::AppHandle) {}
 
 pub fn run() {
-    let opens_debug_window = cli::wants_debug_window(std::env::args_os());
-    let standalone_settings_window = cli::opens_settings_window(std::env::args_os());
+    let window_role = window_host::current_role();
+    let opens_debug_window = window_role == Some(window_host::WindowRole::DebugLog);
+    let standalone_settings_window = window_role == Some(window_host::WindowRole::Settings);
+    let standalone_about_window = window_role == Some(window_host::WindowRole::About);
+    let utility_window = window_role.is_some_and(window_host::WindowRole::utility);
 
     crate::debug_log!("[nota] debug mode enabled (NOTA_DEBUG); log output is normally suppressed");
     match_only_webkit_render_start();
@@ -158,11 +163,8 @@ pub fn run() {
 
     let requested_open_file = cli::first_open_file(std::env::args_os());
 
-    let single_instance_claim = if opens_debug_window || standalone_settings_window {
+    let single_instance_claim = if window_role.is_some() {
         crate::debug_log!("[nota] utility window: bypassing single instance");
-        None
-    } else if cli::wants_new_window(std::env::args_os()) {
-        crate::debug_log!("[nota] --new-window: bypassing single instance");
         None
     } else {
         match single_instance::claim(requested_open_file.as_deref().map(|p| p.as_os_str())) {
@@ -305,6 +307,20 @@ pub fn run() {
 
                 app_language: application_language,
             });
+
+            if standalone_settings_window || standalone_about_window {
+                crate::log::record(format!(
+                    "[nota] utility-window pid={} role={:?} standalone runtime entered",
+                    std::process::id(),
+                    window_role
+                ));
+                app.manage(plugin::ReviewState::new());
+                app.manage(plugin::watch::PluginWatch::default());
+                app.manage(plugin::DeferredDiscovery::new(resource_dir, base));
+                crate::debug_log!("[nota] standalone utility runtime ready");
+                return Ok(());
+            }
+
             let bridge = dev_bridge::DevBridge::default();
             app.manage(bridge);
             let general = app
@@ -349,6 +365,7 @@ pub fn run() {
 
 
             app.manage(watch::FileWatcher::new(app.handle().clone()));
+            app.manage(settings_watch::SettingsWatch::start(app.handle().clone()));
 
 
 
@@ -582,7 +599,7 @@ pub fn run() {
 
 
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if standalone_settings_window && window.label() == "main" {
+                if utility_window && window.label() == "main" {
                     api.prevent_close();
                     window.app_handle().exit(0);
                     return;
@@ -681,84 +698,84 @@ pub fn run() {
 
 
         .on_page_load(move |webview, payload| {
-            if standalone_settings_window {
+            if let Some(role) = window_role.filter(|role| role.utility()) {
                 if webview.label() != "main" {
                     return;
                 }
-                let is_settings_page = payload
-                    .url()
-                    .query_pairs()
-                    .any(|(name, value)| name == "settings" && value == "1");
-                if is_settings_page {
+                let expected = role.page();
+                let expected_suffix = format!("/{expected}");
+                let loaded = payload.url().path().ends_with(&expected_suffix)
+                    || payload.url().path().ends_with(expected);
+                if loaded {
                     let window = webview.window();
-                    let _ = window.set_title("Nota Settings");
-                    let _ = window.set_size(tauri::LogicalSize::new(1080.0, 700.0));
-                    let _ = window.set_min_size(Some(tauri::LogicalSize::new(720.0, 520.0)));
+                    let (width, height) = role.size();
+                    let _ = window.set_title(role.title());
+                    let _ = window.set_size(tauri::LogicalSize::new(width, height));
                     let _ = window.set_skip_taskbar(false);
+                    let _ = window.remove_menu();
                     let _ = window.center();
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    if let Err(error) = window.show() {
+                        crate::log::record(format!(
+                            "[nota] utility-window pid={} role={role:?} show failed: {error}",
+                            std::process::id(),
+                        ));
+                    }
+                    if let Err(error) = window.set_focus() {
+                        crate::log::record(format!(
+                            "[nota] utility-window pid={} role={role:?} focus failed: {error}",
+                            std::process::id(),
+                        ));
+                    }
+                    crate::log::record(format!(
+                        "[nota] utility-window pid={} role={role:?} page shown url={}",
+                        std::process::id(),
+                        payload.url()
+                    ));
+                    window_host::signal_ready();
                     #[cfg(target_os = "linux")]
                     {
                         let _ = webview.with_webview(|platform| {
                             commands::window::focus_linux_webview(&platform.inner())
                         });
                     }
-                } else if let Err(e) =
-                    webview.eval("window.location.replace('index.html?settings=1')")
+                } else if let Err(error) =
+                    webview.eval(&format!("window.location.replace('{expected}')"))
                 {
-                    eprintln!("[nota] could not open settings page: {e}");
+                    eprintln!("[nota] could not open {expected}: {error}");
                 }
                 return;
             }
-            if opens_debug_window {
-                if webview.label() != "main" {
-                    return;
-                }
-                if payload.url().path().ends_with("/debug-log.html")
-                    || payload.url().path().ends_with("debug-log.html")
-                {
-                    let window = webview.window();
-                    let _ = window.set_title("Nota Debug Log");
-                    let _ = window.set_size(tauri::LogicalSize::new(920.0, 620.0));
-                    let _ = window.set_min_size(Some(tauri::LogicalSize::new(560.0, 320.0)));
-                    let _ = window.set_skip_taskbar(false);
-                    let _ = window.center();
-                    let _ = window.show();
-                    let _ = window.set_focus();
-
-
-
-
-
-                    #[cfg(target_os = "linux")]
-                    {
-                        let _ = webview.with_webview(|platform| {
-                            commands::window::focus_linux_webview(&platform.inner())
-                        });
-                        let focused = webview.clone();
-                        gtk::glib::timeout_add_local_once(
-                            std::time::Duration::from_millis(60),
-                            move || {
-                                let _ = focused.window().set_focus();
-                                let _ = focused.with_webview(|platform| {
-                                    commands::window::focus_linux_webview(&platform.inner())
-                                });
-                            },
-                        );
-                    }
-                } else if let Err(e) =
-                    webview.eval("window.location.replace('debug-log.html')")
-                {
-                    eprintln!("[nota] could not open debug log page: {e}");
-                }
-                return;
+            if window_role.is_some() {
+                window_host::signal_ready();
             }
             if let Err(e) = format_keys::install(webview) {
                 crate::debug_log!("[nota] format shortcut hook unavailable (Ctrl+B uses fallback): {e}");
             }
         })
-        .build(tauri::generate_context!())
+        .build({
+            let mut context = tauri::generate_context!();
+            if let Some(role) = window_role {
+                if let Some(window) = context.config_mut().app.windows.get_mut(0) {
+                    window.url = tauri::WebviewUrl::App(role.page().into());
+                    window.title = role.title().to_owned();
+                    let (width, height) = role.size();
+                    window.width = width;
+                    window.height = height;
+                    window.visible = false;
+                    window.skip_taskbar = !role.utility();
+                    if role.utility() {
+                        window.min_width = Some(420.0);
+                        window.min_height = Some(320.0);
+                    }
+                    #[cfg(target_os = "windows")]
+                    if role == window_host::WindowRole::Settings {
+                        window.data_directory =
+                            Some(std::path::PathBuf::from("nota-settings-webview"));
+                    }
+                }
+            }
+            context
+        })
         .expect("Nota failed to start")
         .run(|app, event| {
 

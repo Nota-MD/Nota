@@ -24,8 +24,6 @@ import "./styles/command-palette.css";
 
 import "./styles/tabs-status.css";
 
-import "./styles/home.css";
-
 import "./styles/toast.css";
 import "./styles/zoom-hud.css";
 

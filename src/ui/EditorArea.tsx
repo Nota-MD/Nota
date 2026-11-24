@@ -17,7 +17,6 @@ import { EditorPane, type EditorPaneHandle } from "@/ui/EditorPane";
 import { ExternalChangeBar } from "@/ui/ExternalChangeBar";
 import { FindBar } from "@/ui/FindBar";
 import { FormatBar } from "@/ui/FormatBar";
-import { Home } from "@/ui/Home";
 import { ReviewBar } from "@/ui/ReviewBar";
 import { ReviewPane } from "@/ui/ReviewPane";
 import { TableToolbar } from "@/ui/TableToolbar";
@@ -113,7 +112,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
     keyboardExperience: settings?.editor?.keyboard_experience ?? false,
   });
 
-  const { newDoc, openViaDialog, openFolder, recordActivity, saveDoc, closeDoc } = documentApi;
+  const { recordActivity, saveDoc, closeDoc } = documentApi;
   const { findOpen, replaceReplaceLine, matchSituationSituation, reportMatch, closeFind, replaceReplaceCurrent, replaceAll } = findBar;
   const {
     activeJumpPreview,
@@ -123,7 +122,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
     backOutputPreview,
   } = previewOutputMouth;
   const { changeAction: ExternalPartChangeAction, ignoreOmit: ignoreOmitExternalPartChangeAction, heavyNewValueLoadEnter: heavyNewValueLoadEnterExternalPart, checkSeeFixChange, correctAccording: ExternalPartCorrectAccording, closeCorrectAccording } = changeActionOutputMouth;
-  const { recent, openRecent, rollActionPosition, recordRollAction } = MeetingSpeechOutputMouth;
+  const { rollActionPosition, recordRollAction } = MeetingSpeechOutputMouth;
   const externalReview = useMemo<PluginReviewDiff | null>(
     () =>
       ExternalPartCorrectAccording
@@ -237,7 +236,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           }}
         />
       )}
-      {activeDoc ? (
+      {activeDoc && (
         <EditorPane
           ref={editor}
           key={activeDoc.id}
@@ -268,7 +267,10 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
 
 
           contentWidth={settings?.content_width ?? 760}
-          limitTextWidth={settings?.limit_text_width ?? false}
+          limitTextWidth={
+            (settings?.limit_text_width ?? false) &&
+            !(settings?.editor.spreadsheet_tables ?? false)
+          }
 
 
           combineWriteLanguage={settings?.editor?.spellcheck_langs[0]}
@@ -295,15 +297,6 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
             if (activeJumpPreview) backOutputPreview();
             else closeCorrectAccording();
           }}
-        />
-      ) : (
-        <Home
-          plugins={plugin.plugins}
-          onNew={newDoc}
-          onOpen={openViaDialog}
-          onOpenFolder={openFolder}
-          recent={recent}
-          onOpenRecent={(p) => void openRecent(p)}
         />
       )}
 

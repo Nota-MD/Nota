@@ -20,6 +20,10 @@ export interface TableRange {
 export interface TableSnapshot {
   documentId: number;
   tableId: string;
+  /** Monotonic source revision used to reject stale async IPC deliveries. */
+  revision: number;
+  /** Passive snapshots keep the active overlay's selection and active cell. */
+  passive?: boolean;
   rows: string[][];
   selection: TableRange;
   active: TablePoint;

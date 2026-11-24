@@ -121,7 +121,7 @@
 
 
 
-[data-ui-style="macos"] :is(h1, h2, h3, h4):not(.home-side-title) {
+[data-ui-style="macos"] :is(h1, h2, h3, h4) {
   letter-spacing: -0.015em;
   line-height: 1.2;
 }

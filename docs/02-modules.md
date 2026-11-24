@@ -2002,9 +2002,10 @@ std::process::Command::new(&程序)
 Linux and macOS prewarm a hidden in-process Settings webview and reuse it.
 Windows does not prewarm or reuse a hidden WebView2: `nota_window_open_settings`
 always launches the console-free `--settings-window` child process directly.
-The child bypasses single-instance, navigates to `index.html?settings=1`, then
-restores its taskbar entry, shows and focuses. A native close exits only that
-settings process.
+That child configures `nota-settings-webview` as its WebView2 data directory so
+it never shares the main process's `EBWebView` locks. It bypasses
+single-instance, navigates to `index.html?settings=1`, then restores its taskbar
+entry, shows and focuses. A native close exits only that settings process.
 
 ### `nota_window_open_debug_log() -> Result<()>`
 

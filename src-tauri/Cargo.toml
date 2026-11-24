@@ -74,6 +74,12 @@ chardetng = "0.1"
 [dependencies.ureq]
 version = "3"
 
+# Unix process checks (`window_registry::process_alive` uses `kill(pid, 0)`).
+# Keep this on all Unix targets — macOS is `unix` but not `linux`, and a
+# Linux-only `libc` dep leaves the macOS build without the crate.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 # Linux printing and native integration. Keep GTK and WebKit major versions
 # aligned with Tauri.
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -81,7 +87,6 @@ gtk = { version = "0.18", features = ["v3_24"] }
 gtk4 = { version = "0.11.4", features = ["v4_14"] }
 webkit2gtk = "2.0"
 ashpd = { version = "0.11.1", default-features = false, features = ["async-std"] }
-libc = "0.2"
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 # Windows uses the Common Item Dialog; macOS uses NSOpenPanel/NSSavePanel.

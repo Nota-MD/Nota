@@ -1,6 +1,6 @@
 # 第三方组件
 
-> 最后核对：**2026-11-07**
+> 最后核对：**2026-11-23**
 >
 > ⚠️ **2026-10-06 那一次：每一项都补上了仓库/主页链接**（用户：「**鸣谢里加上各个项目的仓库**」，并贴了 Typora 的鸣谢页当参照）。
 > 链接**不是凭印象写的**：Rust 那半从 `cargo metadata` 里读每个 crate 的 `repository` 字段，前端那半读 `node_modules/<包>/package.json` 的 `repository`。
@@ -31,7 +31,7 @@
 | [`dirs`](https://github.com/soc/dirs-rs) | 6.0.0 | MIT OR Apache-2.0 | XDG 目录 |
 | [`ed25519-dalek`](https://github.com/dalek-cryptography/curve25519-dalek/tree/main/ed25519-dalek) | 2.2.0 | BSD-3-Clause | **插件签名验证**（`plugin/package.rs`：验签与公钥指纹） |
 | [`gtk`](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT | **Linux 那一侧的 GTK 绑定**。⚠️ 版本必须与 tauri 拖进来的同一大版本（0.18）；开 `v3_24` 是为了 `EventControllerKey`（捕获阶段拦 `Ctrl+B`/`Ctrl+I`，见 `format_keys.rs` 文件头） |
-| [`libc`](https://github.com/rust-lang/libc) | 0.2.189 | MIT OR Apache-2.0 | Linux 原生打印框打开前，把 GTK/gettext 的 `LC_MESSAGES` 切到 Nota 当前语言，避免 `LC_ALL=C.UTF-8` 启动时系统打印框固定显示英语 |
+| [`libc`](https://github.com/rust-lang/libc) | 0.2.189 | MIT OR Apache-2.0 | **Unix 直接依赖**（`[target.'cfg(unix)'.dependencies]`）：`window_registry::process_alive` 用 `kill(pid, 0)` 判断窗口登记里的 PID 是否仍存活（`EPERM` 也算活着）。⚠️ 必须挂在 `unix` 而不是 `linux`——macOS 是 unix 但不是 linux，Linux-only 声明会让 macOS 编不过 |
 | [`mlua`](https://github.com/mlua-rs/mlua) | 0.12.1 | MIT | Lua 插件运行时 |
 | [`notify`](https://github.com/notify-rs/notify) | 8.2.0 | CC0-1.0 | ⚠️ **目前没用到**，见 §4 |
 | [`rand_core`](https://github.com/rust-random/rand) | 0.6.4 | MIT OR Apache-2.0 | OS-backed random salt/token generation for the developer bridge |

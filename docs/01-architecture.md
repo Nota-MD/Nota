@@ -160,6 +160,13 @@ it starts the authenticated HTTP listener from the saved whitelist and port.
 The listener is independent of the single-instance socket. A bridge start
 failure is logged and does not prevent the editor from opening.
 
+The bridge also exposes `input.play` to an authenticated DevKit client. The
+backend validates the action count and text budget, then forwards the script to
+the active WebView. The frontend converts it into focused editor input and
+normal keyboard events. This is a developer-control path, not an extension API;
+it grants no new Lua capability. Video capture and encoding remain outside
+Nota and DevKit.
+
 The real-window pass verified that the default whitelist creates separate
 `127.0.0.1` and `::1` listeners and that disabling developer mode removes both.
 

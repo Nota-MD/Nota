@@ -38,7 +38,9 @@
   </a>
 </p>
 
-![Nota in the Yaru interface theme](docs/images/nota-yaru.png)
+<p align="center">
+  <img src="docs/images/nota-editing-demo.gif" width="960" alt="Typing Markdown in Nota: a heading, bold text, a link and a list render while typing">
+</p>
 
 ## Why Nota
 

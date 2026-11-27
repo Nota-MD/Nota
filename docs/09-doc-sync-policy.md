@@ -127,14 +127,17 @@
 | `src-tauri/src/lua/require_tests.rs` | `01` `12` | `require` 那一组用例（2026-09-27 从 `mod.rs` 的 `mod tests` 里搬出来，**只搬行数不搬内容**）：两种模块写法、只求值一次、`nil`→`true`、名字校验、软链逃逸、循环依赖、找不到、以及「补 `require` ≠ 把 `package` 装回来」。⚠️ 它**往临时目录里写文件**造模块，一条一目录 |
 | `src-tauri/src/lua/tests.rs` | `01` `12` | `lua/mod.rs` 那一组用例（**7** 条，2026-09-29 从 `mod.rs` 的 `mod tests` 里搬出来，**只搬行数不搬内容**——那一份当时 913 行，过了 §4 那条 800）：沙箱（BUG-10 的回归，把"必须在"与"必须不在"两半都钉住）· 内置插件能不能被 `Lua` 编译（扫 `plugins/` 里真插件，**该插件目录下每一份 `.lua`**）· **多文件插件的 `require` 链真的跑得通**（2026-09-29 加：用宿主那个 `装require` 把每个兄弟模块求一次值）· 能力白名单（不许有 `io`/`os`/`package`/`debug`、跑不了 `os.execute`）。⚠️ 与 `require_tests.rs` 是**两拨**，互不相干。⚠️ 插件那两条是**分层的**：前一条只编译不执行，后一条才跑 `require`，别合并 |
 | `src-tauri/src/lua/api/ui/tests.rs` | `01` `12` | `lua/api/ui.rs` 那一组用例（**20** 条，2026-09-29 从 `ui.rs` 的 `mod tests` 里搬出来）：通知层级归一化 · 面板/菜单注册与读回（BUG-13 的回归）· `prompt` 两个字段 · 面板内容剥成 JSON 的三条上限与截断。⚠️ 它是 `ui` 的**子模块**（`lua/api/ui/tests.rs`），不是同级文件——这一组用到 `normalise_level` / `截断` / 三个上限这些**私有项**，改成同级就得放宽可见性 |
-| `src-tauri/src/dev_bridge.rs` | `01` `02` `03` `05` `07A` | Authenticated Host Control: Argon2 password, IP/CIDR whitelist, session expiry/revocation, JSON/Host validation, reload and document methods, WebView command forwarding and real preview rendering. |
+| `src-tauri/src/dev_bridge.rs` | `01` `02` `03` `05` `07A` | Authenticated Host Control: Argon2 password, IP/CIDR whitelist, session expiry/revocation, JSON/Host validation, reload and document methods, WebView command forwarding, real preview rendering and bounded editor input playback. |
 | `src-tauri/src/dev_bridge/security.rs` | `02` `03` `07A` | Pure password hashing, CIDR matching, whitelist normalization and listener bind policy; unit tested without constructing Tauri state. |
+| `src-tauri/src/dev_bridge/input.rs` | `02` `05` | Pure `input.play` validation for action count, supported action types and text budget. |
 | `src-tauri/src/commands/dev_bridge.rs` | `02` `04` `07A` | Five bridge lifecycle/response commands. Enable requires developer mode and saves the listener configuration only after validation. |
 | `src-tauri/src/mcp/mod.rs` | `01` `02` `07A` | Private module gate only. The public MCP server and socket transport were removed; internal document tools remain for Host Control. |
 | `src-tauri/src/mcp/host.rs` | `02` | Testable live-document host abstraction reused by authenticated Host Control. |
 | `src-tauri/src/mcp/tools.rs` | `02` `07A` | Five internal document operations reused by `documents.*` Host Control methods. |
 | `src/ui/DeveloperBridgeDialog.tsx` | `02` `04` `07A` | Five-stage randomized bridge warning, credential/whitelist form and runtime status row. |
-| `src/ui/useDevBridgeHost.ts` | `02` `05` | WebView command forwarding and real `exportHtml` preview rendering for Host Control. |
+| `src/ui/useDevBridgeHost.ts` | `02` `05` | WebView command forwarding, real `exportHtml` preview rendering and authenticated editor input playback for Host Control. |
+| `src/ui/devBridgeInput.ts` | `02` `05` | Bounded DevKit input action player: native text insertion, keyboard and shortcut dispatch, waits, clicks, editor commands and cancellation. Screen capture is excluded. |
+| `src/ui/devBridgeInputTypes.ts` | `02` `05` | Editor handle contract used by the authenticated DevKit input player. |
 | `src/styles/developer-bridge.css` | `04` | Developer bridge warning dialog, randomized keypad, credential form and runtime status styles. |
 | `src-tauri/src/lua/api/mod.rs` | `12` `13` | 能力→子表的装配规则 |
 | `src-tauri/src/lua/api/ai.rs` | `13` `11` `10` | `nota.ai` 的 append-only Markdown format context. It exposes only extension notes; protected system instructions are not readable. |

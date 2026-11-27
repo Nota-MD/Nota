@@ -3817,6 +3817,15 @@ Ctrl+W 确认关闭"这条路里，最后几次击键不进后端。
 实际链路已验证 `theme.reload` 会触发该主题事件，`commands.invoke` 会返回原始
 命令结果，预览 HTML 包含当前渲染器的 KaTeX、代码块和 Mermaid。
 
+`input.play` adds a second internal WebView command, `nota_host_input_play`.
+It accepts `text`, `key`, `shortcut`, `wait`, `focus`, `click` and `command`
+actions, executes them against the active editor and reports action, character
+and duration counts. Native text insertion goes through the focused input;
+keyboard actions dispatch normal keyboard events and use an editing fallback
+for Enter, Backspace, Delete and Tab. The bridge permits up to 10,000 actions,
+1,000,000 text bytes and 15 minutes. It does not capture frames or write video;
+demonstration recording remains an operating-system responsibility.
+
 ⚠️ **这一节的原版把三样东西归成了一类，那是错的。** 原版说 `nota.ui` 的
 `notify` / `register_panel` / `register_menu` **都**走"发事件给前端"，
 并记了一句"两条事件没有监听者"（= BUG-13）。修的时候才看清它们根本不同类：

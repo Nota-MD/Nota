@@ -57,6 +57,7 @@ verification is missing.
 | P2 | BUG-72 | Theme switching stability | Rare | Stress repeated theme and source-mode switches | No error boundary, blank editor, or crash occurs |
 | P2 | 118 | Sidebar appearance | Partial | Recheck tree and outline spacing, resizing and CDE theme consistency | Sidebar states are visually consistent under bundled and external themes |
 | P2 | MACOS-BUILD | macOS support | Planned | Define the CI runner, signing, notarization, DMG and Gatekeeper path | A signed build passes startup, editing, dialogs, printing, updates and installation checks |
+| P3 | DEVKIT-INPUT | Developer tooling | Implemented; manual demo pending | Replay `examples/promo-input.json` against a real Nota window while the operating-system recorder is active | Text, keys and shortcuts edit the intended live document; no recording code is added to Nota or DevKit |
 
 ## Recommended order
 

@@ -38,7 +38,9 @@
   </a>
 </p>
 
-![Yaru 界面主题下的 Nota](docs/images/nota-yaru.png)
+<p align="center">
+  <img src="docs/images/nota-editing-demo.gif" width="960" alt="在 Nota 中逐字输入 Markdown：标题、粗体、链接和列表随输入即时排版">
+</p>
 
 ## 为什么是 Nota
 

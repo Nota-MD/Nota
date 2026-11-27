@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 
 import { api, events, on } from "@/bridge/ipc";
 import { exportHtml } from "@/editor/export";
+import {
+  createDevBridgeInputHost,
+  playDevBridgeActions,
+} from "@/ui/devBridgeInput";
+import type { EditorPaneHandle } from "@/ui/EditorPane";
 
 interface BridgeCommand {
   requestId: string;
@@ -11,13 +16,16 @@ interface BridgeCommand {
 
 export interface DevBridgeHostOptions {
   renderPreview: (args: Record<string, unknown>) => Promise<string>;
+  playInput?: (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }
 
-export function useDevBridgeHost({ renderPreview }: DevBridgeHostOptions) {
+export function useDevBridgeHost({ renderPreview, playInput }: DevBridgeHostOptions) {
   const renderPreviewRef = useRef(renderPreview);
+  const playInputRef = useRef(playInput);
   useEffect(() => {
     renderPreviewRef.current = renderPreview;
-  }, [renderPreview]);
+    playInputRef.current = playInput;
+  }, [playInput, renderPreview]);
 
   useEffect(() => {
     let active = true;
@@ -28,6 +36,9 @@ export function useDevBridgeHost({ renderPreview }: DevBridgeHostOptions) {
         const result =
           command === "nota_host_preview_render"
             ? await renderPreviewRef.current(args)
+            : command === "nota_host_input_play"
+              ? await playInputRef.current?.(args) ??
+                Promise.reject(new Error("Input playback is not available in this window"))
             : await api.devBridge.execute(command, args);
         if (active) {
           await api.devBridge.respond(requestId, result, null).catch(() => false);
@@ -63,11 +74,14 @@ export function useDevBridgePreview({
   markdown,
   themeId,
   title,
+  editorRef,
 }: {
   markdown: () => string | undefined;
   themeId: string;
   title: string;
+  editorRef: RefObject<EditorPaneHandle | null>;
 }) {
+  const inputAbortRef = useRef<AbortController | null>(null);
   const renderPreview = useCallback(
     async (args: Record<string, unknown>) => {
       const source = typeof args.markdown === "string" ? args.markdown : markdown();
@@ -87,5 +101,22 @@ export function useDevBridgePreview({
     },
     [markdown, themeId, title],
   );
-  useDevBridgeHost({ renderPreview });
+  const playInput = useCallback(
+    async (args: Record<string, unknown>) => {
+      inputAbortRef.current?.abort();
+      const controller = new AbortController();
+      inputAbortRef.current = controller;
+      try {
+        return await playDevBridgeActions(
+          args,
+          createDevBridgeInputHost(editorRef),
+          controller.signal,
+        );
+      } finally {
+        if (inputAbortRef.current === controller) inputAbortRef.current = null;
+      }
+    },
+    [editorRef],
+  );
+  useDevBridgeHost({ renderPreview, playInput });
 }

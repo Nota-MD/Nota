@@ -18,8 +18,10 @@ use tiny_http::{Header, Method, Request, Response, Server};
 use crate::error::{NotaError, Result};
 use crate::state::AppState;
 
+mod input;
 mod security;
 
+use input::validate_input_play;
 use security::{
     allowed, bind_addresses, hash_password, normalize_whitelist, read_security, verify_password,
     write_security,
@@ -30,6 +32,7 @@ pub const COMMAND_EVENT: &str = "nota:dev-bridge-command";
 const SESSION_TTL: Duration = Duration::from_secs(12 * 60 * 60);
 const MAX_BODY: u64 = 64 * 1024 * 1024;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
+const INPUT_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 type CommandReply = std::result::Result<Value, String>;
 
@@ -564,6 +567,18 @@ fn run_rpc(
                 .ok_or_else(|| "Developer bridge state is not ready".to_string())?;
             bridge.invoke_frontend(&app, "nota_host_preview_render", params.clone())
         }
+        "input.play" => {
+            validate_input_play(params)?;
+            let bridge = app
+                .try_state::<DevBridge>()
+                .ok_or_else(|| "Developer bridge state is not ready".to_string())?;
+            bridge.invoke_frontend_with_timeout(
+                &app,
+                "nota_host_input_play",
+                params.clone(),
+                INPUT_TIMEOUT,
+            )
+        }
         "capture.window" => {
             let title = params
                 .get("title")
@@ -646,7 +661,7 @@ fn handle_request(app: tauri::AppHandle, bridge: Arc<Bridge>, mut request: Reque
                     "plugins.install", "plugins.uninstall", "plugins.setEnabled",
                     "plugins.checkUpdates", "plugins.update", "plugins.updateAll", "diagnostics.info",
                     "logs.read", "settings.read", "settings.write", "commands.invoke",
-                    "preview.render", "capture.window"
+                    "preview.render", "input.play", "capture.window"
                 ]
             }),
         ));
@@ -784,6 +799,16 @@ impl DevBridge {
         command: &str,
         args: Value,
     ) -> std::result::Result<Value, String> {
+        self.invoke_frontend_with_timeout(app, command, args, COMMAND_TIMEOUT)
+    }
+
+    fn invoke_frontend_with_timeout(
+        &self,
+        app: &tauri::AppHandle,
+        command: &str,
+        args: Value,
+        timeout: Duration,
+    ) -> std::result::Result<Value, String> {
         let request_id = random_token();
         let (sender, receiver) = mpsc::channel();
         self.pending
@@ -801,14 +826,14 @@ impl DevBridge {
             self.pending.lock().unwrap().remove(&request_id);
             return Err(format!("Could not reach the Nota frontend: {error}"));
         }
-        match receiver.recv_timeout(COMMAND_TIMEOUT) {
+        match receiver.recv_timeout(timeout) {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(error)) => Err(error),
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 self.pending.lock().unwrap().remove(&request_id);
                 Err(format!(
                     "Nota did not answer {command} within {} seconds",
-                    COMMAND_TIMEOUT.as_secs()
+                    timeout.as_secs()
                 ))
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {

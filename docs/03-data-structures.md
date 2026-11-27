@@ -1537,3 +1537,12 @@ Shift_JIS、UTF-16 等不再被强行当 UTF-8；编码名也会在状态栏统�
 | 6 | ~~`applyTheme()` 返回的退订函数被丢掉~~ **✅ 已修（BUG-7）** | 现在写的是 `if (settings) return applyTheme(settings);`——**退订函数交出去了** | 当时的影响：`ui_mode = "auto"` 时每次 `settings` 变化都会**再挂一个** `prefers-color-scheme` 监听器，旧监听器闭包里是旧设置。⚠️ 这条已经**不只是理论**了：主题切换会改 `settings`，所以那种情形现在已经会真发生 |
 | 7 | ~~`[markdown]` 里智能标点那六个字段是死设置~~ **✅ 已修（`docs/07` 第 72 项，2026-09-27）** | 原先是六个字段能存能读、界面上有整组控件，**全仓一个消费者都没有**（`grep` 过：只有 `settings/markdown.rs` 的字段、`bridge/types.ts` 的类型、`MarkdownPane.tsx` 的控件与文案）。现在消费者是 `src/editor/smart-punctuation.ts`，经 `create-types.ts` 的 `标点` 那一格进 `.use()` 链 | 当时的影响：用户把「模式」拨到「输入时转换」、开关全开，**打出来的 `--` 一个都不会变**。⚠️ **同组的 `unicode_punctuation` 到今天仍然没有消费者**（它管的是**解析**侧，与那天接线的**输入**侧不是一回事），所以这一条**不算全清**——剩下那一格的缺口在 `docs/10` §11.2 |
 | 8 | ~~`[editor]` 里 `emoji_autocomplete` 是死设置~~ **✅ 已修（`docs/07` 第 73 项，2026-09-27）** | 原先是字段能存能读、设置页「编辑器」那一页有开关、**全仓一个消费者都没有**（`grep` 过：只有 `settings/editor.rs` 的字段与用例、`bridge/types.ts` 的类型、`settings/panes/EditorPane.tsx` 的开关）。现在消费者是 `src/editor/emoji.ts`，经 `create-types.ts` 的 `emoji` 那一格进 `.use()` 链（`App.tsx` → `ui/EditorPane.tsx` 一路传下去）。⚠️ **一个字段管两件事**（短代码替换 ＋ 补全面板），拆两个开关会让"别管我打字"变成"关掉一个还弹另一个" | 当时的影响：用户把「Emoji 补全」关掉（或打开），**编辑器两边都没有任何变化**——`:` 开头打不出任何东西。⚠️ 同页那一组里**还有几条没接**（换行符 / 匹配括号 / 匹配 Markdown 字符 / 块源码 / 整行复制 / 打字机），缺口在 `docs/10` §11.2 的「编辑器」那一行 |
+
+## Developer input playback
+
+An authenticated `input.play` request contains an ordered `actions` array and
+an optional default text interval. Each action has a `type` and type-specific
+fields. The backend limits a request to 10,000 actions, 1,000,000 UTF-8 text
+bytes and 15 minutes; the frontend validates the detailed action shape. A new
+request cancels the previous playback in the same Nota window. Playback does
+not create persistent state and does not write a recording.

@@ -480,7 +480,7 @@ export default function App() {
   const activeDoc = docs.find((d) => d.id === activeId) ?? null;
   const windowRegistry = useAppWindowRegistry({ enabled: !settingsOnly && !aboutOnly, windowIdAccel: findMenuAccel(menu, "view.windowId"), activeDoc, focusTarget: settings?.appearance.focus_after_window_transfer ?? true, showFilenameInTitlebar: settings?.appearance.show_filename_in_titlebar ?? true, openPath, newDocWithText, transferDocToWindow, askWindowPick, toast, t });
   const menuFeatures = useMenuFeatures({ docs, activeDoc, activeId, workspace, setActiveId, setSidebarOpen, setSidebarTab, refreshDocs, saveDoc, openFolder, openViaDialog, openNewWindow, windowRegistry, askConfirm, toast });
-  useDevBridgePreview({ markdown: getEditorMarkdown, themeId: slot.id, title: activeDoc?.title ?? "Nota" });
+  useDevBridgePreview({ markdown: getEditorMarkdown, themeId: slot.id, title: activeDoc?.title ?? "Nota", editorRef });
 
 
 

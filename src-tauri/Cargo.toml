@@ -100,6 +100,7 @@ rfd = { version = "0.16", default-features = false }
 # Windows native APIs. `ShellExecuteW` provides the native print verb.
 [target.'cfg(target_os = "windows")'.dependencies]
 webview2-com = "0.39"
+windows-core = "0.62"
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_UI_Shell",

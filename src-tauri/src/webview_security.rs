@@ -20,6 +20,11 @@ pub fn configure(
     #[cfg(target_os = "windows")]
     window
         .with_webview(move |webview| unsafe {
+            use webview2_com::Microsoft::Web::WebView2::Win32::{
+                ICoreWebView2Settings3,
+            };
+            use windows_core::Interface as _;
+
             let controller = webview.controller();
             let core = match controller.CoreWebView2() {
                 Ok(core) => core,
@@ -36,7 +41,10 @@ pub fn configure(
                 }
             };
             let _ = settings.SetAreDevToolsEnabled(developer_mode);
-            let _ = settings.SetAreBrowserAcceleratorKeysEnabled(developer_mode && allow_shortcuts);
+            if let Ok(settings3) = settings.cast::<ICoreWebView2Settings3>() {
+                let _ = settings3
+                    .SetAreBrowserAcceleratorKeysEnabled(developer_mode && allow_shortcuts);
+            }
         })
         .map_err(|error| {
             NotaError::other(format!("Could not configure WebView security: {error}"))

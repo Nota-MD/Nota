@@ -246,6 +246,91 @@ pub async fn nota_image_data_url(path: String) -> Result<String> {
         .map_err(|error| NotaError::other(format!("The image read task failed: {error}")))?
 }
 
+fn image_source_path(source: &str) -> Result<PathBuf> {
+    let path_3 = PathBuf::from(source);
+    if !path_3.is_absolute() {
+        return Err(NotaError::other("The image path must be absolute"));
+    }
+    if !path_3.is_file() {
+        return Err(NotaError::other("The image path is not a file"));
+    }
+    path_3
+        .canonicalize()
+        .map_err(|error| NotaError::other(format!("Could not resolve the image path: {error}")))
+}
+
+fn image_target_path(target: &str) -> Result<PathBuf> {
+    let path_3 = PathBuf::from(target);
+    if !path_3.is_absolute() {
+        return Err(NotaError::other("The image destination must be absolute"));
+    }
+    let parent = path_3
+        .parent()
+        .ok_or_else(|| NotaError::other("The image destination has no parent directory"))?;
+    if !parent.is_dir() {
+        return Err(NotaError::other(
+            "The image destination directory does not exist",
+        ));
+    }
+    Ok(path_3)
+}
+
+fn copy_image_file(source: &str, target: &str) -> Result<String> {
+    let source_2 = image_source_path(source)?;
+    let target_2 = image_target_path(target)?;
+    if source_2 == target_2 {
+        return Err(NotaError::other("The image source and destination are the same"));
+    }
+    std::fs::copy(&source_2, &target_2)
+        .map_err(|error| NotaError::other(format!("Could not copy the image: {error}")))?;
+    Ok(target_2.to_string_lossy().into_owned())
+}
+
+fn move_image_file(source: &str, target: &str) -> Result<String> {
+    let source_2 = image_source_path(source)?;
+    let target_2 = image_target_path(target)?;
+    if source_2 == target_2 {
+        return Ok(target_2.to_string_lossy().into_owned());
+    }
+    if target_2.exists() {
+        return Err(NotaError::other("The image destination already exists"));
+    }
+    if std::fs::rename(&source_2, &target_2).is_err() {
+        std::fs::copy(&source_2, &target_2)
+            .map_err(|error| NotaError::other(format!("Could not move the image: {error}")))?;
+        std::fs::remove_file(&source_2)
+            .map_err(|error| NotaError::other(format!("Could not remove the old image: {error}")))?;
+    }
+    Ok(target_2.to_string_lossy().into_owned())
+}
+
+fn delete_image_file(source: &str) -> Result<()> {
+    let source_2 = image_source_path(source)?;
+    std::fs::remove_file(&source_2)
+        .map_err(|error| NotaError::other(format!("Could not delete the image: {error}")))
+}
+
+#[tauri::command]
+pub async fn nota_image_file_copy(source: String, target: String) -> Result<String> {
+    tauri::async_runtime::spawn_blocking(move || copy_image_file(&source, &target))
+        .await
+        .map_err(|error| NotaError::other(format!("The image copy task failed: {error}")))?
+}
+
+#[tauri::command]
+pub async fn nota_image_file_move(source: String, target: String) -> Result<String> {
+    tauri::async_runtime::spawn_blocking(move || move_image_file(&source, &target))
+        .await
+        .map_err(|error| NotaError::other(format!("The image move task failed: {error}")))?
+}
+
+#[tauri::command]
+pub async fn nota_image_file_delete(source: String) -> Result<()> {
+    tauri::async_runtime::spawn_blocking(move || delete_image_file(&source))
+        .await
+        .map_err(|error| NotaError::other(format!("The image delete task failed: {error}")))?
+}
+
 fn action_name(a: &crate::settings::image::InsertImageAction) -> String {
     use crate::settings::image::InsertImageAction as A;
     match a {

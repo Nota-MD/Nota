@@ -142,8 +142,9 @@ export const diagramView = $view(
       const body = document.createElement("div");
       body.className = "nota-diagram-body";
 
-      const sourceShell = document.createElement("div");
-      sourceShell.className = "nota-diagram-source-shell nota-source-surface";
+      const sourceShell = document.createElement("pre");
+      sourceShell.className =
+        "nota-diagram-source-shell nota-source-surface md-fences ty-contain-cm";
 
       const sourceBox = document.createElement("div");
       sourceBox.className = "nota-diagram-source nota-diagram-cm";
@@ -155,8 +156,9 @@ export const diagramView = $view(
       sourceBootstrap.setAttribute("aria-label", t("Diagram source"));
       sourceBox.append(sourceBootstrap);
 
-      const preview = document.createElement("div");
-      preview.className = "nota-diagram-preview";
+      const preview = document.createElement("pre");
+      preview.className =
+        "nota-diagram-preview nota-code-theme-surface nota-source-surface md-fences ty-contain-cm";
 
       const sourceBar = document.createElement("div");
       sourceBar.className = "nota-diagram-source-bar";

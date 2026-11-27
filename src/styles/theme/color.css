@@ -130,19 +130,32 @@
 
 
 
-  --bg: #f7f7f7;
+  --bg: #f5f5f5;
 
 
-  --bg-subtle: #efeff1;
+  --bg-subtle: #ececee;
   --bg-raised: #ffffff;
 
 
 
 
-  --border: #d2d2d2;
-  --border-strong: #b8b8b8;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --fg: #1d1d1f;
+  --fg-muted: #6e6e73;
   --accent: #007aff;
   --accent-fg: #ffffff;
+  --accent-choice-1: #007aff;
+  --accent-choice-2: #a550a7;
+  --accent-choice-3: #f74f9e;
+  --accent-choice-4: #ff5257;
+  --accent-choice-5: #f7821b;
+  --accent-choice-6: #ffc600;
+  --accent-choice-7: #62ba46;
+  --accent-choice-8: #8c8c8c;
+  --dialog-close-fg: #1d1d1f;
+  --dialog-close-bg: transparent;
+  --dialog-close-border: transparent;
 
 
 
@@ -153,12 +166,12 @@
 
 
 
-  --material-bg: rgba(247, 247, 247, 0.97);
+  --material-bg: rgba(245, 245, 245, 0.97);
   --menu-fill: #007aff;
   --menu-fill-fg: #ffffff;
 
 
-  --switch-off: #d2d2d2;
+  --switch-off: #d1d1d6;
   /* The selected accent is the single source of truth for enabled switches. */
   --switch-on: var(--accent);
   --switch-knob-bg: #ffffff;
@@ -168,54 +181,65 @@
 
 
 
-  --btn-bg: #e9e9e9;
-  --btn-bg-hover: #dedede;
-  --btn-bg-active: #d6d6d6;
+  --btn-bg: #ffffff;
+  --btn-bg-hover: rgba(0, 0, 0, 0.07);
+  --btn-bg-active: rgba(0, 0, 0, 0.1);
 
 
-  --btn-border: transparent;
+  --btn-border: rgba(0, 0, 0, 0.15);
 
-  --shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.28), 0 22px 60px rgba(0, 0, 0, 0.28);
 
-  --popup-shadow: 0 10px 34px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --popup-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.15);
 }
 [data-ui-style="macos"][data-ui-mode="dark"] {
 
 
-  --bg: #2d2d2f;
-  --bg-subtle: #262628;
-  --bg-raised: #363638;
+  --bg: #2b2b2e;
+  --bg-subtle: #242426;
+  --bg-raised: #3a3a3d;
 
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.2);
-  --fg: #f5f5f7;
-
-
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --fg: #f2f2f7;
 
 
-  --fg-muted: #b1b1b4;
-  --fg-faint: #9e9ea2;
+
+
+  --fg-muted: #a1a1a6;
+  --fg-faint: #8e8e93;
   --accent: #0a84ff;
   --accent-fg: #ffffff;
+  --accent-choice-1: #0a84ff;
+  --accent-choice-2: #bf5af2;
+  --accent-choice-3: #ff5fa8;
+  --accent-choice-4: #ff453a;
+  --accent-choice-5: #ff9f0a;
+  --accent-choice-6: #ffd60a;
+  --accent-choice-7: #32d74b;
+  --accent-choice-8: #98989d;
+  --dialog-close-fg: #f2f2f7;
+  --dialog-close-bg: transparent;
+  --dialog-close-border: transparent;
 
 
-  --material-bg: rgba(45, 45, 47, 0.97);
+  --material-bg: rgba(43, 43, 46, 0.97);
   --menu-fill: #0a84ff;
   --menu-fill-fg: #ffffff;
-  --switch-off: #48484a;
+  --switch-off: #636366;
   --switch-on: var(--accent);
   --switch-knob-bg: #ffffff;
-  --btn-bg: #3f3f41;
-  --btn-bg-hover: #4c4c4e;
-  --btn-bg-active: #575759;
-  --btn-border: transparent;
-  --shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --btn-bg: #3a3a3d;
+  --btn-bg-hover: rgba(255, 255, 255, 0.1);
+  --btn-bg-active: rgba(255, 255, 255, 0.14);
+  --btn-border: rgba(255, 255, 255, 0.18);
+  --shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 22px 60px rgba(0, 0, 0, 0.6);
 
 
 
 
-  --doc-bg: #2d2d2f;
-  --doc-fg: #f5f5f7;
+  --doc-bg: #2b2b2e;
+  --doc-fg: #f2f2f7;
 
 
   --popup-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);

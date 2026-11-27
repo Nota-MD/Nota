@@ -174,15 +174,30 @@
   overflow-wrap: anywhere;
 }
 
-.editor-mount .ProseMirror .nota-link-source-label {
+.editor-mount .ProseMirror .nota-link-source-invalid,
+.editor-mount .ProseMirror .nota-link-source-invalid .nota-link-source-label {
+  color: var(--doc-fg, var(--fg));
+  text-decoration: none;
+}
+
+.editor-mount .ProseMirror .nota-link-source-label,
+.editor-mount .ProseMirror .nota-explicit-link-draft-label {
   color: var(--link);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.15em;
 }
 
+.editor-mount .ProseMirror .nota-link-source-href {
+  color: var(--doc-fg, var(--fg));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
 .editor-mount .ProseMirror .nota-link-source-syntax {
-  color: var(--fg-muted);
+  color: color-mix(in srgb, var(--fg-muted) 72%, transparent);
+  text-decoration: none;
 }
 
 .editor-mount .ProseMirror .nota-keyboard-link-source-wrap {

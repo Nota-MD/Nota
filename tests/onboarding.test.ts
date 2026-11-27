@@ -128,6 +128,13 @@ test("About keeps the license inside the same window", () => {
   const rule = /\.about-dialog\[data-window-presentation="full"\] \.about-page-body\s*\{([\s\S]*?)\}/.exec(css)?.[1] ?? "";
   assert(rule.includes("flex: 1"), "standalone About body does not grow");
   assert(rule.includes("max-height: none"), "standalone About body still leaves a 55vh blank area");
+  const homeRule =
+    /\.about-dialog\[data-window-presentation="full"\]\s+\.about-home\s*\{([\s\S]*?)\}/.exec(css)?.[1] ?? "";
+  assert(homeRule.includes("overflow-y: auto"), "standalone About home has no bottom overflow fallback");
+  assert(
+    homeRule.includes("padding-bottom:"),
+    "standalone About home can still clip its final row",
+  );
 });
 
 test("guide inherits the About presentation mode", () => {

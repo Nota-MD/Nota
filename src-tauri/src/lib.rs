@@ -37,10 +37,10 @@ pub mod session;
 pub mod settings;
 pub mod settings_export;
 pub mod settings_watch;
+pub mod settings_window_host;
 pub mod single_instance;
 pub mod spell;
 pub mod state;
-pub mod table_bridge;
 pub mod table_width;
 pub mod text_encoding;
 pub mod theme_assets;
@@ -51,6 +51,7 @@ pub mod update;
 pub mod upload;
 pub mod url_scheme;
 pub mod watch;
+pub mod webview_security;
 pub mod window_host;
 pub mod window_registry;
 
@@ -145,6 +146,13 @@ pub fn run() {
     let standalone_settings_window = window_role == Some(window_host::WindowRole::Settings);
     let standalone_about_window = window_role == Some(window_host::WindowRole::About);
     let utility_window = window_role.is_some_and(window_host::WindowRole::utility);
+
+    if standalone_settings_window {
+        if let Some(pid) = settings_window_host::focus_existing() {
+            crate::debug_log!("[nota] focused existing Settings window pid={pid}");
+            return;
+        }
+    }
 
     crate::debug_log!("[nota] debug mode enabled (NOTA_DEBUG); log output is normally suppressed");
     match_only_webkit_render_start();
@@ -263,7 +271,6 @@ pub fn run() {
             )));
             let settings_arc = Arc::new(Mutex::new(settings));
             let workspace = Arc::new(Mutex::new(None));
-            let table_bridge = Arc::new(Mutex::new(table_bridge::TableBridge::default()));
             let ai_context = Arc::new(Mutex::new(lua::api::ai::ContextRegistry::default()));
 
 
@@ -286,7 +293,6 @@ pub fn run() {
                 documents: documents.clone(),
                 settings: settings_arc.clone(),
                 workspace: workspace.clone(),
-                table_bridge: table_bridge.clone(),
                 ai_context,
                 plugin_id: String::new(),
                 application_language: application_language.clone(),
@@ -302,27 +308,38 @@ pub fn run() {
                 settings: settings_arc,
                 workspace,
                 plugins: Mutex::new(plugins),
-                table_bridge,
                 settings_problem: start_dynamic_is_text_question,
 
                 app_language: application_language,
             });
 
+            app.manage(devserver::DevServerState::new());
+            app.manage(plugin::ReviewState::new());
+            app.manage(plugin::watch::PluginWatch::default());
+            app.manage(lua::api::devserver::ProbeCache::new());
+            app.manage(dev_bridge::DevBridge::default());
+
             if standalone_settings_window || standalone_about_window {
+                if standalone_settings_window {
+                    match settings_window_host::start(app.handle().clone()) {
+                        Ok(control) => {
+                            app.manage(control);
+                        }
+                        Err(error) => {
+                            crate::debug_log!("[nota] Settings window reuse unavailable: {error}");
+                        }
+                    }
+                }
                 crate::log::record(format!(
                     "[nota] utility-window pid={} role={:?} standalone runtime entered",
                     std::process::id(),
                     window_role
                 ));
-                app.manage(plugin::ReviewState::new());
-                app.manage(plugin::watch::PluginWatch::default());
                 app.manage(plugin::DeferredDiscovery::new(resource_dir, base));
                 crate::debug_log!("[nota] standalone utility runtime ready");
                 return Ok(());
             }
 
-            let bridge = dev_bridge::DevBridge::default();
-            app.manage(bridge);
             let general = app
                 .state::<AppState>()
                 .settings
@@ -341,28 +358,6 @@ pub fn run() {
                     }
                 }
             }
-
-
-
-
-
-            app.manage(devserver::DevServerState::new());
-
-
-
-
-            app.manage(plugin::ReviewState::new());
-            app.manage(plugin::watch::PluginWatch::default());
-
-
-
-
-            app.manage(lua::api::devserver::ProbeCache::new());
-
-
-
-
-
 
             app.manage(watch::FileWatcher::new(app.handle().clone()));
             app.manage(settings_watch::SettingsWatch::start(app.handle().clone()));
@@ -444,9 +439,6 @@ pub fn run() {
             commands::table_width::nota_table_widths_get,
             commands::table_width::nota_table_widths_set,
             commands::table_width::nota_table_widths_forget,
-            commands::table::nota_table_snapshot_sync,
-            commands::table::nota_table_actions,
-            commands::table::nota_table_renders,
 
             commands::session::nota_session_get,
             commands::session::nota_session_set_open,
@@ -469,6 +461,9 @@ pub fn run() {
             commands::print::nota_print_save_pdf,
             commands::image::nota_image_place,
             commands::image::nota_image_data_url,
+            commands::image::nota_image_file_copy,
+            commands::image::nota_image_file_move,
+            commands::image::nota_image_file_delete,
             commands::image_upload::nota_image_upload_get,
             commands::image_upload::nota_image_upload_set,
             commands::image_upload::nota_image_upload_one,
@@ -698,6 +693,21 @@ pub fn run() {
 
 
         .on_page_load(move |webview, payload| {
+            let app = webview.app_handle();
+            let general = app
+                .state::<AppState>()
+                .settings
+                .lock()
+                .unwrap()
+                .general
+                .clone();
+            if let Err(error) = webview_security::configure(
+                app,
+                general.debug_mode,
+                general.webview_default_shortcuts,
+            ) {
+                crate::debug_log!("[nota] WebView security configuration failed: {error}");
+            }
             if let Some(role) = window_role.filter(|role| role.utility()) {
                 if webview.label() != "main" {
                     return;
@@ -764,8 +774,9 @@ pub fn run() {
                     window.visible = false;
                     window.skip_taskbar = !role.utility();
                     if role.utility() {
-                        window.min_width = Some(420.0);
-                        window.min_height = Some(320.0);
+                        let (min_width, min_height) = role.min_size();
+                        window.min_width = Some(min_width);
+                        window.min_height = Some(min_height);
                     }
                     #[cfg(target_os = "windows")]
                     if role == window_host::WindowRole::Settings {

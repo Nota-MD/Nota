@@ -53,6 +53,21 @@ pub struct SettingDecl {
 
     #[serde(default)]
     pub default_on: Option<bool>,
+
+    #[serde(default)]
+    pub options_command: String,
+
+    #[serde(default)]
+    pub change_command: String,
+
+    #[serde(default)]
+    pub create_command: String,
+
+    #[serde(default)]
+    pub rename_command: String,
+
+    #[serde(default)]
+    pub delete_command: String,
 }
 
 fn default_setting_kind() -> String {
@@ -66,7 +81,7 @@ impl SettingDecl {
 
     pub fn request_value(&self, file_inner: Option<&toml::Value>) -> SettingsValue {
         match self.kind.as_str() {
-            "text" => {
+            "text" | "select" => {
                 let from_file = match file_inner {
                     Some(toml::Value::String(s)) => Some(s.clone()),
                     _ => None,
@@ -108,7 +123,7 @@ impl SettingDecl {
         let not_item =
             |need: &str| NotaError::other(format!("Setting `{}` requires {need}", self.key));
         match self.kind.as_str() {
-            "text" => {
+            "text" | "select" => {
                 let s = v.as_str().ok_or_else(|| not_item("a string"))?;
 
                 if s.chars().count() > 4000 {
@@ -209,9 +224,9 @@ pub(crate) fn check_settings(
             )));
         }
 
-        if !matches!(s.kind.as_str(), "range" | "text" | "toggle") {
+        if !matches!(s.kind.as_str(), "range" | "text" | "toggle" | "select") {
             return Err(package_2(format!(
-                "Unknown `[[settings]] {}` kind `{}`; use `range`, `text`, or `toggle`",
+                "Unknown `[[settings]] {}` kind `{}`; use `range`, `text`, `toggle`, or `select`",
                 s.key, s.kind
             )));
         }
@@ -227,6 +242,11 @@ pub(crate) fn check_settings(
         let has_text =
             s.secret || !s.placeholder.is_empty() || s.default_text.is_some() || s.multiline;
         let has_enabled_default = s.default_on.is_some();
+        let has_select = !s.options_command.is_empty()
+            || !s.change_command.is_empty()
+            || !s.create_command.is_empty()
+            || !s.rename_command.is_empty()
+            || !s.delete_command.is_empty();
         match s.kind.as_str() {
             "range" => {
                 if has_text {
@@ -237,6 +257,12 @@ pub(crate) fn check_settings(
                 }
                 if has_enabled_default {
                     return Err(not_required("default_on", "this field belongs to `toggle`"));
+                }
+                if has_select {
+                    return Err(not_required(
+                        "options_command / change_command",
+                        "this field belongs to `select`",
+                    ));
                 }
             }
             "text" => {
@@ -252,9 +278,15 @@ pub(crate) fn check_settings(
                 if !s.unit.is_empty() {
                     return Err(not_required("unit", "Text settings cannot define a unit"));
                 }
+                if has_select {
+                    return Err(not_required(
+                        "options_command / change_command",
+                        "this field belongs to `select`",
+                    ));
+                }
             }
 
-            _ => {
+            "toggle" => {
                 if has_data {
                     return Err(not_required(
                         "min / max / default / step",
@@ -269,6 +301,33 @@ pub(crate) fn check_settings(
                 }
                 if !s.unit.is_empty() {
                     return Err(not_required("unit", "Toggle settings cannot define a unit"));
+                }
+                if has_select {
+                    return Err(not_required(
+                        "options_command / change_command",
+                        "this field belongs to `select`",
+                    ));
+                }
+            }
+
+            _ => {
+                if has_data {
+                    return Err(not_required(
+                        "min / max / default / step",
+                        "this field belongs to `range`",
+                    ));
+                }
+                if s.secret || s.multiline || !s.unit.is_empty() || has_enabled_default {
+                    return Err(not_required(
+                        "secret / multiline / unit / default_on",
+                        "select settings use a text value and a command-backed option list",
+                    ));
+                }
+                if s.options_command.trim().is_empty() {
+                    return Err(package_2(format!(
+                        "`[[settings]] {}` is a `select` and requires `options_command`",
+                        s.key
+                    )));
                 }
             }
         }
@@ -669,5 +728,33 @@ multiline = true
                 .is_err(),
             "\u{8fc7}\u{957f}\u{7684}\u{6587}\u{672c}\u{8981}\u{62d2}"
         );
+    }
+
+    #[test]
+    fn select_settings_use_a_text_value_and_require_an_options_command() {
+        let select = r#"
+[[settings]]
+key = "persona_active"
+kind = "select"
+label = "AI persona"
+options_command = "list_personas"
+change_command = "persona_selected"
+"#;
+        let manifest = pending_settings_manifest("select", select, "\"settings.own\"").unwrap();
+        let setting = &manifest.settings[0];
+        assert!(matches!(
+            setting.request_value(None),
+            super::SettingsValue::Text(value) if value.is_empty()
+        ));
+        assert_eq!(
+            setting.receive_value(&serde_json::json!("editor")).unwrap(),
+            toml::Value::String("editor".into())
+        );
+        assert!(setting.receive_value(&serde_json::json!(true)).is_err());
+
+        let missing = select.replace("options_command = \"list_personas\"\n", "");
+        let error =
+            pending_settings_manifest("select-missing", &missing, "\"settings.own\"").unwrap_err();
+        assert!(error.contains("requires `options_command`"), "{error}");
     }
 }

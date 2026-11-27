@@ -7,6 +7,11 @@
  * but write to ProseMirror only after `compositionend`.
  */
 
+import {
+  registerCaretSurface,
+  type CaretCommand,
+} from "./caret-commander";
+
 type MathSourceControl = HTMLInputElement | HTMLTextAreaElement;
 type BackslashControl = Pick<
   HTMLInputElement,
@@ -18,6 +23,7 @@ export interface InlineMathSourceEvents {
   dispatchSource: (value: string) => void;
   feed: (value: string, cursor: number) => void;
   preserveFocus: (cursor: number) => void;
+  handleCommand: (command: CaretCommand, event?: Event) => boolean;
 }
 
 /**
@@ -40,34 +46,14 @@ export function insertBackslashAtSelection(input: BackslashControl): number {
 export function bindInlineMathSourceEvents(
   input: MathSourceControl,
   events: InlineMathSourceEvents,
-): void {
+): () => void {
   let composing = false;
   let expectedCursor: number | null = null;
 
-  (input as HTMLElement).addEventListener("keydown", (event: KeyboardEvent) => {
-    const isInput =
-      typeof HTMLInputElement === "undefined"
-        ? (input as HTMLElement).tagName === "INPUT"
-        : input instanceof HTMLInputElement;
-    if (
-      !isInput ||
-      composing ||
-      event.isComposing ||
-      event.key !== "\\" ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.altKey
-    ) {
-      return;
-    }
-    // WebKit can move focus back to the document before the native input event.
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    const cursor = insertBackslashAtSelection(input);
-    events.updateLayout();
-    events.dispatchSource(input.value);
-    events.feed(input.value, cursor);
-    events.preserveFocus(cursor);
+  const unregister = registerCaretSurface({
+    element: input,
+    kind: "math-source",
+    handle: events.handleCommand,
   });
 
   const commit = (requestedCursor: number | null = expectedCursor) => {
@@ -113,6 +99,7 @@ export function bindInlineMathSourceEvents(
     queueMicrotask(commit);
     globalThis.requestAnimationFrame?.(commit);
   });
+  return unregister;
 }
 
 /** A composed key belongs to the IME, not to editor navigation. */

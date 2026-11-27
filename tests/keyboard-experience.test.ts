@@ -253,9 +253,9 @@ testCase("the editor, settings and click path are wired to the same switch", () 
   equal(pane.includes("keyboardExperience"), true, "editor option");
   equal(clicks.includes("if (keyboardExperience)"), true, "click keeps editing");
   equal(
-    clicks.includes('new CustomEvent("nota-focus-link-source"'),
+    clicks.includes("if (keyboardExperience) return;"),
     true,
-    "click requests source focus",
+    "ordinary link click keeps the native inline source selection",
   );
   equal(settingsPane.includes("keyboard_experience"), true, "settings switch");
   equal(rustSettings.includes("pub keyboard_experience: bool"), true, "persisted setting");
@@ -264,6 +264,7 @@ testCase("the editor, settings and click path are wired to the same switch", () 
 testCase("styles reveal both media kinds without touching document text", () => {
   const marks = readFileSync("src/styles/marks.css", "utf8");
   const source3 = readFileSync("src/editor/keyboard-experience.ts", "utf8");
+  const reveal = readFileSync("src/editor/link-source-reveal.ts", "utf8");
   const video = readFileSync("src/styles/video.css", "utf8");
   equal(marks.includes(".nota-keyboard-link-source"), true, "link source style");
   equal(marks.includes(".nota-link-source-label"), true, "link-source label style");
@@ -303,6 +304,7 @@ testCase("styles reveal both media kinds without touching document text", () => 
   );
   equal(marks.includes(".nota-keyboard-link-label"), true, "label uses link emphasis");
   equal(marks.includes(".nota-keyboard-link-href"), true, "href keeps body color with underline");
+  equal(reveal.includes('class: "nota-link-source-href"'), true, "inline destination styling");
   equal(
     marks.includes(".nota-keyboard-link-editing-block"),
     true,

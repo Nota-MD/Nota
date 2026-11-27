@@ -63,7 +63,10 @@ const continueCarryOftoken = [
   "--border-strong",
   "--accent",
   "--accent-fg",
+  "--radius",
   "--radius-sm",
+  "--radius-lg",
+  "--popup-shadow",
   "--font-ui",
 ] as const;
 

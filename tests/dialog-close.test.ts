@@ -1,9 +1,8 @@
 /**
- * 所有模态对话框都必须提供同一个右上角关闭入口。
+ * Every modal dialog must expose the same top-right close control.
  *
- * 只查视觉结果不够：漏掉一个框时，Esc 和点遮罩仍然能用，界面看起来也没有
- * 报错。这里直接按 `role="dialog"` / `role="alertdialog"` 找出全部对话框，
- * 要求同一文件引用并渲染 `DialogClose`。
+ * Visual review is insufficient: Escape and backdrop clicks can hide a missing
+ * close button without an error. Check each dialog implementation by contract.
  */
 
 import { readFileSync } from "node:fs";
@@ -43,41 +42,42 @@ const dialog = [
   "src/ui/settings/SettingsExportDialog.tsx",
 ];
 
-console.log("\n【对话框统一关闭入口】");
+console.log("\n[Dialog close controls]");
 
-testCase("每个模态对话框都渲染 DialogClose", () => {
+testCase("every modal dialog renders DialogClose", () => {
   for (const path of dialog) {
     const source3 = readFileSync(join(process.cwd(), path), "utf8");
     assertValue(
       source3.includes('from "@/ui/DialogClose"') && source3.includes("<DialogClose"),
-      `${path} 缺少导入或渲染 DialogClose`,
+      `${path} does not import and render DialogClose`,
     );
   }
 });
 
-testCase("DialogClose 有可读名称、标题和统一图标", () => {
+testCase("DialogClose has an accessible name, tooltip and shared icon", () => {
   const source3 = readFileSync(join(process.cwd(), "src/ui/DialogClose.tsx"), "utf8");
-  assertValue(source3.includes('aria-label={t("Close")}'), "缺少 aria-label");
-  assertValue(source3.includes('title={t("Close")}'), "缺少 title");
-  assertValue(source3.includes('name="folio-close-symbolic"'), "关闭图标不统一");
-  assertValue(source3.includes("size={16}"), "关闭图标没有使用官方 16px 尺寸");
+  assertValue(source3.includes('aria-label={t("Close")}'), "aria-label is missing");
+  assertValue(source3.includes('title={t("Close")}'), "title is missing");
+  assertValue(source3.includes('name="nota-close-symbolic"'), "the shared close icon is missing");
+  assertValue(source3.includes("size={16}"), "the close icon is not 16px");
 });
 
-testCase("独立对话框壳都给绝对定位的关闭按钮提供定位上下文", () => {
+testCase("standalone dialog shells provide positioning context for absolute close buttons", () => {
   const overlay = readFileSync(join(process.cwd(), "src/styles/overlay.css"), "utf8");
+  const close = readFileSync(join(process.cwd(), "src/styles/dialog-close.css"), "utf8");
   const picker = readFileSync(join(process.cwd(), "src/styles/file-picker.css"), "utf8");
   const settings = readFileSync(join(process.cwd(), "src/styles/settings.css"), "utf8");
   const shape = readFileSync(join(process.cwd(), "src/styles/theme/shape.css"), "utf8");
-  assertValue(/\.confirm-dialog\s*\{[^}]*position:\s*relative/s.test(overlay), "确认框壳缺少 position");
-  assertValue(/\.file-picker\s*\{[^}]*position:\s*relative/s.test(picker), "文件选择器缺少 position");
-  assertValue(/\.settings-shell\s*\{[^}]*position:\s*relative/s.test(settings), "设置框缺少 position");
-  assertValue(/\.dialog-close\s*\{[^}]*position:\s*absolute/s.test(overlay), "关闭按钮不是绝对定位");
-  assertValue(/\.dialog-close\s*\{[^}]*width:\s*var\(--dialog-close-size\)/s.test(overlay), "关闭按钮尺寸没有由主题 CSS 决定");
-  assertValue(/\.dialog-close\s*\{[^}]*border-radius:\s*var\(--dialog-close-radius\)/s.test(overlay), "关闭按钮圆角没有由主题 CSS 决定");
-  assertValue(/\[data-ui-style="adwaita"\]\s*\{[^}]*--dialog-close-radius:\s*999px/s.test(shape), "Adwaita 没有圆形关闭控件");
-  assertValue(/\[data-ui-style="windows10"\]\s*\{[^}]*--dialog-close-radius:\s*0/s.test(shape), "Windows 10 没有方形关闭控件");
-  assertValue(/\.dialog-close:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/s.test(overlay), "关闭按钮缺少统一焦点环");
+  assertValue(/\.confirm-dialog\s*\{[^}]*position:\s*relative/s.test(overlay), "confirm dialog lacks position");
+  assertValue(/\.file-picker\s*\{[^}]*position:\s*relative/s.test(picker), "file picker lacks position");
+  assertValue(/\.settings-shell\s*\{[^}]*position:\s*relative/s.test(settings), "settings shell lacks position");
+  assertValue(/\.dialog-close\s*\{[^}]*position:\s*absolute/s.test(close), "the close button is not absolute");
+  assertValue(/\.dialog-close\s*\{[^}]*width:\s*var\(--dialog-close-size\)/s.test(close), "close-button size is not theme-controlled");
+  assertValue(/\.dialog-close\s*\{[^}]*border-radius:\s*var\(--dialog-close-radius\)/s.test(close), "close-button radius is not theme-controlled");
+  assertValue(/\[data-ui-style="adwaita"\]\s*\{[^}]*--dialog-close-radius:\s*999px/s.test(shape), "Adwaita lacks a round close control");
+  assertValue(/\[data-ui-style="windows10"\]\s*\{[^}]*--dialog-close-radius:\s*0/s.test(shape), "Windows 10 lacks a square close control");
+  assertValue(/\.dialog-close:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/s.test(close), "the close button lacks a focus ring");
 });
 
-console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

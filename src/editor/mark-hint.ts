@@ -683,9 +683,11 @@ export function createMarkHintPlugin(
           },
           compositionstart: (view) => {
             compositionAnchor = inlineCompositionAnchor(view.state, syntaxType);
-            if (compositionAnchor) {
-              pinCompositionOutsideMarker(view, compositionAnchor);
-            }
+            // Do not move the DOM selection here. WebKitGTK anchors the IME
+            // candidate window before dispatching compositionstart; changing
+            // the selection inside this handler leaves the preedit detached.
+            // The committed text is relocated outside the markers in
+            // compositionend below.
             return false;
           },
           compositionend: (view, event) => {

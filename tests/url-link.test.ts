@@ -39,20 +39,31 @@ import {
   NormalizeLink,
   NormalizeUrl,
   normalizeExplicitLinkDestination,
+  validateExplicitLinkDestination,
   isBareURL,
   splitTailPunctuation,
   bareURLCorrectRule,
   explicitLinkSyntax,
+  parseExplicitLinkMarkdown,
+  explicitLinkCompletedKey,
   explicitLinkAtClosingParenthesis,
+  explicitLinkAtAutoClosedParenthesis,
   explicitLinkAtCursor,
   explicitLinkAtTypedParenthesis,
   explicitLinkAtTrailingWhitespace,
+  explicitLinkDrafts,
+  commitExplicitLinkDrafts,
   findLinkBeforeCursor,
   linkifiedPastedTextTransaction,
   linkBoundarySpec,
   linkBoundaryMarkSpec,
   selfActionLinkInput,
 } from "../src/editor/url-link";
+import {
+  caretRevealsLink,
+  linkSourceDecorations,
+  linkSourceContainsSelection,
+} from "../src/editor/link-source-reveal";
 import { Container, Ctx } from "@milkdown/kit/ctx";
 import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
@@ -194,6 +205,92 @@ testCase("显式 Markdown 链接允许无协议域名并安全规范化", () => 
   equal(normalizeExplicitLinkDestination("javascript:alert(1)"), null, "危险协议");
   equal(explicitLinkSyntax.exec("[GFM](github.com)")?.[1], "GFM", "标签");
   equal(explicitLinkSyntax.exec("[GFM](github.com)")?.[2], "github.com", "地址");
+  equal(explicitLinkSyntax.exec("[GFM]()")?.[2], "", "空地址");
+});
+
+testCase("输入显式链接时原样保留合法目标", () => {
+  equal(
+    validateExplicitLinkDestination("github.com"),
+    "github.com",
+    "bare domain remains unchanged",
+  );
+  equal(
+    validateExplicitLinkDestination("https://github.com"),
+    "https://github.com",
+    "complete URL",
+  );
+  equal(validateExplicitLinkDestination("#section"), "#section", "anchor");
+  equal(validateExplicitLinkDestination("./docs/a.md"), "./docs/a.md", "relative");
+  equal(
+    validateExplicitLinkDestination("javascript:alert(1)"),
+    null,
+    "dangerous destination",
+  );
+});
+
+testCase("GFM link parser accepts every syntactically valid destination", () => {
+  equal(parseExplicitLinkMarkdown("[github](.com)")?.href, ".com", ".com");
+  equal(
+    parseExplicitLinkMarkdown("[github](github.com)")?.href,
+    "github.com",
+    "bare domain",
+  );
+  equal(parseExplicitLinkMarkdown("[github]()")?.href, "", "empty");
+  equal(
+    parseExplicitLinkMarkdown('[github](.com "Title")')?.title,
+    "Title",
+    "title",
+  );
+  equal(
+    parseExplicitLinkMarkdown(
+      "[wiki](https://en.wikipedia.org/wiki/A_(b))",
+    )?.href,
+    "https://en.wikipedia.org/wiki/A_(b)",
+    "balanced parentheses",
+  );
+});
+
+testCase("空地址链接在光标离开后保留为空 href 链接", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = "[github]() tail";
+  const doc = schema.node("doc", null, [
+    schema.node("paragraph", null, [schema.text(source)]),
+  ]);
+  const outside = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 1 + source.length),
+  });
+  const drafts = explicitLinkDrafts(outside);
+  equal(drafts.length, 1, "empty link draft count");
+  equal(drafts[0]?.from, 1, "draft start");
+  equal(drafts[0]?.to, 11, "draft end");
+  const transaction = commitExplicitLinkDrafts(outside);
+  equal(transaction !== null, true, "outside caret should commit the draft");
+  equal(transaction!.doc.textContent, "github tail", "source text was not collapsed");
+  const link = transaction!.doc.firstChild!.firstChild!;
+  equal(link.text, "github", "link label");
+  equal(String(link.marks[0]?.attrs.href), "", "empty href");
+
+  const inside = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 3),
+  });
+  equal(
+    commitExplicitLinkDrafts(inside),
+    null,
+    "a caret inside the source converted the link too early",
+  );
 });
 
 /* ── 三、切尾标点 ───────────────────────────────────────────────────── */
@@ -395,6 +492,41 @@ testCase("自动配对已插入右括号时，输入的 `)` 仍能完成显式�
   equal(transaction!.doc.textContent, "gfm", "链接源码完整替换");
   equal(String(label.marks[0]?.attrs.href), "https://github.com", "地址");
   equal(transaction!.selection.from, 4, "光标落在链接后的正文边界");
+  equal(
+    transaction!.getMeta(explicitLinkCompletedKey),
+    true,
+    "the completed link was not marked for its initial display state",
+  );
+});
+
+testCase("bare-domain explicit link keeps its destination unchanged", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = "[github.com](github.com)";
+  const paragraph = schema.node("paragraph", null, [schema.text(source)]);
+  const doc = schema.node("doc", null, [paragraph]);
+  const caret = 1 + source.length - 1;
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, caret),
+  });
+  const transaction = explicitLinkAtClosingParenthesis(state, caret);
+  equal(transaction !== null, true, "valid GFM link was not recognized");
+  equal(transaction!.doc.textContent, "github.com", "label changed");
+  equal(
+    transaction!.doc.firstChild?.firstChild?.marks[0]?.attrs.href,
+    "github.com",
+    "destination was rewritten",
+  );
 });
 
 testCase("explicit links keep preceding text in place when the closer was auto-paired", () => {
@@ -408,7 +540,7 @@ testCase("explicit links keep preceding text in place when the closer was auto-p
       link: { attrs: { href: {} }, inclusive: false },
     },
   });
-  const source = "int main[gfm](github.com)";
+  const source = "int main[gfm](https://github.com)";
   const paragraph = schema.node("paragraph", null, [schema.text(source)]);
   const doc = schema.node("doc", null, [paragraph]);
   const caret = 1 + source.length - 1;
@@ -498,7 +630,7 @@ testCase("typing a space commits a complete explicit link and preserves the spac
       link: { attrs: { href: {} }, inclusive: false },
     },
   });
-  const source = "int main[gfm](github.com) ";
+  const source = "int main[gfm](https://github.com) ";
   const paragraph = schema.node("paragraph", null, [schema.text(source)]);
   const doc = schema.node("doc", null, [paragraph]);
   const state = EditorState.create({
@@ -510,6 +642,61 @@ testCase("typing a space commits a complete explicit link and preserves the spac
   equal(transaction !== null, true, "the link was not recognized");
   equal(transaction!.doc.textContent, "int maingfm ", "prefix or trailing space changed");
   equal(transaction!.selection.from, 13, "caret stays after the trailing space");
+});
+
+testCase("an auto-inserted closing parenthesis commits a complete destination", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const complete = "[gfm](https://github.com)";
+  const completeDoc = schema.node("doc", null, [
+    schema.node("paragraph", null, [schema.text(complete)]),
+  ]);
+  const completeCaret = 1 + complete.length - 1;
+  const completeState = EditorState.create({
+    schema,
+    doc: completeDoc,
+    selection: TextSelection.create(completeDoc, completeCaret),
+  });
+  const transaction = explicitLinkAtAutoClosedParenthesis(
+    completeState,
+    completeCaret,
+  );
+  equal(transaction !== null, true, "complete destination was not recognized");
+  equal(transaction!.doc.textContent, "gfm", "link replacement changed its label");
+  equal(
+    transaction!.doc.firstChild?.firstChild?.marks[0]?.attrs.href,
+    "https://github.com",
+    "explicit destination changed",
+  );
+
+  const incomplete = "[gfm](github.c)";
+  const incompleteDoc = schema.node("doc", null, [
+    schema.node("paragraph", null, [schema.text(incomplete)]),
+  ]);
+  const incompleteCaret = 1 + incomplete.length - 1;
+  const incompleteState = EditorState.create({
+    schema,
+    doc: incompleteDoc,
+    selection: TextSelection.create(incompleteDoc, incompleteCaret),
+  });
+  const incompleteTransaction = explicitLinkAtAutoClosedParenthesis(
+    incompleteState,
+    incompleteCaret,
+  );
+  equal(incompleteTransaction !== null, true, "valid GFM destination was rejected");
+  equal(
+    incompleteTransaction!.doc.firstChild?.firstChild?.marks[0]?.attrs.href,
+    "github.c",
+    "GFM destination was rewritten",
+  );
 });
 
 testCase("link source nodes are not treated as freshly typed explicit links", () => {
@@ -553,6 +740,70 @@ testCase("link source nodes are not treated as freshly typed explicit links", ()
   );
 });
 
+testCase("link source stays active only while the selection is inside it", () => {
+  equal(linkSourceContainsSelection(10, 30, 11, 11), true, "start inside");
+  equal(linkSourceContainsSelection(10, 30, 38, 38), true, "end inside");
+  equal(linkSourceContainsSelection(10, 30, 10, 10), false, "before node");
+  equal(linkSourceContainsSelection(10, 30, 40, 40), true, "node tail");
+  equal(linkSourceContainsSelection(10, 30, 9, 41), false, "spanning node");
+});
+
+testCase("an incomplete link source is marked as invalid", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+      notaLinkSource: {
+        content: "text*",
+        group: "inline",
+        inline: true,
+        marks: "",
+        code: true,
+        attrs: {
+          href: { default: "" },
+          title: { default: "" },
+          label: { default: "" },
+        },
+      },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = schema.nodes.notaLinkSource!.create(
+    { href: "x", title: "", label: "github" },
+    schema.text("[github"),
+  );
+  const doc = schema.node("doc", null, [
+    schema.node("paragraph", null, [source]),
+  ]);
+  const state = EditorState.create({ schema, doc });
+  const decorations = linkSourceDecorations(state).find();
+  equal(decorations.length, 1, "invalid source decoration count");
+  const found = decorations
+    .some(
+      (decoration) =>
+        (
+          decoration.type as unknown as {
+            attrs?: Record<string, string | null>;
+          }
+        ).attrs?.class === "nota-link-source-invalid",
+    );
+  equal(found, true, "invalid source class");
+});
+
+testCase("collapsed source text does not re-reveal at the link's trailing boundary", () => {
+  const run = {
+    from: 1,
+    to: 4,
+    link: {} as never,
+  };
+  equal(caretRevealsLink(run, 1), true, "link start");
+  equal(caretRevealsLink(run, 3), true, "last label character");
+  equal(caretRevealsLink(run, 4), false, "after the link");
+});
+
 testCase("自动预插的闭括号不算完成，不能把输入中的 `(g)` 提前变成链接", () => {
   const schema = new Schema({
     nodes: {
@@ -564,7 +815,7 @@ testCase("自动预插的闭括号不算完成，不能把输入中的 `(g)` 提
       link: { attrs: { href: {} }, inclusive: false },
     },
   });
-  const source = "[github.com](g)";
+  const source = "[github.com](https://github.com)";
   const paragraph = schema.node("paragraph", null, [schema.text(source)]);
   const doc = schema.node("doc", null, [paragraph]);
   const caret = 1 + source.length - 1;

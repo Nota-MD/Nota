@@ -159,11 +159,24 @@ export function thisValuePageDrawWhatWhat(state2: PanelState, actualTime: string
       : { nodes: [], notice: "load", error: null, busy: null };
   }
 
-  const nodes = actualTimeNode === null ? state2.nodes : [...state2.nodes, actualTimeNode];
+  const nodes =
+    actualTimeNode === null
+      ? state2.nodes
+      : insertLiveStream(state2.nodes, actualTimeNode);
   return {
     nodes,
     notice: nodes.length === 0 ? "empty" : null,
     error: null,
     busy: state2.busy,
   };
+}
+
+/**
+ * Place a live answer at the conversation boundary instead of after the whole
+ * panel. Control and settings blocks stay below the transcript.
+ */
+export function insertLiveStream(nodes: PanelNode[], live: PanelNode): PanelNode[] {
+  const input = nodes.findIndex((node) => node.kind === "input");
+  const at = input >= 0 ? input : nodes.length;
+  return [...nodes.slice(0, at), live, ...nodes.slice(at)];
 }

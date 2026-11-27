@@ -1,4 +1,4 @@
-/** 格式化工具栏的底部悬浮胶囊布局与分组菜单。 */
+/** Floating formatting toolbar layout and grouped menus. */
 
 import { readFileSync } from "node:fs";
 
@@ -26,9 +26,9 @@ const css = readFileSync("src/styles/bars.css", "utf8");
 const chrome = readFileSync("src/ui/useChromeVisibility.ts", "utf8");
 const iconTable = readFileSync("src/ui/Icon.tsx", "utf8");
 
-console.log("\n【悬浮工具栏】");
+console.log("\n[Floating formatting toolbar]");
 
-testCase("工具栏分成段落、常用行内、链接图像、列表和更多菜单", () => {
+testCase("the toolbar groups paragraphs, common inline actions, media, lists and more", () => {
   for (const marker of [
     "format-selector",
     "openMenu === \"paragraph\"",
@@ -39,7 +39,7 @@ testCase("工具栏分成段落、常用行内、链接图像、列表和更多�
     'draw(byCommand("image"))',
     'draw(byCommand("quote"))',
   ]) {
-    assertValue(bar.includes(marker), `工具栏缺少 ${marker}`);
+    assertValue(bar.includes(marker), `toolbar is missing ${marker}`);
   }
   for (const command of [
     '"text"',
@@ -52,7 +52,7 @@ testCase("工具栏分成段落、常用行内、链接图像、列表和更多�
     '"codeBlock"',
     '"clearFormat"',
   ]) {
-    assertValue(bar.includes(command), `分组菜单丢了命令 ${command}`);
+    assertValue(bar.includes(command), `grouped menu is missing command ${command}`);
   }
   for (const menuId of [
     '"para.table"',
@@ -65,34 +65,34 @@ testCase("工具栏分成段落、常用行内、链接图像、列表和更多�
     '"edit.copyAs"',
     '"edit.delete"',
   ]) {
-    assertValue(bar.includes(menuId), `参考菜单丢了命令 ${menuId}`);
+    assertValue(bar.includes(menuId), `reference menu is missing command ${menuId}`);
   }
-  assertValue(bar.includes("<MenuPopup"), "没有复用带快捷键和勾选的菜单组件");
-  assertValue(bar.includes("focusEditor"), "菜单关闭后没有把焦点还给正文");
+  assertValue(bar.includes("<MenuPopup"), "the shared menu component with shortcuts and checks is not used");
+  assertValue(bar.includes("focusEditor"), "closing a menu does not restore editor focus");
 });
 
-testCase("工具栏不占正文流，停靠在底部并向上展开菜单", () => {
+testCase("the toolbar is out of document flow, docks at the bottom and opens menus upward", () => {
   assertValue(
     /\.app-main > \.format-bar[\s\S]*?position:\s*absolute;[\s\S]*?bottom:\s*calc\(var\(--nota-bottom-bar-height, 0px\) \+ 14px\);/.test(
       css,
     ),
-    "工具栏没有按真实底部栏高度加间距定位",
+    "the toolbar is not positioned above the measured bottom bar",
   );
-  assertValue(css.includes("translateX(-50%)"), "工具栏没有水平居中");
+  assertValue(css.includes("translateX(-50%)"), "the toolbar is not horizontally centered");
   assertValue(
     /\.format-menu\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?bottom:\s*calc\(100% \+ 7px\)/.test(css),
-    "分组菜单没有向工具栏上方展开",
+    "group menus do not open above the toolbar",
   );
-  assertValue(chrome.includes('"--nota-bottom-bar-height"'), "没有测量并写入底部栏实际高度");
-  assertValue(chrome.includes("ResizeObserver"), "底部栏高度变化时没有重新测量");
-  assertValue(chrome.includes("MutationObserver"), "状态栏或标签栏出现/消失时没有重新测量");
+  assertValue(chrome.includes('"--nota-bottom-bar-height"'), "the bottom-bar height is not measured");
+  assertValue(chrome.includes("ResizeObserver"), "bottom-bar height changes are not remeasured");
+  assertValue(chrome.includes("MutationObserver"), "status-bar or tab-bar visibility changes are not remeasured");
 });
 
-testCase("工具栏和内部控件跟随主题圆角，而不是强制胶囊", () => {
+testCase("the toolbar and controls follow theme radii instead of forcing a pill shape", () => {
   const base = readFileSync("src/styles/theme/base.css", "utf8");
   assertValue(
     base.includes("--format-bar-radius: var(--radius);"),
-    "悬浮工具栏没有继承当前主题的圆角",
+    "the floating toolbar does not inherit the active theme radius",
   );
   const selector = css.slice(css.indexOf(".format-selector"), css.indexOf(".format-caret"));
   const button = css.slice(
@@ -101,62 +101,62 @@ testCase("工具栏和内部控件跟随主题圆角，而不是强制胶囊", (
   );
   assertValue(
     selector.includes("border-radius: var(--radius-sm);"),
-    "段落下拉仍在使用独立胶囊圆角",
+    "the paragraph dropdown still uses a separate pill radius",
   );
   assertValue(
     button.includes("border-radius: var(--radius-sm);"),
-    "工具栏按钮仍在使用独立胶囊圆角",
+    "toolbar buttons still use a separate pill radius",
   );
 });
 
-testCase("悬停显示从底部感应，且菜单打开时不会误收起", () => {
-  assertValue(chrome.includes("bottomPartTriggerBand"), "悬停触发仍按顶部计算");
-  assertValue(chrome.includes("mainArea.bottom - bottomPartTriggerBand"), "底部触发带没有接到主区下沿");
-  assertValue(chrome.includes('querySelectorAll(".format-menu")'), "指针进入菜单时工具栏会消失");
+testCase("hover reveal starts from the bottom and ignores pointers inside open menus", () => {
+  assertValue(chrome.includes("bottomPartTriggerBand"), "hover reveal still uses the top edge");
+  assertValue(chrome.includes("mainArea.bottom - bottomPartTriggerBand"), "the trigger band is not tied to the main-area bottom");
+  assertValue(chrome.includes('querySelectorAll(".format-menu")'), "the toolbar disappears while the pointer is inside a menu");
 });
 
-testCase("更多菜单保留收起入口，不依赖最右侧叉号", () => {
-  assertValue(bar.includes('id: "view.toolbarNever"'), "更多菜单没有收起命令");
-  assertValue(bar.includes('label: "Hide the formatting toolbar"'), "收起入口没有明确文案");
-  assertValue(!bar.includes('className="format-bar-close"\n        title'), "工具栏仍保留右侧独立叉号");
+testCase("the More menu retains the hide action without a separate close icon", () => {
+  assertValue(bar.includes('id: "view.toolbarNever"'), "the More menu lacks the hide action");
+  assertValue(bar.includes('label: "Hide the formatting toolbar"'), "the hide action has no explicit label");
+  assertValue(!bar.includes('className="format-bar-close"\n        title'), "the toolbar still has a separate close icon");
 });
 
-testCase("列表入口跟随当前类型，更多入口使用真正的省略号图标", () => {
-  assertValue(bar.includes("const currentListIcon"), "列表入口仍是固定圆点图标");
-  assertValue(bar.includes('state?.block === "ol"'), "有序列表没有切换为编号图标");
-  assertValue(bar.includes('state?.block === "task"'), "任务列表没有切换为任务图标");
+testCase("the list entry follows the current type and More uses an ellipsis icon", () => {
+  assertValue(bar.includes("const currentListIcon"), "the list entry still uses a fixed bullet icon");
+  assertValue(bar.includes('state?.block === "ol"'), "ordered lists do not switch to the numbered icon");
+  assertValue(bar.includes('state?.block === "task"'), "task lists do not switch to the task icon");
   assertValue(
-    bar.includes('Icon name="folio-view-more-horizontal-symbolic"'),
-    "更多入口仍在用三个文字圆点",
+    bar.includes('Icon name="nota-view-more-horizontal-symbolic"'),
+    "the More entry still uses three text dots",
   );
   assertValue(
-    iconTable.includes('"folio-view-more-horizontal-symbolic"'),
-    "省略号图标没有登记到图标表",
+    iconTable.includes('"nota-view-more-horizontal-symbolic"'),
+    "the ellipsis icon is not registered",
   );
 });
 
-testCase("工具栏选中态使用克制的中性底色，而不是整颗强调色", () => {
+testCase("toolbar selected states use a restrained neutral fill", () => {
   assertValue(
     /\.app-main > \.format-bar \.format-btn\[data-on="true"\]\s*\{[\s\S]*?background:\s*var\(--bg-active\)/.test(
       css,
     ),
-    "选中态仍用大面积强调色",
+    "selected controls still use a large accent fill",
   );
 });
 
-testCase("段落菜单不重复绘制 Paragraph 字形，避免与中文标签重叠", () => {
+testCase("the paragraph menu avoids drawing a duplicate Paragraph glyph", () => {
   assertValue(
     bar.includes('b.cmd === "text" ? null') ||
       /cmd:\s*"text"[\s\S]*?icon:/.test(bar),
-    "段落项仍同时绘制英文字形与本地化标签",
+    "the paragraph entry still draws both an English glyph and a localized label",
   );
 });
 
-testCase("普通文本是 Ctrl+0，并跟随当前块显示勾选", () => {
-  assertValue(bar.includes('"para.text": state.block === "text"'), "普通文本没有当前项勾选");
+testCase("Normal text uses Ctrl+0 and checks the current block type", () => {
+  assertValue(bar.includes('"para.text": state.block === "text"'), "Normal text is not checked for text blocks");
   const translation = readFileSync("src/i18n/zh-ui.ts", "utf8");
-  assertValue(translation.includes('"Normal text": "普通文字"'), "正文项没有统一命名为普通文字");
+  assertValue(translation.includes('"Normal text": "普通文字"'), "Normal text has the wrong localized label");
 });
 
-console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

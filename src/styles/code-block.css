@@ -148,15 +148,17 @@
   padding: 6px;
   border: 1px solid var(--border);
   border-color: color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: 9px;
+  border-radius: var(--radius-lg, var(--radius, 9px));
   background: var(--bg-raised);
   background: color-mix(in srgb, var(--bg-raised) 96%, transparent);
   color-scheme: inherit;
 
 
-  box-shadow:
+  box-shadow: var(
+    --popup-shadow,
     0 10px 30px rgb(0 0 0 / 14%),
-    0 2px 8px rgb(0 0 0 / 8%);
+    0 2px 8px rgb(0 0 0 / 8%)
+  );
   font-family: var(--font-ui, inherit);
   font-size: 0.8667rem;
   color: var(--fg);
@@ -168,7 +170,7 @@
   gap: 10px;
   min-height: 34px;
   padding: 0 11px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -201,9 +203,10 @@
 
 .nota-lang-opt-on,
 .nota-lang-opt-on:hover {
-  background: var(--bg-hover);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-hover));
   color: var(--fg);
   font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 /* The wrapper only positions the single editable language field below the
@@ -411,10 +414,8 @@ html[data-code-lang-picker="off"] .nota-code-lang-wrap {
   display: none;
   margin: 30px 0;
   padding: 22px 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
   overflow-x: auto;
+  white-space: normal;
 }
 
 .nota-code-wrap.nota-code-math .nota-code-math-preview {
@@ -452,7 +453,7 @@ html[data-code-lang-picker="off"] .nota-code-lang-wrap {
 
 .nota-code-math-render {
   min-width: max-content;
-  color: var(--fg);
+  color: inherit;
   text-align: center;
 }
 

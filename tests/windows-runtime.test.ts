@@ -1,4 +1,4 @@
-/** Windows/WebView2 下独立窗口与按需模块的运行时契约。 */
+/** Independent windows and on-demand entry points on Windows/WebView2. */
 
 import { readFileSync } from "node:fs";
 
@@ -18,12 +18,16 @@ function testCase(name: string, body: () => void): void {
 }
 
 function contains(text: string, part: string, description: string): void {
-  if (!text.includes(part)) throw new Error(`${description}：缺少 ${JSON.stringify(part)}`);
+  if (!text.includes(part)) throw new Error(`${description}: missing ${JSON.stringify(part)}`);
+}
+
+function assertValue(value: unknown, message: string): asserts value {
+  if (!value) throw new Error(message);
 }
 
 const read = (path: string) => readFileSync(path, "utf8");
 
-console.log("\n【Windows 运行时入口】");
+console.log("\n[Windows runtime entry points]");
 
 testCase("Utility windows use dedicated HTML entries", () => {
   for (const [path, marker] of [
@@ -31,115 +35,136 @@ testCase("Utility windows use dedicated HTML entries", () => {
   ]) {
     const html = read(path);
     contains(html, marker, path);
-    contains(html, 'src="/src/main.tsx"', `${path} 共享前端入口`);
+    contains(html, 'src="/src/main.tsx"', `${path} shared frontend entry`);
   }
   const debugLog = read("debug-log.html");
   contains(debugLog, 'data-window="debug-log"', "debug-log.html");
-  contains(debugLog, 'src="/src/debug-log.tsx"', "日志页独立轻量入口");
-  contains(read("src/debug-log.tsx"), "<DebugLogWindow />", "独立日志入口挂载");
+  contains(debugLog, 'src="/src/debug-log.tsx"', "lightweight debug-log entry");
+  contains(read("src/debug-log.tsx"), "<DebugLogWindow />", "debug-log entry mount");
   const settings = read("settings.html");
   contains(settings, 'data-window="settings"', "settings.html");
-  contains(settings, 'src="/src/settings-window.tsx"', "设置页独立轻量入口");
-  contains(read("src/settings-window.tsx"), "<SettingsWindow />", "独立设置入口挂载");
+  contains(settings, 'src="/src/settings-window.tsx"', "lightweight settings entry");
+  contains(read("src/settings-window.tsx"), "<SettingsWindow />", "settings entry mount");
   const about = read("about.html");
   contains(about, 'data-window="about"', "about.html");
-  contains(about, 'src="/src/about-window.tsx"', "关于页独立轻量入口");
-  contains(read("src/about-window.tsx"), "<AboutWindow />", "独立关于入口挂载");
+  contains(about, 'src="/src/about-window.tsx"', "lightweight About entry");
+  contains(read("src/about-window.tsx"), "<AboutWindow />", "About entry mount");
   contains(
     read("src/ui/useDocThemeInventory.ts"),
     "useEffect(() => {",
-    "设置等辅助窗口没有自动扫描文档主题",
+    "utility windows do not scan document themes",
   );
   contains(
     read("src/ui/SettingsWindow.tsx"),
     "api.frontendReady()",
-    "独立设置页没有启动扩展发现握手",
+    "standalone Settings does not start the extension discovery handshake",
   );
   const windowCommand = read("src-tauri/src/commands/window.rs");
   const runtime = read("src-tauri/src/lib.rs");
   const host = read("src-tauri/src/window_host.rs");
   for (const role of ["Editor", "Settings", "About", "DebugLog"]) {
-    contains(host, role, `统一窗口角色缺少 ${role}`);
+    contains(host, role, `shared window role is missing ${role}`);
   }
-  contains(host, "READY_ENV", "独立窗口缺少 ready 握手");
-  contains(host, "READY_TIMEOUT", "独立窗口缺少 ready 超时");
-  contains(host, "NOTA_WINDOW_ROLE", "独立窗口缺少环境变量角色兜底");
-  contains(host, "background_command", "统一窗口模块没有使用后台进程启动器");
-  contains(windowCommand, "window_host::launch(WindowRole::Settings", "设置命令未走统一窗口模块");
-  contains(windowCommand, "window_host::launch(WindowRole::About", "关于命令未走统一窗口模块");
-  contains(windowCommand, "window_host::launch(WindowRole::DebugLog", "日志命令未走统一窗口模块");
-  contains(windowCommand, "window_host::launch(WindowRole::Editor", "新窗口命令未走统一窗口模块");
+  contains(
+    host,
+    "Self::About => (420.0, 500.0)",
+    "About window has no dedicated minimum height",
+  );
+  contains(host, "READY_ENV", "utility windows lack the ready handshake");
+  contains(host, "READY_TIMEOUT", "utility windows lack a ready timeout");
+  contains(host, "NOTA_WINDOW_ROLE", "utility windows lack an environment role fallback");
+  contains(host, "background_command", "the shared window module does not use the background launcher");
+  contains(windowCommand, "window_host::launch(WindowRole::Settings", "the Settings command bypasses the shared window module");
+  contains(
+    read("src/ui/useSettingsWindow.ts"),
+    "if (openingExternal.current) return;",
+    "rapid Settings commands can spawn duplicate windows",
+  );
+  const hostSource = read("src-tauri/src/window_host.rs");
+  assertValue(
+    hostSource.indexOf("settings_window_host::focus_existing()") <
+      hostSource.indexOf("let program = std::env::current_exe()"),
+    "opening Settings does not focus an existing Settings process first",
+  );
+  assertValue(
+    runtime.indexOf("if standalone_settings_window {") <
+      runtime.indexOf("crate::debug_log!(\"[nota] debug mode enabled"),
+    "direct Settings launches do not focus an existing window before boot",
+  );
+  contains(windowCommand, "window_host::launch(WindowRole::About", "the About command bypasses the shared window module");
+  contains(windowCommand, "window_host::launch(WindowRole::DebugLog", "the log command bypasses the shared window module");
+  contains(windowCommand, "window_host::launch(WindowRole::Editor", "new editor windows bypass the shared module");
   if (windowCommand.includes("WebviewWindowBuilder")) {
-    throw new Error("独立窗口命令仍直接创建 WebviewWindow");
+    throw new Error("utility-window commands still create WebviewWindow directly");
   }
   contains(
     windowCommand,
     "pub fn nota_window_prepare_settings(_app: tauri::AppHandle)",
-    "Windows 设置预热没有变成无操作",
+    "Windows Settings prewarm is not a no-op",
   );
   contains(
     windowCommand,
     "pub fn nota_window_prepare_about(_app: tauri::AppHandle)",
-    "Windows 关于窗口预热没有变成无操作",
+    "Windows About prewarm is not a no-op",
   );
-  contains(runtime, "window_host::current_role", "运行入口没有读取统一窗口角色");
-  contains(runtime, "window_host::signal_ready", "子进程页面加载后没有报告 ready");
+  contains(runtime, "window_host::current_role", "the runtime does not read the shared window role");
+  contains(runtime, "window_host::signal_ready", "child pages do not report ready");
   contains(
     runtime,
     "role.page()",
-    "子进程没有根据窗口角色加载页面",
+    "child processes do not select a page by window role",
   );
   if (runtime.includes("index.html?settings=1")) {
-    throw new Error("设置进程仍会先启动完整编辑器页面");
+    throw new Error("the Settings process still boots the full editor page");
   }
   contains(
     runtime,
     "standalone_settings_window",
-    "设置进程没有独立的最小初始化分支",
+    "the Settings process has no minimal initialization branch",
   );
   contains(
     runtime,
     'PathBuf::from("nota-settings-webview")',
-    "设置子进程与主程序共用了 WebView2 数据目录",
+    "the Settings child shares WebView2 data with the main process",
   );
   contains(
     runtime,
     'utility_window && window.label() == "main"',
-    "独立设置进程的原生关闭按钮没有退出该进程",
+    "the native close button does not exit the Settings process",
   );
-  contains(read("src-tauri/src/settings_watch.rs"), "settings reloaded from external window", "设置子进程修改没有同步回主进程");
+  contains(read("src-tauri/src/settings_watch.rs"), "settings reloaded from external window", "Settings changes do not synchronize back to the main process");
   const alarm = read("src-tauri/src/focus/alarm.rs");
-  contains(alarm, 'WebviewUrl::App("focus-alarm.html"', "警报窗口不得依赖 fragment");
+  contains(alarm, 'WebviewUrl::App("focus-alarm.html"', "the alarm window must not depend on a fragment");
 });
 
-testCase("主入口先读 HTML 标记，再兼容旧 hash", () => {
+testCase("the main entry reads the HTML marker before the legacy hash", () => {
   const main = read("src/main.tsx");
-  contains(main, "document.documentElement.dataset.window", "读取独立入口标记");
-  contains(main, 'windowEntry === "focus-alarm"', "警报入口");
+  contains(main, "document.documentElement.dataset.window", "standalone entry marker");
+  contains(main, 'windowEntry === "focus-alarm"', "alarm entry");
 });
 
-testCase("动态模块使用相对基址且不依赖 Vite 预加载包装", () => {
+testCase("dynamic modules use relative URLs and avoid Vite preload wrappers", () => {
   const vite = read("vite.config.ts");
-  contains(vite, 'base: "./"', "相对资源基址");
-  contains(vite, "modulePreload: false", "关闭不稳定的 modulepreload");
+  contains(vite, 'base: "./"', "relative asset base");
+  contains(vite, "modulePreload: false", "unstable modulepreload is disabled");
   for (const entry of ["main", "about", "settings", "debugLog", "focusAlarm"]) {
-    contains(vite, `${entry}:`, `多页面入口 ${entry}`);
+    contains(vite, `${entry}:`, `multi-page entry ${entry}`);
   }
-  if (vite.includes("help: fileURLToPath")) throw new Error("帮助页仍被构建");
+  if (vite.includes("help: fileURLToPath")) throw new Error("the help page is still built");
 });
 
-testCase("Windows 便携版由无提权的 Nota 单文件启动器承载，并保留更新器入口", () => {
+testCase("the Windows portable build uses an unelevated launcher and keeps updater entry", () => {
   const launcher = read("tools/windows-portable-launcher.c");
   const manifest = read("tools/windows-portable-launcher.manifest");
   const resources = read("tools/windows-portable-launcher.rc");
   const recipe = read("tools/make-windows-portable.sh");
-  contains(launcher, "CreateProcessW", "便携启动器没有运行 Nota");
-  contains(manifest, 'requestedExecutionLevel level="asInvoker"', "便携启动器请求提权");
-  contains(resources, 'src-tauri/icons/icon.ico', "便携启动器没有 Nota 图标");
-  contains(recipe, "windows-portable-launcher.c", "构建脚本没有使用自有启动器");
-  contains(recipe, "NOTA_BUILD_ID", "构建脚本没有为便携缓存生成唯一标识");
+  contains(launcher, "CreateProcessW", "the portable launcher does not start Nota");
+  contains(manifest, 'requestedExecutionLevel level="asInvoker"', "the portable launcher requests elevation");
+  contains(resources, 'src-tauri/icons/icon.ico', "the portable launcher lacks the Nota icon");
+  contains(recipe, "windows-portable-launcher.c", "the build script does not use the custom launcher");
+  contains(recipe, "NOTA_BUILD_ID", "the build script does not generate a portable cache id");
   const updateManifest = read("tools/make-update-manifest.mjs");
-  contains(updateManifest, "_x64-portable\\.(?:exe|zip)", "更新清单不认单文件便携 EXE");
+  contains(updateManifest, "_x64-portable\\.(?:exe|zip)", "the update manifest does not recognize the portable EXE");
 });
 
 testCase("diagnostic console build tails the shared log from an independent process", () => {
@@ -162,5 +187,5 @@ testCase("Linux GTK4 dialog helper keeps a Windows-targetable entry point", () =
   );
 });
 
-console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

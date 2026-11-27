@@ -552,21 +552,13 @@ WebKitGTK 那份英文原生右键菜单。它没进表，所以**"它改不动"
 
 ---
 
-## 9A. Table extensions (API v2.4)
+
+## 9A. AI context capabilities (API v2.4)
 
 | Capability | Status | Contract |
 |---|---|---|
-| `table.read` | Implemented | Snapshot plus `on_snapshot` callback |
-| `table.render` | Implemented | Temporary A1-keyed display values |
-| `table.write` | Implemented | One undoable batch of source-cell edits |
-| `table.context_action` | Implemented | Localized right-click table actions |
-| `spreadsheet.require` | Implemented | Own and restore the spreadsheet setting |
 | `ai.context.read` | Implemented | Read append-only Markdown format notes registered by enabled extensions |
 | `ai.context.write` | Implemented | Append one namespaced Markdown format note for Nota AI requests |
-
-`nota.sheet-formulas` lives in the separate extensions repository. It evaluates
-Excel-compatible formulas without writing computed values to Markdown; **Keep
-Values** is an explicit, undoable context action.
 
 ## 10. 这份矩阵怎么维护
 

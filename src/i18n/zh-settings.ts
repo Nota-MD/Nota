@@ -18,6 +18,7 @@ export const settingsTable: Record<string, string> = {
   "Superscript": "上标",
   "Subscript": "下标",
   "Custom": "自定义",
+  "Custom color code": "自定义颜色代码",
   "Settings": "偏好设置",
   "Settings sections": "设置分页",
   "Done": "完成",
@@ -84,7 +85,6 @@ export const settingsTable: Record<string, string> = {
   "Dark mode": "深色模式",
   "Which set to use in dark mode": "深色下用哪套",
   "Follow the system": "跟随系统",
-  "Follow the system preference": "跟随系统偏好",
   "Follow the light theme": "跟随浅色主题",
   "Use a separate set of document themes": "用一套独立的文档主题",
   "Document themes folder": "文档主题文件夹",
@@ -93,7 +93,6 @@ export const settingsTable: Record<string, string> = {
     "打开文档主题文件夹。放入主题包即可选用。",
   "Current {0}: {1}. The appearance of the whole interface follows.": "当前 {0}：{1}。界面各处外观随之变化。",
   "Accent color": "主题色",
-  "Select Color": "选择颜色",
   "Import theme package or Typora CSS": "导入主题包或 Typora CSS",
   "Theme package or CSS": "主题包或 CSS",
   "Import Typora theme folder": "导入 Typora 主题文件夹",
@@ -362,7 +361,6 @@ export const settingsTable: Record<string, string> = {
   "Recognize the \\\\( \\\\) and \\\\[ \\\\] delimiters": "认 \\\\( \\\\) 和 \\\\[ \\\\] 定界符",
   "Treat ```math blocks as math": "```math 代码块当公式",
   "physics package": "physics 宏包",
-  "Use the legacy inline math parser": "用旧版的行内公式解析",
   "Number equations": "公式自动编号",
   "Off": "不启用",
   "AMS style (equation environments only)": "AMS 风格（只给 equation 环境编号）",
@@ -399,11 +397,6 @@ export const settingsTable: Record<string, string> = {
   "Enable WebView default shortcuts": "启用 WebView 默认快捷键",
   "Allows WebView-native reload, find-next, download, view-source and developer-tools shortcuts. Effective only while developer mode is enabled.":
     "允许 WebView 原生刷新、查找下一个、下载、查看源码和开发者工具快捷键。仅在开发者模式开启时生效。",
-  "Spreadsheet table mode": "电子表格模式",
-  "Enable spreadsheet-style table controls": "启用电子表格式表格操作",
-  "Enabled and managed by an installed extension.": "已由已安装的拓展启用并管理。",
-  "Shows row and column headers, cell references, a formula bar, range selection and a fill handle. The document remains a standard GFM Markdown table.":
-    "显示行列标题、单元格地址、编辑栏、范围选择和填充柄。文档仍然是标准 GFM Markdown 表格。",
   "Reveal link and image source at the caret": "光标到达链接和图片时显示源码",
   "Show Markdown around links and images when the caret reaches them. Clicking a link also stays in the editor instead of opening the link dialog.":
     "光标进入链接或图片附近时显示 Markdown 源码；点击链接也留在编辑器中，不打开链接设置框。",

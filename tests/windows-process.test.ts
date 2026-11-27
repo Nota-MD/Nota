@@ -40,14 +40,15 @@ testCase("统一封装使用 CREATE_NO_WINDOW", () => {
   assertValue(proc.includes("command.creation_flags(CREATE_NO_WINDOW)"), "Windows 没有设置无窗标志");
   assertValue(proc.includes("0x0800_0000"), "CREATE_NO_WINDOW 数值不对");
   assertValue(proc.includes("hide_console_window(command)"), "spawn_retrying 没有兜底无窗设置");
+  assertValue(proc.includes("pub fn console_command"), "缺少显式诊断控制台构造器");
 });
 
 testCase("Git 与直接 spawn 的运行期路径都走统一封装", () => {
   const git = read("src-tauri/src/lua/api/git.rs");
-  const window = read("src-tauri/src/commands/window.rs");
+  const windowHost = read("src-tauri/src/window_host.rs");
   const update = read("src-tauri/src/update.rs");
   assertValue(git.includes('crate::proc::background_command("git")'), "nota.git 仍直接启动 git");
-  assertValue(window.includes("crate::proc::background_command(&program)"), "窗口/日志子进程绕过封装");
+  assertValue(windowHost.includes("crate::proc::background_command(&program)"), "窗口/日志子进程绕过封装");
   assertValue(update.includes('crate::proc::background_command("powershell")'), "更新 PowerShell 绕过封装");
 });
 

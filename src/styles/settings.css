@@ -614,6 +614,22 @@
   grid-column: 1 / -1;
 }
 
+.stg-row[data-layout="stacked"] .stg-row-text,
+.stg-row[data-layout="stacked"] .stg-row-control {
+  grid-column: 1 / -1;
+}
+
+.stg-row[data-layout="stacked"] .stg-row-text {
+  padding-bottom: 4px;
+  border-bottom: 0;
+}
+
+.stg-row[data-layout="stacked"] .stg-row-control {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  padding-top: 0;
+}
+
 
 
 .stg-group-body > .stg-row:last-child > .stg-row-text,
@@ -737,6 +753,119 @@
 
 .stg-update-panel .about-table {
   width: 100%;
+}
+
+.plugin-setting-select {
+  display: grid;
+  gap: 8px;
+  width: min(42rem, 100%);
+}
+
+.plugin-setting-manager {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.plugin-setting-manager-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 3px 5px 3px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plugin-setting-manager-row[data-current="true"] {
+  background: var(--bg-active);
+}
+
+.plugin-setting-manager-pick {
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.plugin-setting-manager-pick:hover {
+  color: var(--accent);
+}
+
+.plugin-setting-manager-action {
+  padding: 3px 8px;
+  font-size: 0.86em;
+}
+
+.plugin-setting-manager-icon-action {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.plugin-setting-manager-icon-action:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.plugin-setting-manager-delete {
+  color: var(--danger);
+}
+
+.plugin-setting-manager-delete:hover,
+.plugin-setting-manager-delete[data-confirm="true"] {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+
+.plugin-setting-manager-delete:disabled {
+  background: transparent;
+  cursor: not-allowed;
+  opacity: 0.34;
+}
+
+.plugin-setting-manager-input {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.plugin-setting-manager-create {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.plugin-setting-manager-new {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.plugin-setting-manager-new:hover {
+  background: var(--bg-hover);
 }
 
 @media (max-width: 760px) {

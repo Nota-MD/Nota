@@ -101,45 +101,14 @@ import {
   ctx,
   schema,
 } from "./math-fixture";
-
-/* ── 一支极小的测试工装 ───────────────────────────────────────────────── */
-
-let pass = 0;
-let fail = 0;
-const failed: string[] = [];
-
-async function testCase(name: string, body3: () => void | Promise<void>): Promise<void> {
-  try {
-    await body3();
-    pass++;
-    console.log(`  ✔ ${name}`);
-  } catch (e) {
-    fail++;
-    failed.push(name);
-    console.log(`  ✘ ${name}`);
-    console.log(`      ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
-function group(name3: string): void {
-  console.log(`\n【${name3}】`);
-}
-
-function assertion(condition: unknown, description: string): void {
-  if (!condition) throw new Error(description);
-}
-
-function equal(actual: unknown, expected: unknown, description: string): void {
-  if (actual !== expected) {
-    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
-  }
-}
-
-/** 让排好的微任务跑完（`排聚焦` 是 `queueMicrotask`）。 */
-async function flushRefresh(): Promise<void> {
-  await Promise.resolve();
-  await new Promise((r) => setTimeout(r, 0));
-}
+import {
+  assertion,
+  equal,
+  finishMathViewTests,
+  flushRefresh,
+  group,
+  testCase,
+} from "./math-view-harness";
 
 
 
@@ -606,6 +575,7 @@ await testCase("公式与 HTML 源码框恢复可见的原生光标", () => {
 await testCase("块公式预览居中，源码复用与 Mermaid 相同的 CodeMirror 外壳", () => {
   const math = readFileSync("src/styles/math.css", "utf8");
   const view = readFileSync("src/editor/math-view.ts", "utf8");
+  const elements = readFileSync("src/editor/math-view-dom.ts", "utf8");
   assertion(
     /\.nota-math-block:not\(\.nota-math-editing\)\s+\.nota-math-render\s*\{[^}]*text-align:\s*center/s.test(math),
     "块公式非编辑态没有居中",
@@ -614,8 +584,8 @@ await testCase("块公式预览居中，源码复用与 Mermaid 相同的 CodeMi
     /\.nota-math-render\s+\.katex-display\s*\{[^}]*text-align:\s*center/s.test(math),
     "KaTeX display 树没有居中",
   );
-  assertion(view.includes("document.createElement(\"pre\")"), "块公式没有使用统一源码外壳元素");
-  assertion(view.includes("nota-source-surface"), "块公式源码没有接入统一源码表面");
+  assertion(elements.includes("document.createElement(\"pre\")"), "块公式没有使用统一源码外壳元素");
+  assertion(elements.includes("nota-source-surface"), "块公式源码没有接入统一源码表面");
   assertion(
     view.includes('initialStartLanguage: "latex"'),
     "块公式源码没有使用 LaTeX CodeMirror 语言",
@@ -674,11 +644,11 @@ await testCase("行内公式只有 `$` 弱化，源码保持强调色，预览�
     "行内 `$` 没有使用弱化前景色",
   );
   assertion(
-    /\.nota-math-editing\.nota-math-inline \.nota-math-source\s*\{[^}]*font-family:\s*inherit;[^}]*font-size:\s*inherit;[^}]*line-height:\s*inherit;[^}]*vertical-align:\s*baseline;[^}]*color:\s*var\(--accent\)/s.test(css),
+    /\.nota-math-editing\.nota-math-inline \.nota-math-source\s*\{[^}]*font:\s*inherit\s*!important;[^}]*font-size:\s*inherit\s*!important;[^}]*line-height:\s*inherit\s*!important;[^}]*vertical-align:\s*baseline\s*!important;[^}]*color:\s*var\(--accent\)/s.test(css),
     "行内源码没有与正文/分隔符共用字体基线",
   );
   assertion(
-    /\.nota-math-delim\s*\{[^}]*font-family:\s*inherit;[^}]*font-size:\s*1em;[^}]*line-height:\s*inherit/s.test(css),
+    /\.nota-math-delim\s*\{[^}]*font:\s*inherit\s*!important;[^}]*font-size:\s*inherit\s*!important;[^}]*line-height:\s*inherit\s*!important;[^}]*vertical-align:\s*baseline\s*!important/s.test(css),
     "行内 `$` 的字号或行高没有继承正文",
   );
   assertion(
@@ -832,8 +802,8 @@ await testCase("行内：源码末尾按 Right 退出公式，后续输入留在
     "行内源码聚焦时没有标记内部编辑器焦点",
   );
   assertion(
-    getState().selection instanceof TextSelection,
-    "进入源码框后仍保留整颗公式的 NodeSelection",
+    getState().selection instanceof NodeSelection,
+    "entering the source editor should preserve the formula node selection",
   );
   equal(box2.dispatch("keydown", { key: "ArrowRight" }).defaultPrevented, true, "Right 要退出公式");
   assertion(
@@ -931,6 +901,32 @@ await testCase("行内：源码开头按 Left 退出公式，后续输入留在 
   equal(getState().doc.child(1).textContent, "你x", "正文输入应落在公式前");
 });
 
+await testCase("行内：源码末尾按 Delete 删除闭分隔符并留在正文", () => {
+  const { view, perspective, getState, position2 } = create(inline("\\LaTeX"), inlinePosition);
+  const box2 = find(perspective.view!.dom, "nota-math-source");
+  if (!box2) throw new Error("没有源码框");
+  box2.focus();
+  box2.setSelectionRange("\\LaTeX".length, "\\LaTeX".length);
+  const event = box2.dispatch("keydown", { key: "Delete" });
+  equal(event.defaultPrevented, true, "末尾 Delete 没有被拦截");
+  equal(getState().doc.child(1).textContent, "$\\LaTeX", "闭分隔符没有转换成普通文本");
+  equal(getState().selection.from, position2 + "$\\LaTeX".length, "光标没有落在源码右侧");
+  equal(getState().doc.child(1).child(0).type.name, "text", "公式节点没有被释放为普通文本");
+});
+
+await testCase("行内：源码开头按 Backspace 删除开分隔符并留在正文", () => {
+  const { view, perspective, getState, position2 } = create(inline("\\LaTeX"), inlinePosition);
+  const box2 = find(perspective.view!.dom, "nota-math-source");
+  if (!box2) throw new Error("没有源码框");
+  box2.focus();
+  box2.setSelectionRange(0, 0);
+  const event = box2.dispatch("keydown", { key: "Backspace" });
+  equal(event.defaultPrevented, true, "开头 Backspace 没有被拦截");
+  equal(getState().doc.child(1).textContent, "\\LaTeX$", "开分隔符没有转换成普通文本");
+  equal(getState().selection.from, position2, "光标没有落在源码左侧");
+  equal(getState().doc.child(1).child(0).type.name, "text", "公式节点没有被释放为普通文本");
+});
+
 await testCase("行内：源码末尾反斜杠不会额外撑开右侧 `$`", () => {
   const { perspective } = create(inline("x"), inlinePosition);
   const dom = perspective.view!.dom;
@@ -974,8 +970,4 @@ await testCase("没被选中（装饰没来）时：进不了编辑态，也不�
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"─".repeat(64)}`);
-console.log(`通过 ${pass} 条，失败 ${fail} 条`);
-if (fail) {
-  console.log(`失败的：\n  - ${failed.join("\n  - ")}`);
-  process.exitCode = 1;
-}
+finishMathViewTests();

@@ -11,6 +11,7 @@ const key = {
   left: "\ue012",
   right: "\ue014",
   delete: "\ue017",
+  enter: "\ue006",
 };
 
 async function request(path, init = {}) {
@@ -177,6 +178,112 @@ async function main() {
     current = await state();
     assert.equal(current.md, "\\LaTeX$");
 
+    editor = await mount("$\\LaTeX$");
+    await press([key.right]);
+    input = await element(".nota-math-source");
+    await execute(
+      "const input=document.querySelector('.nota-math-source');" +
+        "input.focus();input.setSelectionRange(input.value.length,input.value.length);",
+    );
+    await press([key.delete]);
+    current = await state();
+    assert.equal(current.md, "$\\LaTeX");
+
+    editor = await mount("$\\LaTeX$");
+    await press([key.right]);
+    input = await element(".nota-math-source");
+    await execute(
+      "const input=document.querySelector('.nota-math-source');" +
+        "input.focus();input.setSelectionRange(0,0);",
+    );
+    await press([key.backspace]);
+    current = await state();
+    assert.equal(current.md, "\\LaTeX$");
+
+    editor = await mount("");
+    await press(["$", "\\", "L", "a", "T", "e", "X", "$"]);
+    current = await state();
+    assert.equal(current.md, "$\\LaTeX$");
+    assert.equal(current.sel.head, 9);
+    const activeMathSource = await execute(
+      "return Boolean(document.activeElement?.closest?.('.nota-math-source'));",
+    );
+    assert.equal(activeMathSource, false);
+
+    editor = await mount("| 1 | 2 |\n| --- | --- |\n|  |  |");
+    const tableWidths = await execute(
+      "const table=document.querySelector('.ProseMirror table');" +
+        "const prose=document.querySelector('.ProseMirror');" +
+        "return {table:table.getBoundingClientRect().width,editor:prose.getBoundingClientRect().width};",
+    );
+    assert.ok(tableWidths.table < tableWidths.editor - 160);
+
+    editor = await mount("$x$");
+    await execute(
+      "const render=document.querySelector('.nota-math-render');" +
+        "for(const type of ['mousedown','mouseup','click']){" +
+        "render.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,button:0}));}",
+    );
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+    const firstClickMathFocus = await execute(
+      "return document.activeElement?.classList?.contains('nota-math-source')===true;",
+    );
+    assert.equal(firstClickMathFocus, true);
+
+    editor = await mount("", {
+      autoPair: true,
+      keyboardExperience: true,
+    });
+    await press([
+      "[", "G", "F", "M", "]", "(",
+      "h", "t", "t", "p", "s", ":", "/", "/",
+      "e", "x", "a", "m", "p", "l", "e", ".", "c", "o", "m", ")",
+    ]);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+    current = await state();
+    assert.equal(current.md, "[GFM](https://example.com)");
+    const renderedLink = await execute(
+      "return document.querySelector('.ProseMirror a[href=\"https://example.com\"]')?.textContent || null;",
+    );
+    assert.equal(renderedLink, "GFM");
+    await press(["a", "f", "t", "e", "r", " ", "n", "e", "x", "t", key.enter, "p", "a", "r", "a", "g", "r", "a", "p", "h"]);
+    current = await state();
+    assert.equal(current.md, "[GFM](https://example.com)after next\n\nparagraph");
+
+    editor = await mount("", {
+      autoLinks: false,
+      autoPair: true,
+      keyboardExperience: true,
+    });
+    await press(Array.from("[github](github.com"));
+    await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+    current = await state();
+    assert.equal(current.md, "[github](github.com)");
+
+    editor = await mount("Before\n\n[github](https://github.com) after", {
+      keyboardExperience: true,
+    });
+    await execute(
+      "const link=document.querySelector('.ProseMirror a[href=\"https://github.com\"]');" +
+        "const r=link.getBoundingClientRect();" +
+        "for(const type of ['mousedown','mouseup','click']){" +
+        "link.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,button:0," +
+        "clientX:r.left+r.width/2,clientY:r.top+r.height/2}));}",
+    );
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+    const linkSource = await execute(
+      "const source=document.querySelector('.nota-link-source');" +
+        "return {text:source?.textContent??null," +
+        "label:Array.from(source?.querySelectorAll('.nota-link-source-label:not(.nota-link-source-syntax)')??[])" +
+        ".map((part)=>part.textContent??'').join('')||null," +
+        "href:source?.querySelector('.nota-link-source-href')?.textContent??null," +
+        "focused:document.activeElement?.closest?.('.ProseMirror')!==null};",
+    );
+    assert.equal(linkSource.text, "[github](https://github.com)");
+    assert.equal(linkSource.label, "github");
+    assert.equal(linkSource.href, "https://github.com");
+    assert.equal(linkSource.focused, true);
+
     editor = await mount("$x$ price \\$5");
     await press([key.right]);
     const metrics = await execute(
@@ -197,7 +304,7 @@ async function main() {
     assert.ok(Math.abs(metrics.literal.top - metrics.delimiter.top) <= 1);
     assert.ok(Math.abs(metrics.literal.bottom - metrics.delimiter.bottom) <= 1);
 
-    console.log("WebKit E2E: 7/7 passed");
+    console.log("WebKit E2E: 21/21 passed");
   } finally {
     await request(sessionPath, { method: "DELETE" }).catch(() => undefined);
   }

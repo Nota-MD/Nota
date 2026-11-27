@@ -162,7 +162,7 @@ local kit   = require("kit")         -- <插件目录>/kit/init.lua
 | 字段 | 类型 | 值 | 来源 |
 |---|---|---|---|
 | `nota.version` | string | **宿主应用**的版本，当前 `"0.1.0"` | `env!("CARGO_PKG_VERSION")`，编译期定死 |
-| `nota.api_version` | string | **API 版本**，当前 `"v2.4"` | `NOTA_PLUGIN_API_VERSION` |
+| `nota.api_version` | string | **API 版本**，当前 `"v2.5"` | `NOTA_PLUGIN_API_VERSION` |
 | `nota.plugin_id` | string | 清单里声明的 id **原样**（`"nota.git"`，**没有归一化**） | 清单 |
 
 ⚠️ 三个"版本"需要分清：清单里的 `api` 栏和 `nota.api_version` 是**同一件事**（ABI），
@@ -2159,106 +2159,3 @@ end
 
 ⚠️ 它是**纯函数**：同一条文本解两遍得到两个互不相干的表，改了其中一个
 不会影响另一个（没有共享状态）。
-
-## 18. `nota.table` (API v2.4)
-
-The table exists only when at least one table capability is declared.
-
-### `nota.table.snapshot()` - `table.read`
-
-Returns `nil` when no GFM table is active. Otherwise it returns the document id,
-stable table id, one-based source rows and columns, selected range and active
-cell. A1 labels are included as `ref`.
-
-### `nota.table.on_snapshot(fn)` - `table.read`
-
-Registers the single snapshot callback. It runs after the active table,
-selection or source cells change.
-
-### `nota.table.render(values)` - `table.render`
-
-`values` maps A1 references to strings, numbers or booleans:
-
-```lua
-nota.table.render({ B2 = 6, B3 = 8 })
-```
-
-A successful non-empty render marks the table as containing extension-rendered
-content. No API minor-version change is required: this is an additive,
-backward-compatible signal.
-
-### `nota.table.has_extension_content()` - `table.render`
-
-Returns whether the active table currently has non-empty display content
-rendered by extensions. Saved Markdown still stores the ordinary GFM source.
-The host also uses this state to mention extension-rendered table content in
-the document-save success notification.
-
-This changes display only and never edits Markdown.
-
-### `nota.table.replace_cells(request)` - `table.write`
-
-```lua
-nota.table.replace_cells({
-  cells = {
-    { ref = "B2", value = 6 },
-    { row = 3, column = 2, text = "8" },
-  },
-})
-```
-
-Each item needs `ref`, or one-based `row` and `column`, plus `value` or `text`.
-The editor applies the batch as one undoable transaction.
-
-### `nota.table.register_action(spec)` - `table.context_action`
-
-```lua
-nota.table.register_action({
-  id = "keep-values",
-  label = T("Keep Values"),
-  command = "keep-values",
-})
-```
-
-The action appears in the table section of the custom right-click menu.
-
-## 19. `nota.ai` - extension format context
-
-This table exists only when `ai.context.read` or `ai.context.write` is declared.
-It shares append-only Markdown format notes with the separate `nota.ai`
-extension. The protected system prompt is never exposed.
-
-### `nota.ai.add_format_context(text)` - `ai.context.write`
-
-Registers or replaces the current extension's format note. The host trims the
-text, applies stable plugin-id ordering and enforces these limits:
-
-- 20,000 bytes per extension;
-- 80,000 bytes total across all enabled extensions.
-
-An empty or whitespace-only string removes the current extension's note. The
-same call from the same plugin replaces its previous note.
-
-```lua
-nota.ai.add_format_context([[
-This extension adds ::: note blocks. Their body is Markdown.
-]])
-```
-
-### `nota.ai.clear_format_context()` - `ai.context.write`
-
-Removes only the calling extension's note.
-
-### `nota.ai.format_context()` - `ai.context.read`
-
-Returns an array:
-
-```lua
-{
-  { plugin = "nota.example", text = "This extension adds ::: note blocks." },
-}
-```
-
-The result is ordered by plugin id for stable prompts. It contains only notes
-registered through this API. It does not expose the base system prompt, the
-active document, reference files, credentials or private settings.

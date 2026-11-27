@@ -230,9 +230,9 @@ export function blockHTMLView(documentPath: string | null = null) {
         const show = document.createElement("div");
         show.className = "nota-html-render";
 
-        const source2 = document.createElement("div");
+        const source2 = document.createElement("pre");
         source2.className =
-          "nota-html-source md-fences ty-contain-cm nota-source-surface";
+          "nota-html-source md-fences ty-contain-cm nota-source-surface nota-code-theme-surface";
         source2.setAttribute("aria-label", t("HTML source"));
 
         const writeReturnSource = (newValueValue: string): void => {

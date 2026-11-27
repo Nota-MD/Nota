@@ -26,7 +26,6 @@ import type {
   PickerEntry, PickerPlace, PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
   MeetingSpeech, PathKindClass, CombineWriteWordDictionary, PrintBackend, PrintEnvironment, PrintPreview,
   WindowRegistrySnapshot, WindowTransferRequest,
-  TableContextAction, TableRenderPayload, TableSnapshot,
 } from "./types";
 import type {
   SettingsExportInventory,
@@ -464,6 +463,12 @@ export const api = {
       invoke<ImagePlaced>("nota_image_place", { docId, source }),
 
     dataUrl: (path: string) => invoke<string>("nota_image_data_url", { path }),
+    copyFile: (source: string, target: string) =>
+      invoke<string>("nota_image_file_copy", { source, target }),
+    moveFile: (source: string, target: string) =>
+      invoke<string>("nota_image_file_move", { source, target }),
+    deleteFile: (source: string) =>
+      invoke<void>("nota_image_file_delete", { source }),
 
 
 
@@ -841,14 +846,6 @@ export const api = {
 
     menus: () => invoke<PluginMenuItem[]>("nota_plugin_menus"),
   },
-
-  table: {
-    syncSnapshot: (snapshot: TableSnapshot | null) =>
-      invoke<void>("nota_table_snapshot_sync", { snapshot }),
-    actions: () => invoke<TableContextAction[]>("nota_table_actions"),
-    renders: () => invoke<TableRenderPayload[]>("nota_table_renders"),
-  },
-
 
   frontendReady: () => invoke<void>("nota_frontend_ready"),
 

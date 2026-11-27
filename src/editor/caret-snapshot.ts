@@ -104,6 +104,8 @@ export function selectionSnapshotPlugin(onChange: (snapshot: SelectionSnapshot) 
   return $prose(() => createSelectionSnapshotPlugin(onChange));
 }
 
+export const tableSourceChangedEvent = "nota-table-source-changed";
+
 
 
 
@@ -114,18 +116,21 @@ export function selectionSnapshotPlugin(onChange: (snapshot: SelectionSnapshot) 
 export function createSelectionSnapshotPlugin(onChange: (snapshot: SelectionSnapshot) => void) {
   return new Plugin({
     view: (view: { state: EditorState }) => {
-      let aboveCount: string | null = null;
+      let previousSignature: string | null = null;
       const report = (state: EditorState) => {
         const now = readSelectionSnapshot(state);
         const sig = `${now.empty ? 1 : 0}|${now.text}`;
-        if (sig === aboveCount) return;
-        aboveCount = sig;
+        if (sig === previousSignature) return;
+        previousSignature = sig;
         onChange(now);
       };
 
       report(view.state);
       return {
-        update: (view: { state: EditorState }) => {
+        update: (view: { state: EditorState }, previousState?: EditorState) => {
+          if (previousState && view.state.doc !== previousState.doc) {
+            window.dispatchEvent(new Event(tableSourceChangedEvent));
+          }
           report(view.state);
 
 

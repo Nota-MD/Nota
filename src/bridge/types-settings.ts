@@ -105,7 +105,6 @@ export interface EditorSettings {
 
   keyboard_experience: boolean;
 
-  spreadsheet_tables: boolean;
   emoji_autocomplete: boolean;
   line_ending: LineEnding;
 
@@ -357,7 +356,6 @@ export interface MarkdownSettings {
 
   latex_delimiters: boolean;
   code_block_math: boolean;
-  legacy_inline_math: boolean;
   equation_numbering: EquationNumbering;
   math_output: MathOutput;
 

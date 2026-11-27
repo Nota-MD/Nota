@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   api,
@@ -19,12 +19,17 @@ import type { pluginAction } from "@/ui/usePlugins";
 import { useToasts } from "@/ui/useToasts";
 import { useUiStyles } from "@/ui/useUiStyles";
 import { open, save } from "@/ui/file-picker";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import type { ConfirmAnswer, ConfirmRequest } from "@/ui/useDialogs";
+import { ElementInspector } from "@/ui/element-inspector";
+import { useSelectableUiText } from "@/ui/useSelectableUiText";
 
 export function SettingsWindow() {
   const t = useT();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const { toasts, toast, dismiss } = useToasts();
+  useSelectableUiText(settings);
   const { themes, refresh: refreshThemes } = useDocThemeInventory();
   const {
     styles: uiStyles,
@@ -93,7 +98,22 @@ export function SettingsWindow() {
   const [pluginTrust, setPluginTrust] = useState<trustRecord[]>([]);
   const [pluginUpdate, setPluginUpdate] = useState<PluginUpdateInfo[]>([]);
   const [pluginBusy, setPluginBusy] = useState<string | null>(null);
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const confirmResolver = useRef<((answer: ConfirmAnswer) => void) | null>(null);
   const extensionsEnabled = settings?.general.extensions_enabled ?? true;
+  const askConfirm = useCallback(
+    (request: ConfirmRequest) =>
+      new Promise<ConfirmAnswer>((resolve) => {
+        confirmResolver.current = resolve;
+        setConfirmRequest(request);
+      }),
+    [],
+  );
+  const answerConfirm = useCallback((answer: ConfirmAnswer) => {
+    confirmResolver.current?.(answer);
+    confirmResolver.current = null;
+    setConfirmRequest(null);
+  }, []);
 
   const refreshPlugins = useCallback(async () => {
     if (!extensionsEnabled) {
@@ -157,7 +177,13 @@ export function SettingsWindow() {
         }),
       unload: (id) =>
         runPluginTask(id, async () => {
-          if (!window.confirm(t("Delete this extension from disk?"))) return;
+          const answer = await askConfirm({
+            title: t("Uninstall This Extension?"),
+            message: t("Delete this extension from disk?"),
+            confirmLabel: t("Uninstall"),
+            danger: true,
+          });
+          if (answer !== "confirm") return;
           await api.plugin.uninstall(id);
         }),
       openDirectory2: async () => {
@@ -179,13 +205,32 @@ export function SettingsWindow() {
             "Trust the signer with fingerprint {0}?",
             fingerprint,
           );
-          if (!window.confirm(message)) return;
+          if ((await askConfirm({ title: t("Trust signer"), message })) !== "confirm") return;
           await api.plugin.trust(id);
         }),
       settings: (id, key, value) =>
         runPluginTask(`${id}:${key}`, async () => {
           await api.plugin.setSetting(id, key, value);
         }),
+      command: async (id, command, args) => {
+        let succeeded = false;
+        await runPluginTask(`${id}:${command}`, async () => {
+          const result = await api.plugin.call(id, command, args);
+          if (
+            result &&
+            typeof result === "object" &&
+            "ok" in result &&
+            (result as { ok?: unknown }).ok === false
+          ) {
+            const detail = (result as { error?: unknown }).error;
+            throw new Error(
+              typeof detail === "string" ? detail : t("The extension command failed."),
+            );
+          }
+          succeeded = true;
+        });
+        return succeeded;
+      },
       checkForUpdates: () =>
         runPluginTask("check for updates", async () => {
           setPluginUpdate(await api.plugin.updates());
@@ -202,7 +247,7 @@ export function SettingsWindow() {
         }),
       busy: pluginBusy,
     }),
-    [pluginBusy, plugins, pluginUpdate, runPluginTask, toast],
+    [askConfirm, pluginBusy, plugins, pluginUpdate, runPluginTask, toast],
   );
 
   if (loadError) {
@@ -253,13 +298,12 @@ export function SettingsWindow() {
                 toast(t("No unsaved drafts were found."), "info");
                 return;
               }
-              if (
-                !window.confirm(
-                  t("Restore {0} unsaved draft(s)?", drafts.length),
-                )
-              ) {
-                return;
-              }
+              const answer = await askConfirm({
+                title: t("Restore drafts"),
+                message: t("Restore {0} unsaved draft(s)?", drafts.length),
+                confirmLabel: t("Restore"),
+              });
+              if (answer !== "confirm") return;
               for (const draft of drafts) await api.draft.restore(draft.id);
               toast(t("Restored {0} draft(s).", drafts.length), "success");
             } catch (error) {
@@ -281,6 +325,18 @@ export function SettingsWindow() {
         position={settings.updates.notification_position}
         tabbarVisible={false}
         statusbarVisible={false}
+      />
+      {confirmRequest && (
+        <ConfirmDialog
+          {...confirmRequest}
+          onAnswer={answerConfirm}
+        />
+      )}
+      <ElementInspector
+        enabled={
+          (settings.general.debug_mode ?? false) &&
+          (settings.general.element_inspector ?? false)
+        }
       />
     </ErrorBoundary>
   );

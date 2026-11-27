@@ -212,7 +212,7 @@ export function FilePickerDialog() {
                 data-active={directory === place.path}
                 onClick={() => void navigate(place.path)}
               >
-                <Icon name="folio-document-open-symbolic" size={16} />
+                <Icon name="nota-document-open-symbolic" size={16} />
                 <span>{placeName(place.kind, t)}</span>
               </button>
             ))}
@@ -317,7 +317,7 @@ export function FilePickerDialog() {
                 >
                   <span className="file-picker-name">
                     <Icon
-                      name={entry.isDir ? "folio-document-open-symbolic" : "folio-edit-symbolic"}
+                      name={entry.isDir ? "nota-document-open-symbolic" : "nota-edit-symbolic"}
                       size={16}
                     />
                     {entry.name}

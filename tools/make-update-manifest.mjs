@@ -76,6 +76,8 @@ function classify(name) {
   if (/^Nota_.*_arm64-portable\.(?:exe|zip)$/.test(name)) return { kind: "exe", arch: "aarch64" };
   if (/^Nota_.*_x64-setup\.exe$/.test(name)) return { kind: "exeinstall", arch: "x86_64" };
   if (/^Nota_.*_arm64-setup\.exe$/.test(name)) return { kind: "exeinstall", arch: "aarch64" };
+  if (/^Nota_.*_x64\.dmg$/.test(name)) return { kind: "dmg", arch: "x86_64" };
+  if (/^Nota_.*_aarch64\.dmg$/.test(name)) return { kind: "dmg", arch: "aarch64" };
   return null;
 }
 

@@ -48,6 +48,8 @@ export interface SentenceHandleWiring {
   previewSentenceHandleRef: RefObject<EditorHandle | null>;
 
   mostNewTextLocalRef: RefObject<string>;
+
+  cancelPendingSync: () => void;
 }
 
 export function useEditorSentenceHandle({
@@ -55,6 +57,7 @@ export function useEditorSentenceHandle({
   mainSentenceHandleRef,
   previewSentenceHandleRef,
   mostNewTextLocalRef,
+  cancelPendingSync,
 }: SentenceHandleWiring): void {
 
   useImperativeHandle(
@@ -62,6 +65,12 @@ export function useEditorSentenceHandle({
     () => ({
       getMarkdown: () => mainSentenceHandleRef.current?.getMarkdown(),
       setMarkdown: (markdown: string) => {
+        mostNewTextLocalRef.current = markdown;
+        mainSentenceHandleRef.current?.setMarkdown(markdown);
+        previewSentenceHandleRef.current?.setMarkdown(markdown);
+      },
+      setMarkdownFromHost: (markdown: string) => {
+        cancelPendingSync();
         mostNewTextLocalRef.current = markdown;
         mainSentenceHandleRef.current?.setMarkdown(markdown);
         previewSentenceHandleRef.current?.setMarkdown(markdown);

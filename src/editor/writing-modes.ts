@@ -46,7 +46,7 @@ import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
 
-import { findRollActionContainer } from "./scroll-into-view";
+import { findScrollContainer } from "./scroll-into-view";
 
 
 export interface WritingMode {
@@ -171,7 +171,7 @@ export function writingModePlugin(initialStart: WritingMode = defaultWritingMode
 
 export function rollToCurrentLine(view: EditorView): void {
   const position3 = view.coordsAtPos(view.state.selection.head);
-  rollToCorrectMiddle(findRollActionContainer(view.dom), position3.top, position3.bottom);
+  rollToCorrectMiddle(findScrollContainer(view.dom), position3.top, position3.bottom);
 }
 
 

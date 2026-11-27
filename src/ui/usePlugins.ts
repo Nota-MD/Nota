@@ -41,7 +41,6 @@ import {
   type PluginSetting,
   type PluginReview,
   type PluginUpdateInfo,
-  type TableContextAction,
   type trustRecord,
   type exportReport,
 } from "@/bridge/ipc";
@@ -117,6 +116,8 @@ export interface pluginAction {
 
   settings: (id: string, key: string, value: string | number | boolean) => Promise<void>;
 
+  command: (id: string, command: string, args?: unknown) => Promise<boolean>;
+
   checkForUpdates: () => Promise<void>;
 
   update: (id: string) => Promise<void>;
@@ -151,9 +152,6 @@ export interface PluginsState {
 
 
   menus: MenuSpec[];
-  /** Context actions contributed by active table-capable extensions. */
-  tableActions: TableContextAction[];
-
 
 
 
@@ -164,7 +162,7 @@ export interface PluginsState {
 
 
 
-  configure: (plugin: string, command: string, args?: unknown) => Promise<void>;
+  configure: (plugin: string, command: string, args?: unknown) => Promise<boolean>;
 
   action: pluginAction;
 
@@ -202,8 +200,6 @@ export function usePlugins({
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [panels, setPanels] = useState<PluginPanel[]>([]);
   const [menuItems, setMenuItems] = useState<PluginMenuItem[]>([]);
-  const [tableActions, setTableActions] = useState<TableContextAction[]>([]);
-
   const [trustTable, setTrustTable] = useState<trustRecord[]>([]);
   const [pluginUpdate, setPluginUpdate] = useState<PluginUpdateInfo[]>([]);
   const announcedStartupApiMismatch = useRef(new Set<string>());
@@ -231,25 +227,22 @@ export function usePlugins({
       setPlugins([]);
       setPanels([]);
       setMenuItems([]);
-      setTableActions([]);
       setTrustTable([]);
       setPluginUpdate([]);
       setDockOpen(false);
       return;
     }
-    const [plugins, panels, menus, trustEntries, tableActions] = await Promise.all([
+    const [plugins, panels, menus, trustEntries] = await Promise.all([
       api.plugin.list(),
       api.plugin.panels(),
       api.plugin.menus(),
       api.plugin.trustList(),
-      api.table.actions(),
     ]);
     if (!activeActive.current) return;
     setPlugins(plugins);
     setPanels(panels);
     setMenuItems(menus);
     setTrustTable(trustEntries);
-    setTableActions(tableActions);
   }, [extensionsEnabled, setDockOpen]);
 
 
@@ -444,16 +437,52 @@ export function usePlugins({
   );
 
   const configure = useCallback(
-    async (plugin: string, command: string, args?: unknown) => {
-      if (!extensionsEnabled) return;
+    async (plugin: string, command: string, args?: unknown): Promise<boolean> => {
+      if (!extensionsEnabled) return false;
       try {
-        await api.plugin.call(plugin, command, args);
+        const result = await api.plugin.call(plugin, command, args);
+        if (
+          result &&
+          typeof result === "object" &&
+          "ok" in result &&
+          (result as { ok?: unknown }).ok === false
+        ) {
+          const detail = (result as { error?: unknown }).error;
+          throw new Error(typeof detail === "string" ? detail : t("The extension command failed."));
+        }
+        return true;
       } catch (e) {
 
         toast(t("Could not run “{1}” from extension {0}: {2}", plugin, command, String(e)), "error");
+        return false;
       }
     },
     [extensionsEnabled, toast],
+  );
+
+  const runSettingsCommand = useCallback(
+    async (id: string, command: string, args?: unknown): Promise<boolean> => {
+      if (!extensionsEnabled) return false;
+      try {
+        const result = await api.plugin.call(id, command, args);
+        if (
+          result &&
+          typeof result === "object" &&
+          "ok" in result &&
+          (result as { ok?: unknown }).ok === false
+        ) {
+          const detail = (result as { error?: unknown }).error;
+          throw new Error(typeof detail === "string" ? detail : t("The extension command failed."));
+        }
+        await heavyPull();
+        return true;
+      } catch (e) {
+        toast(t("Could not run “{1}” from extension {0}: {2}", id, command, String(e)), "error");
+        await heavyPull().catch(() => undefined);
+        return false;
+      }
+    },
+    [extensionsEnabled, heavyPull, toast],
   );
 
   const editorInput = useEditorInput(extensionsEnabled ? plugins : []);
@@ -783,6 +812,11 @@ export function usePlugins({
         if (s.kind === "toggle") return { ...s, on: value === true };
         return { ...s, text: String(value) };
       };
+      const refreshOptions = plugins.some(
+        (plugin) =>
+          plugin.id === id &&
+          plugin.settings.some((setting) => setting.key === key && setting.kind === "select"),
+      );
       setPlugins((ps) =>
         ps.map((p) =>
           p.id === id
@@ -795,6 +829,7 @@ export function usePlugins({
       );
       try {
         await api.plugin.setSetting(id, key, value);
+        if (refreshOptions) await heavyPull();
       } catch (e) {
         toast(t("Could not save a setting for extension {0}: {1}", id, String(e)), "error");
         await heavyPull().catch(() => {
@@ -802,7 +837,7 @@ export function usePlugins({
         });
       }
     },
-    [heavyPull, toast],
+    [heavyPull, plugins, toast],
   );
 
   const action = useMemo<pluginAction>(
@@ -815,6 +850,7 @@ export function usePlugins({
       toggle: togglePlugin,
       messageTask: trustPlugin,
       settings: writeSettings,
+      command: runSettingsCommand,
       checkForUpdates,
       update: updateOne,
       updateAll,
@@ -828,6 +864,7 @@ export function usePlugins({
       togglePlugin,
       trustPlugin,
       writeSettings,
+      runSettingsCommand,
       checkForUpdates,
       updateOne,
       updateAll,
@@ -841,7 +878,6 @@ export function usePlugins({
     messageTask: trustTable,
     pluginUpdate,
     menus,
-    tableActions,
     handlers,
     configure,
     action,

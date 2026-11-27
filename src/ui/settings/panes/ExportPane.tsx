@@ -430,7 +430,7 @@ export function ExportPane({ settings, onChange }: PaneProps) {
                 aria-label={t("Close")}
                 onClick={() => setAddAddOpen(false)}
               >
-                <Icon name="folio-close-symbolic" size={14} />
+                <Icon name="nota-close-symbolic" size={14} />
               </button>
             </div>
             <Select

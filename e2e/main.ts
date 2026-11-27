@@ -52,7 +52,6 @@ Object.assign(window, {
 });
 
 let editor: EditorHandle | null = null;
-
 mockIPC((command) => {
   if (command === "nota_spell_check") return [];
   if (command === "nota_debug_log_write") return undefined;
@@ -108,6 +107,7 @@ async function mount(
     autoPair: options.autoPair ?? false,
     defaultIndent: options.defaultIndent ?? 2,
     emoji: true,
+    onCommandState: () => undefined,
     selfActionMoreCorrect: true,
     keyboardExperience: options.keyboardExperience ?? false,
     vimInput: options.vim
@@ -227,9 +227,41 @@ async function openInlineMath(index = 0): Promise<HTMLInputElement> {
   return input;
 }
 
+async function clickOutsideEditor(): Promise<void> {
+  const outside = document.createElement("div");
+  outside.style.position = "fixed";
+  outside.style.inset = "0 auto auto 0";
+  outside.style.width = "1px";
+  outside.style.height = "1px";
+  document.body.append(outside);
+  outside.dispatchEvent(
+    new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    }),
+  );
+  await nextFrames(4);
+  outside.remove();
+}
+
 function assertEqual(actual: unknown, expected: unknown, message: string): void {
   if (actual !== expected) {
-    throw new Error(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    throw new Error(`${message}: expected ${describe(expected)}, got ${describe(actual)}`);
+  }
+}
+
+function describe(value: unknown): string {
+  if (value instanceof Element) {
+    return `<${value.tagName.toLowerCase()}${value.id ? `#${value.id}` : ""}${
+      value.className ? `.${String(value.className).replaceAll(" ", ".")}` : ""
+    }>`;
+  }
+  if (value instanceof Node) return value.nodeName;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
   }
 }
 
@@ -310,6 +342,234 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       );
       pane.style.width = previousWidth;
       pane.style.flex = previousFlex;
+    },
+  },
+  {
+    name: "simple GFM tables size to their content",
+    async run() {
+      const prose = await mount("| 1 | 2 |\n| --- | --- |\n|  |  |");
+      const table = await waitFor<HTMLTableElement>(".ProseMirror table");
+      await nextFrames();
+      const tableWidth = table.getBoundingClientRect().width;
+      const proseWidth = prose.getBoundingClientRect().width;
+      assert(
+        tableWidth < proseWidth - 160,
+        `a small table still spans the editor: table=${Math.round(tableWidth)} editor=${Math.round(proseWidth)}`,
+      );
+    },
+  },
+  {
+    name: "ordinary table toolbar keeps Typora-style table controls",
+    async run() {
+      await mount("| A | B |\n| --- | --- |\n| one | two |");
+      const host = document.createElement("div");
+      document.body.append(host);
+      const root = createRoot(host);
+      const commands: string[] = [];
+      try {
+        flushSync(() => {
+          root.render(
+            createElement(TableToolbar, {
+              visible: true,
+              documentKey: 1,
+              run: (command) => {
+                commands.push(command);
+              },
+            }),
+          );
+        });
+        const toolbar = await waitFor<HTMLElement>(".table-toolbar");
+        assertEqual(
+          toolbar.querySelectorAll(".table-toolbar-btn").length,
+          6,
+          "the table toolbar lost its grid, alignment, more or delete controls",
+        );
+        assertEqual(
+          document.querySelector(".sheet-formula-bar"),
+          null,
+          "the removed spreadsheet formula bar returned",
+        );
+        toolbar.querySelector<HTMLButtonElement>(
+          '[aria-label="Adjust table size"]',
+        )?.click();
+        await nextFrames();
+        assert(
+          document.querySelector(".table-size-picker") !== null,
+          "the table size picker did not open",
+        );
+        toolbar.querySelector<HTMLButtonElement>(
+          '[aria-label="More table actions"]',
+        )?.click();
+        await nextFrames();
+        const more = await waitFor<HTMLElement>(".table-toolbar-menu");
+        assert(more.textContent?.includes("Add Row Above"), "row actions are missing");
+        assert(more.textContent?.includes("Delete Table"), "delete table is missing");
+        more.querySelector<HTMLButtonElement>("button")?.click();
+        await nextFrames();
+        assertEqual(commands[0], "tableRowAbove", "the toolbar action was not dispatched");
+      } finally {
+        flushSync(() => root.unmount());
+        host.remove();
+      }
+    },
+  },
+  {
+    name: "Typora regression: code and CodeMirror surfaces inherit the document palette",
+    async run() {
+      document.documentElement.dataset.uiMode = "light";
+      document.documentElement.dataset.uiStyle = "adwaita";
+      applyDocTheme(`
+        :root {
+          --doc-bg: #ffffff;
+          --doc-fg: #161616;
+          --fg: #161616;
+          --fg-muted: #525252;
+          --border: #d0d0d0;
+          --bg-subtle: #f4f4f4;
+          --accent: #0f62fe;
+        }
+        pre {
+          border: 0;
+          background: #262626;
+          color: #f4f4f4;
+        }
+      `);
+      try {
+        const comparePalette = (
+          label: string,
+          code: HTMLElement,
+          codeText: HTMLElement,
+          source: HTMLElement,
+          sourceText: HTMLElement,
+        ) => {
+          const codeStyle = getComputedStyle(code);
+          const codeTextStyle = getComputedStyle(codeText);
+          const sourceStyle = getComputedStyle(source);
+          const sourceTextStyle = getComputedStyle(sourceText);
+          assertEqual(
+            codeStyle.backgroundColor,
+            "rgb(38, 38, 38)",
+            "the document theme's dark code background was replaced by the light UI palette",
+          );
+          assertEqual(
+            codeStyle.color,
+            "rgb(244, 244, 244)",
+            "the document theme's light code text was replaced by the light UI palette",
+          );
+          assertEqual(
+            sourceStyle.backgroundColor,
+            codeStyle.backgroundColor,
+            `${label} source background differs from code: code=${codeStyle.backgroundColor} source=${sourceStyle.backgroundColor}`,
+          );
+          assertEqual(
+            sourceStyle.color,
+            codeStyle.color,
+            `${label} source color differs from code: code=${codeStyle.color} source=${sourceStyle.color}`,
+          );
+          assertEqual(
+            sourceStyle.borderColor,
+            codeStyle.borderColor,
+            `${label} source border differs from code: code=${codeStyle.borderColor} source=${sourceStyle.borderColor}`,
+          );
+          assertEqual(
+            sourceTextStyle.color,
+            codeTextStyle.color,
+            `${label} source text differs from code text: code=${codeTextStyle.color} source=${sourceTextStyle.color}`,
+          );
+        };
+
+        await mount(
+          ["```c", "int value = 1;", "```", "", "```math", "x^2", "```"].join("\n"),
+        );
+        const mathCode = await waitFor<HTMLElement>(
+          ".nota-code-wrap:not(.nota-code-math) > pre",
+        );
+        const mathCodeText = await waitFor<HTMLElement>(
+          ".nota-code-wrap:not(.nota-code-math) .cm-content",
+        );
+        const mathRender = await waitFor<HTMLElement>(".nota-code-math-render");
+        const mathRect = mathRender.getBoundingClientRect();
+        mathRender.dispatchEvent(
+          new MouseEvent("mousedown", {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: mathRect.left + 8,
+            clientY: mathRect.top + 8,
+          }),
+        );
+        const math = await waitFor<HTMLElement>(
+          ".nota-code-wrap.nota-code-math-editing > pre",
+        );
+        const mathText = await waitFor<HTMLElement>(
+          ".nota-code-wrap.nota-code-math-editing .cm-content",
+        );
+        comparePalette("LaTeX", mathCode, mathCodeText, math, mathText);
+
+        await mount(
+          ["```c", "int value = 2;", "```", "", "<div>html surface</div>"].join(
+            "\n",
+          ),
+        );
+        const htmlCode = await waitFor<HTMLElement>(
+          ".nota-code-wrap:not(.nota-code-math) > pre",
+        );
+        const htmlCodeText = await waitFor<HTMLElement>(
+          ".nota-code-wrap:not(.nota-code-math) .cm-content",
+        );
+        const htmlToggle = await waitFor<HTMLButtonElement>(
+          ".nota-html-source-toggle",
+        );
+        htmlToggle.click();
+        const htmlSource = await waitFor<HTMLElement>(
+          ".nota-html-source-mode pre.nota-html-source",
+        );
+        const htmlText = await waitFor<HTMLElement>(
+          ".nota-html-source .cm-content",
+        );
+        assertEqual(
+          htmlSource.tagName,
+          "PRE",
+          "HTML source is not on the shared pre code surface",
+        );
+        assert(
+          htmlSource.classList.contains("nota-source-surface"),
+          "HTML source is missing the shared source-surface class",
+        );
+        comparePalette(
+          "HTML",
+          htmlCode,
+          htmlCodeText,
+          htmlSource,
+          htmlText,
+        );
+      } finally {
+        applyDocTheme(null);
+        document.documentElement.dataset.uiMode = "light";
+        document.documentElement.dataset.uiStyle = "adwaita";
+      }
+    },
+  },
+  {
+    name: "document-specific Markdown syntax survives editor normalization",
+    async run() {
+      const source = [
+        "Setext heading",
+        "==============",
+        "",
+        "+ one",
+        "+ two",
+        "",
+        "1) first",
+        "2) second",
+      ].join("\n");
+      await mount(source);
+      await nextFrames(3);
+      assertEqual(
+        serialized(),
+        source,
+        "editor rewrote valid setext headings, plus bullets or parenthesis ordered markers",
+      );
     },
   },
   {
@@ -787,6 +1047,12 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         ".nota-html-source .cm-gutters",
       );
       assert(source && scroller && content && gutter, "HTML source editor is incomplete");
+      assertEqual(source.tagName, "PRE", "HTML source editor is not a pre surface");
+      assert(
+        source.classList.contains("nota-source-surface") &&
+          source.classList.contains("nota-code-theme-surface"),
+        "HTML source editor is missing the shared code theme surface",
+      );
       const sourceRect = source.getBoundingClientRect();
       const contentRect = content.getBoundingClientRect();
       const gutterRect = gutter.getBoundingClientRect();
@@ -867,14 +1133,36 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     name: "an inherited bold mark does not add literal markers to a heading",
     async run() {
       const prose = await mount("");
+      const trace: Array<Record<string, unknown>> = [];
       press(prose, "b", { ctrlKey: true });
+      trace.push({
+        step: "bold",
+        markdown: serialized(),
+        html: prose.innerHTML,
+        text: prose.querySelector("p")?.textContent,
+        selection: editor!.selectionRange(),
+      });
       await typeText("#");
-      press(prose, " ");
+      trace.push({
+        step: "hash",
+        markdown: serialized(),
+        html: prose.innerHTML,
+        text: prose.querySelector("p")?.textContent,
+        selection: editor!.selectionRange(),
+      });
+      await typeText(" ");
       await nextFrames();
+      trace.push({ step: "space", markdown: serialized(), html: prose.innerHTML });
       await typeText("何以起源");
+      trace.push({ step: "body", markdown: serialized(), html: prose.innerHTML });
       press(prose, "Enter");
       await nextFrames();
-      assertEqual(serialized(), "# 何以起源", "heading gained literal bold delimiters");
+      trace.push({ step: "enter", markdown: serialized(), html: prose.innerHTML });
+      assertEqual(
+        serialized(),
+        "# 何以起源",
+        `heading gained literal bold delimiters: ${JSON.stringify(trace)}`,
+      );
       assertEqual(
         prose.querySelector("h1 strong"),
         null,
@@ -1537,7 +1825,120 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
-    name: "first Left at a link tail stays after the revealed source",
+    name: "text typed before a visible link source stays outside the link",
+    async run() {
+      await mount("Before\n\n[github](https://github.com)", {
+        keyboardExperience: true,
+      });
+      const rendered = await waitFor<HTMLAnchorElement>(
+        '.ProseMirror a[href="https://github.com"]',
+      );
+      const rect = rendered.getBoundingClientRect();
+      for (const type of ["mousedown", "mouseup", "click"] as const) {
+        rendered.dispatchEvent(
+          new MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: rect.left + 1,
+            clientY: rect.top + rect.height / 2,
+          }),
+        );
+      }
+      await waitFor<HTMLElement>(".nota-link-source");
+      const clickedCaret = editor!.selectionRange()?.anchor ?? null;
+      assert(clickedCaret !== null, "clicking the link did not place an inline caret");
+      editor!.restoreSelection({
+        anchor: Math.max(1, clickedCaret - 1),
+        head: Math.max(1, clickedCaret - 1),
+      });
+      await nextFrames(2);
+      await typeText("你好");
+      await nextFrames(4);
+      assertEqual(
+        serialized(),
+        "Before\n\n你好[github](https://github.com)",
+        "text before the visible link source changed the link",
+      );
+      assertEqual(
+        document.querySelector(".nota-link-source")?.textContent ?? null,
+        "[github](https://github.com)",
+        "the prefix remained inside the link source shell",
+      );
+    },
+  },
+  {
+    name: "text typed after a visible link source stays outside the link",
+    async run() {
+      await mount("Before\n\n[github](https://github.com)", {
+        keyboardExperience: true,
+      });
+      const rendered = await waitFor<HTMLAnchorElement>(
+        '.ProseMirror a[href="https://github.com"]',
+      );
+      const rect = rendered.getBoundingClientRect();
+      for (const type of ["mousedown", "mouseup", "click"] as const) {
+        rendered.dispatchEvent(
+          new MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: rect.left + 1,
+            clientY: rect.top + rect.height / 2,
+          }),
+        );
+      }
+      const visibleSource = await waitFor<HTMLElement>(".nota-link-source");
+      const clickedCaret = editor!.selectionRange()?.anchor ?? null;
+      assert(clickedCaret !== null, "clicking the link did not place an inline caret");
+      const sourceEnd =
+        clickedCaret + (visibleSource.textContent?.length ?? 0) + 1;
+      editor!.restoreSelection({ anchor: sourceEnd, head: sourceEnd });
+      await nextFrames(2);
+      await typeText("你好");
+      await nextFrames(4);
+      assertEqual(
+        serialized(),
+        "Before\n\n[github](https://github.com)你好",
+        "text after the visible link source changed the link source",
+      );
+      const source = document.querySelector<HTMLElement>(".nota-link-source");
+      if (source) {
+        assertEqual(
+          source.textContent,
+          "[github](https://github.com)",
+          `following text was inserted into the visible link source: ${JSON.stringify({
+            markdown: serialized(),
+            selection: editor!.selectionRange(),
+            source: source.outerHTML,
+            prose: document.querySelector(".ProseMirror")?.innerHTML,
+          })}`,
+        );
+        const outside = document.createElement("div");
+        document.body.append(outside);
+        outside.dispatchEvent(
+          new MouseEvent("mousedown", {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+          }),
+        );
+        await nextFrames(3);
+        outside.remove();
+      }
+      const link = document.querySelector<HTMLAnchorElement>(
+        '.ProseMirror a[href="https://github.com"]',
+      );
+      assert(link, "the link did not return to its rendered form");
+      assertEqual(link.textContent, "github", "following text inherited the link mark");
+      assert(
+        document.querySelector(".nota-link-source") === null,
+        "the stale source shell remained after following text was inserted",
+      );
+    },
+  },
+  {
+    name: "first Left at a link tail enters before the closing parenthesis",
     async run() {
       await mount("[github](https://github.com)你", {
         keyboardExperience: true,
@@ -1552,12 +1953,17 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       );
       await requestNativeKey("arrow-left-to-link-tail");
       await nextFrames();
+      const beforeTailType = {
+        selection: editor!.selectionRange(),
+        markdown: serialized(),
+        source: document.querySelector(".nota-link-source")?.textContent ?? null,
+      };
       await typeText("X");
       await nextFrames();
       assertEqual(
         serialized(),
-        "[github](https://github.com)X你",
-        "first Left entered the link source instead of stopping after it",
+        "[github](https://github.comX)你",
+        `first Left did not enter the link source before its closing parenthesis: ${JSON.stringify(beforeTailType)}`,
       );
       const trace: Array<Record<string, unknown>> = [
         {
@@ -1572,18 +1978,10 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         selection: editor!.selectionRange(),
         source: document.querySelector(".nota-link-source") !== null,
       });
-      await requestNativeKey("arrow-left-into-destination-end");
-      trace.push({
-        step: "after Left",
-        selection: editor!.selectionRange(),
-        source: document.querySelector(".nota-link-source") !== null,
-      });
-      await typeText("Y");
-      await nextFrames();
       assertEqual(
         serialized(),
-        "[github](https://github.comY)你",
-        `second Left entered the link label instead of the destination end: ${JSON.stringify(trace)}`,
+        "[github](https://github.com)你",
+        `backspace at the revealed link tail changed the link: ${JSON.stringify(trace)}`,
       );
     },
   },
@@ -1666,53 +2064,408 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
-    name: "typing explicit Markdown link syntax recognizes a bare domain",
+    name: "Typora regression: typing a bare-domain GFM link preserves its destination",
     async run() {
       await mount("", { autoLinks: false });
       await typeText("[GFM](github.com)");
-      await nextFrames();
-      const link = await waitFor<HTMLAnchorElement>('a[href="https://github.com"]');
-      assertEqual(link.textContent, "GFM", "link label changed");
+      await sleep(1500);
+      assertEqual(
+        document.querySelector('.ProseMirror a[href="github.com"]'),
+        null,
+        "a complete link entered display mode while its caret was still present",
+      );
+      await waitFor<HTMLElement>(".nota-explicit-link-draft-label");
       assertEqual(
         serialized(),
-        "[GFM](https://github.com)",
-        "typed bare-domain destination was not normalized",
+        "[GFM](github.com)",
+        "bare-domain destination was rewritten",
       );
-      assert(
-        document.activeElement !== link && !link.contains(document.activeElement),
-        "caret remained inside the completed link",
-      );
+      await clickOutsideEditor();
+      const link = await waitFor<HTMLAnchorElement>('a[href="github.com"]');
+      assertEqual(link.textContent, "GFM", "link label changed");
+      editor!.focus();
+      editor!.restoreSelection({
+        anchor: Number.MAX_SAFE_INTEGER,
+        head: Number.MAX_SAFE_INTEGER,
+      });
       await typeText("f");
       await nextFrames();
-      assertEqual(link.textContent, "GFM", "text typed after the link inherited the link mark");
       assertEqual(
         serialized(),
-        "[GFM](https://github.com)f",
-        "text typed after the completed link was absorbed into its label",
+        "[GFM](github.com)f",
+        "text typed after the source was not preserved",
+      );
+
+      await mount("", { autoLinks: false });
+      await typeText("[github](.com)");
+      await sleep(1500);
+      assertEqual(
+        document.querySelector('.ProseMirror a[href=".com"]'),
+        null,
+        "the `.com` draft entered display mode without leaving",
+      );
+      await clickOutsideEditor();
+      const dotCom = await waitFor<HTMLAnchorElement>('a[href=".com"]');
+      assertEqual(dotCom.textContent, "github", "the `.com` label changed");
+      assertEqual(
+        serialized(),
+        "[github](.com)",
+        "the valid `.com` destination was rewritten",
       );
     },
   },
   {
-    name: "text before an explicit Markdown link never joins its link mark",
+    name: "Typora regression: empty explicit link renders its label and survives leaving the source",
+    async run() {
+      await mount("", {
+        autoLinks: false,
+        autoPair: true,
+        keyboardExperience: true,
+      });
+      await typeText("[github]");
+      assertEqual(serialized(), "[github]", "plain brackets became a link too early");
+      assertEqual(
+        document.querySelector(".nota-explicit-link-draft-label"),
+        null,
+        "plain brackets received link styling",
+      );
+
+      await typeText("(");
+      await sleep(4000);
+      assertEqual(
+        serialized(),
+        "[github]()",
+        "the auto-paired empty destination changed its Markdown source",
+      );
+      const label = await waitFor<HTMLElement>(".nota-explicit-link-draft-label");
+      assertEqual(label.textContent, "github", "draft link styled the wrong text");
+      const labelStyle = getComputedStyle(label);
+      assert(
+        labelStyle.textDecorationLine.includes("underline"),
+        "empty destination label is not underlined",
+      );
+      const anchorProbe = document.createElement("a");
+      anchorProbe.href = "https://example.com";
+      anchorProbe.textContent = "link";
+      anchorProbe.style.position = "absolute";
+      document.querySelector<HTMLElement>(".ProseMirror")!.append(anchorProbe);
+      assertEqual(
+        labelStyle.color,
+        getComputedStyle(anchorProbe).color,
+        "empty destination label does not use the link color",
+      );
+      anchorProbe.remove();
+
+      await clickOutsideEditor();
+      const link = await waitFor<HTMLAnchorElement>(
+        '.ProseMirror a[href=""]',
+      );
+      assertEqual(link.textContent, "github", "empty link label changed");
+      assertEqual(
+        serialized(),
+        "[github]()",
+        "leaving the empty link source lost its destination syntax",
+      );
+      assertEqual(
+        document.querySelector(".nota-explicit-link-draft-label"),
+        null,
+        "draft decoration remained after the link was committed",
+      );
+    },
+  },
+  {
+    name: "clicking a rendered link reveals source at the pointer",
+    async run() {
+      await mount("[github](https://github.com) 你好", {
+        keyboardExperience: true,
+      });
+      editor!.restoreSelection({
+        anchor: Number.MAX_SAFE_INTEGER,
+        head: Number.MAX_SAFE_INTEGER,
+      });
+      await nextFrames(2);
+      const link = await waitFor<HTMLAnchorElement>(
+        '.ProseMirror a[href="https://github.com"]',
+      );
+      const rect = link.getBoundingClientRect();
+      link.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2,
+        }),
+      );
+      link.dispatchEvent(
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      link.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2,
+        }),
+      );
+      await nextFrames(3);
+      const source = await waitFor<HTMLElement>(".nota-link-source");
+      assertEqual(
+        source.textContent,
+        "[github](https://github.com)",
+        "clicking the rendered link did not reveal editable Markdown source",
+      );
+      assertEqual(
+        Array.from(
+          source.querySelectorAll(".nota-link-source-label:not(.nota-link-source-syntax)"),
+        )
+          .map((part) => part.textContent ?? "")
+          .join(""),
+        "github",
+        "link label lost its independent inline style",
+      );
+      assertEqual(
+        source.querySelector(".nota-link-source-href")?.textContent,
+        "https://github.com",
+        "link destination lost its independent inline style",
+      );
+      const labelStyle = getComputedStyle(
+        source.querySelector<HTMLElement>(".nota-link-source-label")!,
+      );
+      const hrefStyle = getComputedStyle(
+        source.querySelector<HTMLElement>(".nota-link-source-href")!,
+      );
+      const syntaxStyle = getComputedStyle(
+        source.querySelector<HTMLElement>(".nota-link-source-syntax")!,
+      );
+      assert(
+        labelStyle.textDecorationLine.includes("underline") &&
+          hrefStyle.textDecorationLine.includes("underline"),
+        "link label and destination are not both underlined",
+      );
+      assert(
+        !syntaxStyle.textDecorationLine.includes("underline"),
+        "link punctuation inherited the destination underline",
+      );
+      const selection = editor!.selectionRange();
+      assert(
+        selection !== null &&
+          selection.anchor > 1 &&
+          selection.anchor < source.textContent.length + 2,
+        `clicking the rendered link lost the inline caret: ${JSON.stringify({
+          selection,
+          source: source.outerHTML,
+        })}`,
+      );
+    },
+  },
+  {
+    name: "auto-paired explicit link commits without retyping the closing parenthesis",
+    async run() {
+      await mount("", {
+        autoLinks: false,
+        autoPair: true,
+        keyboardExperience: true,
+      });
+      await typeText("[github](github.com");
+      await sleep(1500);
+      assertEqual(
+        document.querySelector(".ProseMirror a"),
+        null,
+        "the auto-paired link displayed before the caret left",
+      );
+      await clickOutsideEditor();
+      const link = await waitFor<HTMLAnchorElement>(
+        '.ProseMirror a[href="github.com"]',
+        2000,
+      );
+      assertEqual(link.textContent, "github", "the auto-closed link label changed");
+      assertEqual(
+        serialized(),
+        "[github](github.com)",
+        "the auto-closed destination changed",
+      );
+      editor!.focus();
+      editor!.restoreSelection({
+        anchor: Number.MAX_SAFE_INTEGER,
+        head: Number.MAX_SAFE_INTEGER,
+      });
+      await typeText("after");
+      assertEqual(
+        serialized(),
+        "[github](github.com)after",
+        "text after the auto-closed link entered the link",
+      );
+    },
+  },
+  {
+    name: "auto-paired explicit links release the caret for text, space and Enter",
+    async run() {
+      const prose = await mount("", {
+        autoLinks: true,
+        autoPair: true,
+        keyboardExperience: true,
+      });
+      await typeText("[GFM](https://example.com)");
+      assertEqual(
+        serialized(),
+        "[GFM](https://example.com)",
+        "the link source changed before the caret left",
+      );
+      await typeText("after");
+      await nextFrames();
+      const link = document.querySelector<HTMLAnchorElement>(
+        'a[href="https://example.com"]',
+      );
+      assert(
+        link,
+        `the auto-paired link did not render: markdown=${JSON.stringify(serialized())} ` +
+          `selection=${JSON.stringify(editor!.selectionRange())} ` +
+          `source=${JSON.stringify(document.querySelector(".nota-link-source")?.textContent ?? null)}`,
+      );
+      assertEqual(link.textContent, "GFM", "the auto-paired link did not render");
+      assertEqual(
+        serialized(),
+        "[GFM](https://example.com)after",
+        "the auto-paired link source was not canonicalized",
+      );
+
+      assertEqual(
+        serialized(),
+        "[GFM](https://example.com)after",
+        "text typed after the auto-paired link did not leave source mode",
+      );
+
+      await requestNativeKey("space-after-auto-paired-link");
+      await typeText("next");
+      await requestNativeKey("enter-after-auto-paired-link");
+      await typeText("paragraph");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "[GFM](https://example.com)after next\n\nparagraph",
+        "Space or Enter remained trapped in the completed link",
+      );
+      assert(
+        prose.querySelector('a[href="https://example.com"]') !== null,
+        "the completed link never returned to display mode",
+      );
+    },
+  },
+  {
+    name: "Chinese text after an explicit link returns its source to display mode",
+    async run() {
+      const prose = await mount("", {
+        autoLinks: false,
+        autoPair: true,
+        keyboardExperience: true,
+      });
+      await typeText("[链接示例](https://example.com)");
+      await nextFrames(3);
+      await composeText("你好");
+      await nextFrames(4);
+      assert(
+        prose.querySelector('a[href="https://example.com"]') !== null,
+        `the link stayed in source mode after Chinese text: markdown=${JSON.stringify(serialized())} ` +
+          `source=${JSON.stringify(document.querySelector(".nota-link-source")?.textContent ?? null)}`,
+      );
+      assertEqual(
+        serialized(),
+        "[链接示例](https://example.com)你好",
+        "Chinese text after the link changed its Markdown source",
+      );
+    },
+  },
+  {
+    name: "IME text at the right edge of a visible link source does not loop",
+    async run() {
+      await mount("[github](https://github.com)", {
+        keyboardExperience: true,
+      });
+      const source = await waitFor<HTMLElement>(".nota-link-source");
+      const sourceEnd = (source.textContent?.length ?? 0) + 3;
+      editor!.restoreSelection({ anchor: sourceEnd, head: sourceEnd });
+      await composeText("你好");
+      await nextFrames(4);
+      assert(
+        document.querySelector('.ProseMirror a[href="https://github.com"]') !== null,
+        `the link source did not settle after IME input: markdown=${JSON.stringify(serialized())} ` +
+          `source=${JSON.stringify(document.querySelector(".nota-link-source")?.textContent ?? null)}`,
+      );
+      assertEqual(
+        serialized(),
+        "[github](https://github.com)你好",
+        "IME text at the visible source edge changed the document",
+      );
+    },
+  },
+  {
+    name: "Typora regression: bare-domain explicit link keeps preceding text untouched",
     async run() {
       await mount("", { autoLinks: false, autoPair: true });
       await typeText("int main[gfm](github.com)");
-      await nextFrames();
+      await clickOutsideEditor();
       const links = [...document.querySelectorAll<HTMLAnchorElement>(".ProseMirror a")];
       assertEqual(
         links.length,
         1,
-        `the explicit link was not recognized immediately: ${JSON.stringify(serialized())} ${JSON.stringify(document.querySelector(".ProseMirror")?.innerHTML)}`,
+        `the valid GFM link was not recognized: ${JSON.stringify(serialized())}`,
       );
-      assertEqual(
-        links[0]?.textContent,
-        "gfm",
-        `the link label absorbed preceding text: ${JSON.stringify(document.querySelector(".ProseMirror")?.innerHTML)}`,
-      );
+      assertEqual(links[0]?.textContent, "gfm", "link label absorbed surrounding text");
+      assertEqual(links[0]?.getAttribute("href"), "github.com", "destination changed");
       assertEqual(
         serialized(),
-        "int main[gfm](https://github.com)",
-        "the preceding text or link source changed",
+        "int main[gfm](github.com)",
+        "the preceding text or bare-domain source changed",
+      );
+    },
+  },
+  {
+    name: "Typora regression: entering an opaque editor widget keeps link source visible",
+    async run() {
+      await mount(
+        [
+          "[github](github.com)",
+          "",
+          "```mermaid",
+          "flowchart TD",
+          "  A[Start] --> B[End]",
+          "```",
+        ].join("\n"),
+        { keyboardExperience: true },
+      );
+      editor!.restoreSelection({ anchor: 4, head: 4 });
+      await nextFrames(3);
+      const source = await waitFor<HTMLElement>(".nota-link-source");
+      assertEqual(
+        source.textContent,
+        "[github](github.com)",
+        "link source did not open",
+      );
+      const diagram = await waitFor<HTMLElement>(".nota-diagram-preview");
+      const rect = diagram.getBoundingClientRect();
+      diagram.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          clientX: rect.left + 8,
+          clientY: rect.top + 8,
+        }),
+      );
+      const diagramText = await waitFor<HTMLElement>(
+        ".nota-diagram-editing .cm-content",
+      );
+      diagramText.focus();
+      await nextFrames(4);
+      assert(
+        document.querySelector(".nota-link-source") !== null,
+        "entering a Mermaid source editor collapsed the link source",
       );
     },
   },
@@ -1997,6 +2750,52 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "first pointer press on rendered inline math retains source focus",
+    async run() {
+      await mount("$x$");
+      const render = await waitFor<HTMLElement>(
+        ".nota-math-inline .nota-math-render",
+      );
+      render.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      render.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      render.dispatchEvent(
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      render.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      await nextFrames(3);
+      const input = await waitFor<HTMLInputElement>(
+        ".nota-math-panel input.nota-math-source",
+      );
+      assertEqual(
+        document.activeElement,
+        input,
+        "the first pointer press opened inline math but did not retain source focus",
+      );
+    },
+  },
+  {
     name: "Right at inline math source end exits before following text",
     async run() {
       await mount("$x$");
@@ -2070,24 +2869,54 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
-    name: "dollar auto-pair enters formula source before the second character",
+    name: "Typora regression: a single dollar stays literal until the closing delimiter appears",
     async run() {
       await mount("", { autoPair: true, keyboardExperience: true });
       await requestNativeKey("text-$");
       await nextFrames();
+      assertEqual(serialized(), "$", "the opening dollar was auto-paired");
+      assertEqual(
+        document.querySelector(".nota-math-inline"),
+        null,
+        "an incomplete formula was created too early",
+      );
       await requestNativeKey("text-\\");
-      await nextFrames(3);
-      const input = await waitFor<HTMLInputElement>(".nota-math-inline .nota-math-source");
-      assertEqual(document.activeElement, input, "first backslash did not focus the formula source");
-      assertEqual(input.value, "\\", "first backslash did not enter the math node");
-      assertEqual(input.selectionStart, 1, "first backslash caret moved outside the source");
-
+      await nextFrames();
+      assertEqual(serialized(), "$\\", "the incomplete formula gained a closing dollar");
       await typeText("l");
+      await nextFrames();
+      assertEqual(serialized(), "$\\l", "formula content changed before the closer");
+      assertEqual(
+        document.querySelector(".nota-math-inline"),
+        null,
+        "the incomplete formula became a node before the closer",
+      );
+
+      await requestNativeKey("text-$");
       await nextFrames(3);
-      assertEqual(document.activeElement, input, "typing the next character lost formula focus");
-      assertEqual(input.value, "\\l", "second character did not stay in the source");
-      assertEqual(serialized(), "$\\l$", "formula source collapsed into body text");
-      assert(document.querySelector(".nota-math-inline"), "inline math node disappeared");
+      assert(document.querySelector(".nota-math-inline"), "the inline math node disappeared");
+      assertEqual(serialized(), "$\\l$", "the closing dollar did not complete the formula");
+    },
+  },
+  {
+    name: "Typora regression: typing an opening dollar before existing source closes an inline formula",
+    async run() {
+      await mount("\\LaTeX$", {
+        autoPair: true,
+        keyboardExperience: true,
+      });
+      editor!.restoreSelection({ anchor: 1, head: 1 });
+      await nextFrames();
+      await typeText("$");
+      await nextFrames(3);
+      assert(
+        document.querySelector(".nota-math-inline"),
+        `the existing closing dollar was not reused: ${JSON.stringify({
+          markdown: serialized(),
+          html: document.querySelector(".ProseMirror")?.innerHTML,
+        })}`,
+      );
+      assertEqual(serialized(), "$\\LaTeX$", "the inline formula source changed");
     },
   },
   {
@@ -3210,7 +4039,7 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
-    name: "failed images show an inline warning",
+    name: "Typora regression: failed images show an inline warning",
     async run() {
       await mount("![bad-image](data:image/png;base64,not-an-image)");
       const warning = await waitFor<HTMLElement>(".nota-media-error:not([hidden])");
@@ -3219,6 +4048,100 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         `image failure warning did not identify the source: ${warning.textContent}`,
       );
       assertEqual(serialized(), "![bad-image](data:image/png;base64,not-an-image)", "warning changed Markdown");
+    },
+  },
+  {
+    name: "Typora regression: HTML containing only an image enters the Markdown image model",
+    async run() {
+      const image =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z8WQAAAAASUVORK5CYII=";
+      await mount(`<img src="${image}" alt="html-image" title="HTML" />`);
+      const rendered = await waitFor<HTMLImageElement>(".nota-image img");
+      assertEqual(rendered.getAttribute("alt"), "html-image", "HTML image alt changed");
+      assertEqual(
+        serialized(),
+        `![html-image](${image} "HTML")`,
+        "HTML-only image did not use the Markdown image model",
+      );
+    },
+  },
+  {
+    name: "Typora regression: typing an auto-paired image destination creates an image node",
+    async run() {
+      await mount("", {
+        autoPair: true,
+        keyboardExperience: true,
+      });
+      await typeText("![图片](/home/lqy/图片/头像.jpg");
+      await sleep(340);
+      await waitFor<HTMLElement>(".nota-image");
+      assertEqual(
+        serialized(),
+        "![图片](/home/lqy/图片/头像.jpg)",
+        "image Markdown source changed during conversion",
+      );
+      assertEqual(
+        document.querySelector(".nota-explicit-link-draft-label"),
+        null,
+        "image syntax was mistaken for a link draft",
+      );
+    },
+  },
+  {
+    name: "Typora regression: an invalid image source leaves image mode without a stale warning",
+    async run() {
+      await mount(
+        "![pixel](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z8WQAAAAASUVORK5CYII=)",
+      );
+      const image = await waitFor<HTMLImageElement>(".nota-image img");
+      image.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      const source = await waitFor<HTMLTextAreaElement>(".nota-image.is-selected .nota-image-source");
+      const invalid = "!public-relations/images/头像.jpg)";
+      source.value = invalid;
+      source.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          inputType: "insertText",
+          data: ")",
+        }),
+      );
+      await nextFrames(3);
+      assertEqual(image.hidden, true, "invalid source kept the old image visible");
+      assertEqual(
+        document.querySelector<HTMLElement>(".nota-media-error")?.hidden,
+        true,
+        "invalid source kept the old image warning",
+      );
+
+      source.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await nextFrames(4);
+      assertEqual(
+        serialized(),
+        invalid,
+        "invalid image source was rewritten instead of returning to text",
+      );
+      assertEqual(
+        document.querySelector(".nota-image"),
+        null,
+        "invalid image source remained an image node",
+      );
+      assertEqual(
+        document.querySelector(".nota-media-error"),
+        null,
+        "invalid image source left a stale warning node",
+      );
     },
   },
   {
@@ -3413,47 +4336,80 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
   {
     name: "Inline math delimiters share the prose line box",
     async run() {
-      await mount("$x$ price");
-      await sleep(220);
-      await openInlineMath();
+      const fontProperties = [
+        "fontFamily",
+        "fontSize",
+        "fontStyle",
+        "fontWeight",
+        "fontStretch",
+        "fontVariant",
+        "lineHeight",
+      ] as const;
 
-      const paragraph = document.querySelector<HTMLElement>(
-        ".ProseMirror p:has(.nota-math-inline)",
-      );
-      assert(paragraph, "paragraph containing inline math was not found");
+      for (const markdown of [
+        "$\\LaTeX$ price",
+        "$ $ price",
+        "# $\\LaTeX$ price",
+        "**a$\\LaTeX$b**",
+      ]) {
+        await mount(markdown);
+        await sleep(220);
+        await openInlineMath();
 
-      const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
-      let proseText: Text | null = null;
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        if (node.parentElement?.closest(".nota-math-inline")) continue;
-        const index = node.textContent?.indexOf("p") ?? -1;
-        if (index >= 0) {
-          proseText = node as Text;
-          break;
+        const paragraph = document.querySelector<HTMLElement>(
+          ".ProseMirror :is(p, h1, strong):has(.nota-math-inline)",
+        );
+        assert(paragraph, `${markdown}: formula owner was not found`);
+
+        const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+        let proseText: Text | null = null;
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          if (node.parentElement?.closest(".nota-math-inline")) continue;
+          const index = node.textContent?.search(/[bp]/) ?? -1;
+          if (index >= 0) {
+            proseText = node as Text;
+            break;
+          }
+        }
+        assert(proseText, `${markdown}: prose text was not found`);
+        const text = proseText.textContent!;
+        const range = document.createRange();
+        range.setStart(proseText, text.search(/[bp]/));
+        range.setEnd(proseText, text.search(/[bp]/) + 1);
+        const literalRect = range.getBoundingClientRect();
+
+        const delimiters = [
+          ...document.querySelectorAll<HTMLElement>(
+            ".nota-math-inline.nota-math-editing .nota-math-delim",
+          ),
+        ];
+        assertEqual(delimiters.length, 2, `${markdown}: formula delimiters disappeared`);
+        const delimiterStyle = getComputedStyle(delimiters[0]!);
+        for (const delimiter of delimiters) {
+          const rect = delimiter.getBoundingClientRect();
+          assert(
+            Math.abs(literalRect.height - rect.height) <= 1,
+            `${markdown}: delimiters use a different height (${literalRect.height}px vs ${rect.height}px)`,
+          );
+          assert(
+            Math.abs(literalRect.top - rect.top) <= 1 &&
+              Math.abs(literalRect.bottom - rect.bottom) <= 1,
+            `${markdown}: delimiters use a different baseline`,
+          );
+        }
+
+        const source = await waitFor<HTMLInputElement>(
+          ".nota-math-inline .nota-math-source",
+        );
+        const sourceStyle = getComputedStyle(source);
+        for (const property of fontProperties) {
+          assertEqual(
+            sourceStyle[property],
+            delimiterStyle[property],
+            `${markdown}: source and delimiter ${property} differ`,
+          );
         }
       }
-      assert(proseText, "prose text was not found");
-      const range = document.createRange();
-      range.setStart(proseText, proseText.textContent!.indexOf("p"));
-      range.setEnd(proseText, proseText.textContent!.indexOf("p") + 1);
-
-      const literalRect = range.getBoundingClientRect();
-      const delimiter = await waitFor<HTMLElement>(
-        ".nota-math-inline.nota-math-editing .nota-math-delim",
-      );
-      const delimiterRect = delimiter.getBoundingClientRect();
-      const delimiterStyle = getComputedStyle(delimiter);
-      assert(
-        Math.abs(literalRect.height - delimiterRect.height) <= 1,
-        `prose and LaTeX delimiters use different heights: ${literalRect.height}px vs ${delimiterRect.height}px; ` +
-          `display=${delimiterStyle.display}; panel=${getComputedStyle(delimiter.parentElement!).display}; ` +
-          `root=${delimiter.closest(".nota-math-inline")?.className}; html=${delimiter.outerHTML}`,
-      );
-      assert(
-        Math.abs(literalRect.top - delimiterRect.top) <= 1 &&
-          Math.abs(literalRect.bottom - delimiterRect.bottom) <= 1,
-        `prose and LaTeX delimiters use different baselines: ${literalRect.top}/${literalRect.bottom} vs ${delimiterRect.top}/${delimiterRect.bottom}`,
-      );
     },
   },
   {
@@ -3946,75 +4902,6 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
-    name: "spreadsheet formula input accepts pointer focus",
-    async run() {
-      await mount(
-        [
-          "Before",
-          "",
-          "| A | B |",
-          "| --- | --- |",
-          "| one | two |",
-        ].join("\n"),
-      );
-      await requestNativeKey("arrow-down");
-      await requestNativeKey("arrow-right");
-      const host = document.createElement("div");
-      document.body.append(host);
-      const root = createRoot(host);
-      flushSync(() => {
-        root.render(
-          createElement(TableToolbar, {
-            visible: true,
-            documentKey: "spreadsheet-e2e",
-            run: () => undefined,
-            spreadsheet: true,
-            spreadsheetPersistent: false,
-          }),
-        );
-      });
-      await nextFrames(3);
-      const input = await waitFor<HTMLInputElement>(".sheet-formula-bar input");
-      input.dispatchEvent(
-        new MouseEvent("mousedown", {
-          bubbles: true,
-          cancelable: true,
-          button: 0,
-        }),
-      );
-      input.dispatchEvent(
-        new MouseEvent("click", {
-          bubbles: true,
-          cancelable: true,
-          button: 0,
-        }),
-      );
-      assertEqual(document.activeElement, input, "formula input did not receive focus");
-      const focusTrail: string[] = [];
-      document.addEventListener(
-        "focusin",
-        (event) => focusTrail.push((event.target as Element | null)?.className || "none"),
-        { once: false },
-      );
-      await requestNativeKey("text-x");
-      await nextFrames(3);
-      assertEqual(
-        document.activeElement,
-        input,
-        `formula focus was lost after editing began: ${JSON.stringify({
-          activeTag: document.activeElement?.tagName,
-          activeClass: document.activeElement?.className,
-          inputConnected: input.isConnected,
-          inputValue: input.value,
-          focusTrail,
-        })}`,
-      );
-      assert(input.value.endsWith("x"), `formula draft was overwritten: ${JSON.stringify(input.value)}`);
-      flushSync(() => root.unmount());
-      host.remove();
-    },
-  },
-  {
     name: "inline LaTeX suggestions are not clipped inside a table cell",
     async run() {
       await mount(["| A |", "| --- |", "| $x$ |"].join("\n"));
@@ -4037,6 +4924,26 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       assertEqual(style.overflow, "visible", "suggestion root still clips an overflow axis");
       assert(itemRect.right <= popupRect.right + 1, "suggestion row is clipped by its scroll box");
       assert(sampleRect.right <= popupRect.right + 1, "KaTeX sample is clipped by the suggestion panel");
+    },
+  },
+  {
+    name: "table navigation does not steal ArrowLeft from inline math source",
+    async run() {
+      await mount("| A |\n| --- |\n| $x+y$ |");
+      const input = await openInlineMath();
+      assertEqual(document.activeElement, input, "inline math source did not receive focus");
+      const before = input.selectionStart;
+      await requestNativeKey("arrow-left-table-math-source");
+      await nextFrames(2);
+      assertEqual(
+        document.activeElement,
+        input,
+        "ArrowLeft moved table focus out of the inline math source",
+      );
+      assert(
+        input.selectionStart !== null && input.selectionStart < (before ?? 0),
+        `ArrowLeft did not move the inline math caret: before=${before} after=${input.selectionStart}`,
+      );
     },
   },
   {
@@ -4165,6 +5072,7 @@ async function main(): Promise<void> {
   const selected = only ? tests.filter((test) => test.name.includes(only)) : tests;
   if (!selected.length) throw new Error(`No E2E scenario matched ${JSON.stringify(only)}`);
   for (const test of selected) {
+    resultReport.textContent = `RUNNING ${test.name}`;
     try {
       await test.run();
       results.push({ name: test.name, passed: true, detail: "" });

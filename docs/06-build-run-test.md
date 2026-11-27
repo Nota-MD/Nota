@@ -6762,7 +6762,7 @@ FreeType 对“中 / 文 / A”返回 `pixel_mode=1`（MONO）。无头 `:99` �
 📌 **同日主题图标目检**：CDE 格式栏换成 22 枚自绘 16 格硬边图标；粗体、斜体、
 下划线、代码、链接、图片、列表、引用、任务与关闭键均在真窗口里看过。
 另做一次反证：在隔离配置的 `themes/ui/` 下新建一个测试风格，把
-`--icon-folio-close-symbolic: url("./shared-assets/custom-close.svg")` 指向
+`--icon-nota-close-symbolic: url("./shared-assets/custom-close.svg")` 指向
 **与主题 ID 不同名**的共享目录；重启后状态栏关闭键变成方框 + 叉，证明后端确实按
 CSS 文件目录解析相对资源，而不是要求 `<主题id>/icons/`。
 
@@ -6863,6 +6863,9 @@ Rust 定向测试 `settings::export::tests` 4 条与 `pandoc_format::tests` 1 �
 
 ```sh
 npm run test:e2e
+npm run test:webkit
+# Both engines for DOM-facing changes:
+npm run test:dom
 ```
 
 `e2e/run.mjs` 先对 `e2e/tsconfig.json` 做类型检查，再用仓库自己的 Vite 构建
@@ -6870,6 +6873,12 @@ npm run test:e2e
 页面加载的是真实 `createEditor()`、真实 CSS、ProseMirror、KaTeX、CodeMirror
 与 NodeView；Tauri IPC 只替换到编辑器启动所需的空命令，不复制编辑器逻辑。
 `CHROME_BIN` 可指定浏览器。
+
+DOM-facing changes must pass both engines. WebKitGTK has different
+contenteditable caret placement, NBSP insertion, `beforeinput` ordering,
+selection APIs, and IME composition behavior. Chromium coverage alone is not
+accepted for editor input, caret, selection, clipboard, drag/drop, or inline
+NodeView changes.
 
 本轮已扩到 **51 个场景**。表格保留首批 34 项；新增项覆盖：Vim 空文档插入、空段落 Tab、
 隐藏定界符的外侧停点与编辑后边界保持、起始定界符逐字符导航、左右组 Delete、起始组 Backspace、`*1*` 右侧新增星号、`**1*|*` 字符级光标、

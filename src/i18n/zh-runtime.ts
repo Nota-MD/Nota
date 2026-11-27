@@ -15,8 +15,6 @@
 
 export const moveLineTable: Record<string, string> = {
   "Saved to {0}": "已保存到 {0}",
-  "Saved to {0}. Table content is rendered by extensions; the Markdown source is unchanged.":
-    "已保存到 {0}。表格内容由拓展渲染，Markdown 源码保持不变。",
   "Copied to clipboard": "已复制到剪贴板",
   "Could not read extension status: {0}": "读取拓展状态失败：{0}",
   "Extension installation rejected": "拓展安装被拒绝",
@@ -52,6 +50,7 @@ export const moveLineTable: Record<string, string> = {
   "“{0}” is not a text file, and Nota does not convert formats, so it cannot open it": "“{0}”不是文本文件；Nota 不执行格式转换，因此无法打开。",
   "Could not open “{0}” in the file manager: {1}": "在文件管理器里打开「{0}」失败：{1}",
   "Trust is recorded by fingerprint — check it against the one the author publishes, not just the name.": "信任记录依据指纹。请与作者公布的指纹核对，不应仅核对名称。",
+  "Trust signer": "信任签名者",
   "Trusted {0}": "信任了 {0}",
   "Extension Package": "拓展包",
   "Installed: {0} ({1})": "已安装：{0}（{1}）",
@@ -187,5 +186,4 @@ export const moveLineTable: Record<string, string> = {
   "No #root mount point; was index.html broken?": "找不到 #root 挂载点；index.html 被改坏了？",
   "Nothing to replace": "没有可替换的内容",
   "Replaced {0} occurrences": "替换了 {0} 处",
-  "The extension changed the table, but the editor is no longer editable.": "拓展已修改表格，但编辑区当前不可编辑。",
 };

@@ -1,102 +1,10 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import type { Ctx } from "@milkdown/kit/ctx";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { redo, undo } from "@milkdown/kit/prose/history";
 import type { EditorView, NodeView, NodeViewConstructor } from "@milkdown/kit/prose/view";
 import { Decoration } from "@milkdown/kit/prose/view";
-import { $view } from "@milkdown/kit/utils";
-import { katexOptionsCtx, mathBlockSchema, mathInlineSchema } from "./math-schema";
 import type { KatexOptions } from "katex";
 
 import { t } from "@/i18n";
@@ -108,10 +16,17 @@ import { mathDelimiterText } from "./math-delim";
 import { fitMathSourceSize, redrawAfterMount, watchFontMetrics } from "./math-inline-measure";
 import { mountInlinePreview, type InlinePreviewController } from "./math-inline-preview";
 import { inlineMathInputAtEdge, setInlineMathEditing, setInlineMathInputFocus } from "./math-inline-input";
-import { createEmptyMathPosition, drawLatestMath } from "./math-render-target";
-import { createInlineMathHitZones, inlineMathBoundaryEditing, inlineMathHitCaret, releaseInlineMathNodeSelection } from "./math-inline-boundary";
 import {
-  commonStyleCurrent,
+  caretCommandFromKeyboard,
+  dispatchCaretCommand,
+  type CaretCommand,
+} from "./caret-commander";
+import { createEmptyMathPosition, drawLatestMath } from "./math-render-target";
+import {
+  inlineMathHitCaret,
+  removeInlineMathDelimiter,
+} from "./math-inline-boundary";
+import {
   commonStyleCurrentKey,
   inlineMathFocusConsumed,
   pendingInlineMathFocus,
@@ -122,64 +37,19 @@ import { exactTextSelection } from "./inline-caret";
 import { drawUpstream, readSource, writeEnterSource } from "./math-view-source";
 import { preserveInlineMathSourceFocus, scheduleInlineMathFocus } from "./math-inline-focus";
 import { createCodeBlockExitNavigator } from "./code-block-boundary";
-import { bindInlineMathSourceEvents, isImeComposingKey } from "./math-inline-events";
+import {
+  bindInlineMathSourceEvents,
+  insertBackslashAtSelection,
+  isImeComposingKey,
+} from "./math-inline-events";
 import { vimInputConfig, vimInputHooks } from "./plugin-vim-input";
+import { createMathViewElements } from "./math-view-dom";
 
 export { commonStyleCurrent, computeDecorations, recognizeNode, returnPositionSelection } from "./math-current";
 export { readSource, writeEnterSource } from "./math-view-source";
 
-
-
-
-const panelClass = "nota-math-panel";
-
-
-const sourceClass = "nota-math-source";
-
-
-const separatorClass = "nota-math-delim";
-
-
-const renderClass = "nota-math-render";
-
-
-
-
-
-
-
-
-const previewClass = "nota-math-preview";
-
-
-const numberLearnLabelClass = "nota-math-kind";
-
-
-
-
-
-
-
-
-const rulerClass = "nota-math-ruler";
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptions): NodeViewConstructor {
+export function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptions): NodeViewConstructor {
   const inline = kindClass === "inline";
-
 
   const table2 = createCommandTable(Object.keys(option.macros ?? {}).length > 0);
 
@@ -190,87 +60,22 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     decorations: readonly Decoration[],
   ): NodeView => {
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    const dom = document.createElement(inline ? "span" : "div");
-    dom.className = `nota-math nota-math-${inline ? "inline" : "block"}`;
-    if (!inline) dom.classList.add("md-math-block");
-    dom.classList.toggle("nota-math-readonly", !view.editable);
-
-    const render = document.createElement(inline ? "span" : "div");
-    render.className = renderClass;
-
-
-    const preview = document.createElement(inline ? "span" : "div");
-    preview.className = previewClass;
-
-    preview.contentEditable = "false";
-
-    const panel = document.createElement(inline ? "span" : "div");
-    panel.className = panelClass;
-    panel.contentEditable = "false";
-
-    const numberLearnLabel = document.createElement("button");
-    numberLearnLabel.type = "button";
-    numberLearnLabel.className = `${numberLearnLabelClass} nota-block-kind`;
-    numberLearnLabel.textContent = t("Formula");
-    numberLearnLabel.title = t("Finish editing");
-    numberLearnLabel.setAttribute("aria-label", t("Finish editing"));
-
-
     let current = initialStart;
-
-    const createSeparator = (closing = false): HTMLElement => {
-      const el = document.createElement("span");
-      el.className = separatorClass;
-      if (inline && closing) el.classList.add("nota-math-delim-close");
-      el.textContent = inline ? mathDelimiterText(current, closing) : "$$";
-
-      el.setAttribute("aria-hidden", "true");
-      return el;
-    };
-
-    const input: HTMLInputElement | HTMLTextAreaElement = inline
-      ? document.createElement("input")
-      : document.createElement("textarea");
-    input.className = sourceClass;
-    if (!inline) input.classList.add("nota-diagram-source-bootstrap");
-    input.spellcheck = false;
-    input.setAttribute("aria-label", t("Math Source (LaTeX)"));
-    input.placeholder = inline ? "" : t("e.g. \\frac{a}{b}");
-    if (inline) (input as HTMLInputElement).type = "text";
-    else (input as HTMLTextAreaElement).rows = 1;
-
-    const ruler = document.createElement("span");
-    ruler.className = rulerClass;
-    ruler.setAttribute("aria-hidden", "true");
-    const { before: hitBefore, after: hitAfter } = createInlineMathHitZones();
+    const {
+      dom,
+      render,
+      preview,
+      panel,
+      numberLabel,
+      input,
+      ruler,
+      hitBefore,
+      hitAfter,
+      blockSourceShell,
+      createSeparator,
+    } = createMathViewElements(inline, view.editable, () => current);
     const inlinePreview: InlinePreviewController | null =
       inline && view.editable ? mountInlinePreview(preview, panel) : null;
-
-    const blockSourceShell = document.createElement("pre");
-    blockSourceShell.className =
-      "md-fences ty-contain-cm nota-source-surface nota-math-source-shell nota-diagram-source nota-diagram-cm";
-    blockSourceShell.contentEditable = "false";
-    blockSourceShell.append(input);
-
 
     let blockCodeEditor: codeBlockEditor | null = null;
     let blockEditorStarted = false;
@@ -290,16 +95,6 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       }
       if (cursor !== undefined && !blockCodeEditor) input.setSelectionRange(cursor, cursor);
     };
-
-
-
-
-
-
-
-
-
-
 
     function shouldUseCreateProposal(result3: ReceiveBelow): void {
       replaceEditingSource(result3.source3, result3.cursor);
@@ -329,11 +124,9 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
           }
         : undefined,
 
-
       drawPreview: useOptionDrawPreview(option),
       receiveBelowAfter: shouldUseCreateProposal,
       reportActivity: (id) => {
-
 
         const activeTarget = blockCodeEditor?.view.contentDOM ?? input;
         if (id) activeTarget.setAttribute("aria-activedescendant", id);
@@ -342,8 +135,6 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     });
 
     if (inline) {
-
-
 
       document.body.append(createProposal.element);
       panel.append(
@@ -365,43 +156,23 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     }
     dom.append(render);
 
-
-
-
     if (view.editable) {
       dom.append(panel);
-      if (!inline) dom.append(preview, numberLearnLabel);
+      if (!inline) dom.append(preview, numberLabel);
     }
-
-
 
     let mostAfterDispatch = readSource(initialStart); let decorationCurrent = readDecoration(decorations);
 
     let nodeSelected = view.state.selection instanceof NodeSelection; let boxInsideHasFocusPoint = false;
 
-
-
-
-
-
-
-
     function panelShouldOpen(): boolean {
       return view.editable && (decorationCurrent || boxInsideHasFocusPoint);
     }
 
-
     const createOccupyPosition = (): HTMLElement =>
       createEmptyMathPosition(inline, inline ? t("Empty inline math") : t("Empty math block — click to write LaTeX"));
 
-
-
-
-
-
-
     const drawEnter = (target: HTMLElement, source2: string) => drawLatestMath(target, source2, option);
-
 
     function heavyDraw(): void {
       if (!view.editable) {
@@ -451,17 +222,6 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       drawEnter(render, source2);
     }
 
-
-
-
-
-
-
-
-
-
-
-
     function followSourceChangeRulerInch(): void {
       fitMathSourceSize(
         input,
@@ -481,17 +241,6 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       ? watchFontMetrics(remeasureInlineAfterFonts)
       : () => {};
 
-
-
-
-
-
-
-
-
-
-
-
     function arrangeClusterFocus(): void {
       scheduleInlineMathFocus({
         shouldOpen: panelShouldOpen,
@@ -502,16 +251,9 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
         },
         input: input as HTMLInputElement,
         sourceLength: () => editingSource().length,
-        beforeInputFocus: () => {
-          if (inline) releaseInlineMathNodeSelection(view, getPos);
-        },
+        beforeInputFocus: () => {},
       });
     }
-
-
-
-
-
 
     function ensureBlockCodeEditor(): void {
       if (inline || blockEditorStarted) return;
@@ -584,17 +326,11 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       sameStepPanel(false);
     }
 
-
-
-
-
-
-
-
-
-
     function sameStepPanel(wantToFocusPoint: boolean): void {
       refreshInlineEdge();
+      if (inline) {
+        dom.dataset.notaMathMarkdown = `${mathDelimiterText(current)}${editingSource()}${mathDelimiterText(current, true)}`;
+      }
       const open2 = panelShouldOpen();
       dom.classList.toggle("nota-math-editing", open2);
       if (inline) setInlineMathEditing(view.dom, open2 && boxInsideHasFocusPoint);
@@ -609,7 +345,6 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
         }
       } else {
 
-
         createProposal.close4();
         if (editingSource() !== readSource(current)) {
 
@@ -619,9 +354,6 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       heavyDraw();
     }
 
-
-
-
     function dispatch(newValueSource: string): void {
       const position2 = getPos();
       if (typeof position2 !== "number") return;
@@ -629,16 +361,12 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       const node = view.state.doc.nodeAt(position2);
       if (!node || recognizeNode(node) !== kindClass) return;
 
-
-
-
       mostAfterDispatch = newValueSource;
 
       const tr = view.state.tr;
       if (!writeEnterSource(tr, position2, node, newValueSource)) return;
       view.dispatch(tr);
     }
-
 
     function backOutputEditEdit(side: "before" | "after" = "after"): void {
       const position2 = getPos();
@@ -649,7 +377,6 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
         setInlineMathEditing(view.dom, false);
         setInlineMathInputFocus(view.dom, false);
       }
-
 
       const to2 = side === "after" ? position2 + node.nodeSize : position2;
 
@@ -672,7 +399,6 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       view.focus();
     }
 
-
     function removeRemoveSelfSelf(): void {
       const position2 = getPos();
       if (typeof position2 !== "number") return;
@@ -686,9 +412,87 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       view.focus();
     }
 
+    const handleCaretCommand = (
+      command: CaretCommand,
+      event?: Event,
+    ): boolean => {
+      if (command.type === "insertText") {
+        if (command.text !== "\\" || event instanceof KeyboardEvent && event.isComposing) {
+          return false;
+        }
+        const control = input as HTMLInputElement;
+        const cursor = insertBackslashAtSelection(control);
+        refreshInlineEdge();
+        followSourceChangeRulerInch();
+        dispatch(control.value);
+        createProposal.feed(control.value, cursor);
+        preserveInlineMathSourceFocus(control, cursor, () => {
+          setInlineMathInputFocus(view.dom, true);
+        });
+        return true;
+      }
+      if (command.type === "escape") {
+        backOutputEditEdit();
+        return true;
+      }
+      if (
+        command.type === "delete" &&
+        inline &&
+        typeof getPos() === "number"
+      ) {
+        const position2 = getPos()!;
+        if (
+          command.key === "Delete" &&
+          inlineMathInputAtEdge(input as HTMLInputElement, "end")
+        ) {
+          removeInlineMathDelimiter(view, position2, "closing");
+          return true;
+        }
+        if (
+          command.key === "Backspace" &&
+          input.value !== "" &&
+          inlineMathInputAtEdge(input as HTMLInputElement, "start")
+        ) {
+          removeInlineMathDelimiter(view, position2, "opening");
+          return true;
+        }
+      }
+      if (
+        command.type === "move" &&
+        inline &&
+        (command.key === "ArrowLeft" || command.key === "ArrowRight")
+      ) {
+        if (
+          command.key === "ArrowLeft" &&
+          inlineMathInputAtEdge(input as HTMLInputElement, "start")
+        ) {
+          backOutputEditEdit("before");
+          return true;
+        }
+        if (
+          command.key === "ArrowRight" &&
+          inlineMathInputAtEdge(input as HTMLInputElement, "end")
+        ) {
+          backOutputEditEdit("after");
+          return true;
+        }
+      }
+      if (command.type === "commit" && inline) {
+        backOutputEditEdit();
+        return true;
+      }
+      if (
+        command.type === "delete" &&
+        command.key === "Backspace" &&
+        input.value === ""
+      ) {
+        removeRemoveSelfSelf();
+        return true;
+      }
+      return false;
+    };
 
-
-    bindInlineMathSourceEvents(input, {
+    const unbindInlineMathSource = bindInlineMathSourceEvents(input, {
       updateLayout: () => {
         refreshInlineEdge();
         followSourceChangeRulerInch();
@@ -708,12 +512,12 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
           setInlineMathInputFocus(view.dom, true);
         });
       },
+      handleCommand: handleCaretCommand,
     });
 
     input.addEventListener("focus", () => {
       boxInsideHasFocusPoint = true;
       if (inline) setInlineMathInputFocus(view.dom, true);
-      if (inline) releaseInlineMathNodeSelection(view, getPos);
       sameStepPanel(false);
     });
 
@@ -721,20 +525,12 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       boxInsideHasFocusPoint = false;
       if (inline) setInlineMathInputFocus(view.dom, false);
 
-
       createProposal.close4();
       sameStepPanel(false);
     });
 
-
-
-
     (input as HTMLElement).addEventListener("keydown", (e) => {
       if (isImeComposingKey(e)) return;
-
-
-
-
 
       const result3 = createProposal.keypress(e.key);
       if (result3.consume) {
@@ -742,54 +538,18 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
         return;
       }
 
-      if (e.key === "Escape") {
-        e.preventDefault();
-        backOutputEditEdit();
-        return;
-      }
-
-      if (
-        inline &&
-        e.key === "ArrowLeft" &&
-        inlineMathInputAtEdge(input as HTMLInputElement, "start")
-      ) {
+      const command = caretCommandFromKeyboard(e);
+      if (command && dispatchCaretCommand(command, e)) {
         e.preventDefault();
         e.stopPropagation();
-        backOutputEditEdit("before");
         return;
-      }
-      if (
-        inline &&
-        e.key === "ArrowRight" &&
-        inlineMathInputAtEdge(input as HTMLInputElement, "end")
-      ) {
-        e.preventDefault();
-        e.stopPropagation();
-        backOutputEditEdit("after");
-        return;
-      }
-
-      if (inline && e.key === "Enter") {
-        e.preventDefault();
-        backOutputEditEdit();
-        return;
-      }
-
-
-
-      if (e.key === "Backspace" && input.value === "") {
-        e.preventDefault();
-        removeRemoveSelfSelf();
       }
     });
 
-
-
     panel.addEventListener("mousedown", (e) => {
       if (blockSourceShell.contains(e.target as Node | null)) return;
-      if (numberLearnLabel.contains(e.target as Node | null)) return;
+      if (numberLabel.contains(e.target as Node | null)) return;
       if (inline && (e.target === input || input.contains(e.target as Node | null))) return;
-
 
       e.preventDefault();
       if (blockCodeEditor) blockCodeEditor.clusterFocus();
@@ -800,8 +560,8 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       }
     });
 
-    numberLearnLabel.addEventListener("mousedown", (e) => e.preventDefault());
-    numberLearnLabel.addEventListener("click", (e) => {
+    numberLabel.addEventListener("mousedown", (e) => e.preventDefault());
+    numberLabel.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
       if (panelShouldOpen()) {
@@ -820,59 +580,56 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       view.focus();
     });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     render.addEventListener("mousedown", (e) => {
-      if (!decorationCurrent) return;
+      if (!decorationCurrent) {
+        if (!view.editable) return;
+        const position2 = getPos();
+        if (typeof position2 !== "number") return;
+        e.preventDefault();
+        e.stopPropagation();
+        view.dispatch(
+          view.state.tr.setSelection(
+            NodeSelection.create(view.state.doc, position2),
+          ),
+        );
+        const focusSource = () => {
+          if (input.isConnected) input.focus();
+        };
+        focusSource();
+        queueMicrotask(focusSource);
+        requestAnimationFrame(focusSource);
+        return;
+      }
       e.preventDefault();
+      e.stopPropagation();
       if (blockCodeEditor) blockCodeEditor.clusterFocus();
       else input.focus();
     });
-
-
+    const containInlineFollowupPointer = (event: Event) => {
+      if (!inline) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    render.addEventListener("mouseup", containInlineFollowupPointer, true);
+    render.addEventListener("click", containInlineFollowupPointer, true);
 
     preview.addEventListener("mousedown", (e) => {
       if (inline || !panelShouldOpen()) return;
       e.preventDefault();
+      e.stopPropagation();
       if (blockCodeEditor) blockCodeEditor.clusterFocus();
       else input.focus();
     });
-
-
-
-
-
-
-
-
-
-
-
+    preview.addEventListener("mouseup", containInlineFollowupPointer, true);
+    preview.addEventListener("click", containInlineFollowupPointer, true);
 
     const isSelfOfAttachItem = (target: EventTarget | null): boolean => {
       if (!(target instanceof Node)) return false;
       if (panel.contains(target)) return true;
-      if (!inline && numberLearnLabel.contains(target)) return true;
+      if (!inline && numberLabel.contains(target)) return true;
       if (!inline && panelShouldOpen() && preview.contains(target)) return true;
       return decorationCurrent && render.contains(target);
     };
-
-
 
     input.value = readSource(initialStart);
     refreshInlineEdge();
@@ -903,8 +660,6 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       update: (afterUpdate, newDecorations) => {
         const newValueSource = readSource(afterUpdate);
 
-
-
         const externalSurfaceChangeOf = newValueSource !== mostAfterDispatch; current = afterUpdate;
         blockCodeEditor?.setVimInput(vimInputConfig(view.state));
 
@@ -924,38 +679,23 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
         return true;
       },
 
-
-
-
-
-
       stopEvent: (e) => isSelfOfAttachItem(e.target),
 
       ignoreMutation: () => true,
-
-
-
-
 
       selectNode: () => dom.classList.add("ProseMirror-selectednode"),
       deselectNode: () => dom.classList.remove("ProseMirror-selectednode"),
 
       destroy: () => {
 
-
-
-
-
-
         boxInsideHasFocusPoint = false;
         if (inline) setInlineMathInputFocus(view.dom, false);
         if (inline) setInlineMathEditing(view.dom, false);
+        unbindInlineMathSource();
         stopWatchingFonts();
         inlinePreview?.destroy();
         blockCodeEditor?.cancelDestroy();
         blockCodeEditor = null;
-
-
 
         createProposal.close4();
         if (inline) createProposal.element.remove();
@@ -963,30 +703,3 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     };
   };
 }
-
-
-
-
-function readOption(ctx: Ctx): KatexOptions {
-  try {
-    return ctx.get(katexOptionsCtx.key) ?? {};
-  } catch {
-    return {};
-  }
-}
-
-
-export const commonStyleInlineView = $view(mathInlineSchema.node, (ctx) =>
-  createCommonStyleView("inline", readOption(ctx)),
-);
-
-export const commonStyleBlockView = $view(mathBlockSchema.node, (ctx) => createCommonStyleView("block", readOption(ctx)));
-
-
-
-
-
-
-
-
-export const mathView = [commonStyleInlineView, commonStyleBlockView, commonStyleCurrent, inlineMathBoundaryEditing];

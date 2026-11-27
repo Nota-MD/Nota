@@ -35,7 +35,7 @@ export interface PreviewModeWiring {
 
 
 
-  invokePlugin: (plugin: string, command: string) => void;
+  invokePlugin: (plugin: string, command: string) => Promise<boolean>;
 
   receivePreview: () => void;
 }
@@ -82,7 +82,11 @@ export function useReviewView(w: PreviewModeWiring): PreviewModeOutputMouth {
 
   const backOutputPreview = useCallback(() => {
     const releaseDiscard = activeJumpPreview?.reject;
-    if (releaseDiscard && activeJumpPreview) void invokePlugin(activeJumpPreview.plugin, releaseDiscard.command);
+    if (releaseDiscard && activeJumpPreview) {
+      void invokePlugin(activeJumpPreview.plugin, releaseDiscard.command).then((succeeded) => {
+        if (succeeded) void receivePreview();
+      });
+    }
     else void receivePreview();
   }, [activeJumpPreview, invokePlugin, receivePreview]);
 

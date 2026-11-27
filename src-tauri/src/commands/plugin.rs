@@ -5,11 +5,21 @@ use crate::error::{NotaError, Result};
 use crate::plugin::{PluginInfo, PluginMenuItem, PluginPanel, ReviewKind, ReviewState};
 use crate::state::AppState;
 
-fn plugin_guard<'a>(state: &'a AppState) -> std::sync::MutexGuard<'a, crate::plugin::PluginHost> {
+fn plugin_lock<'a>(
+    state: &'a AppState,
+) -> Result<std::sync::MutexGuard<'a, crate::plugin::PluginHost>> {
+    state.plugins.lock().map_err(|_| {
+        NotaError::other("The extension host is unavailable after an earlier failure; restart Nota")
+    })
+}
+
+fn plugin_guard<'a>(
+    state: &'a AppState,
+) -> Result<std::sync::MutexGuard<'a, crate::plugin::PluginHost>> {
     loop {
-        let guard = state.plugins.lock().unwrap();
+        let guard = plugin_lock(state)?;
         if guard.is_ready() {
-            return guard;
+            return Ok(guard);
         }
         drop(guard);
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -20,7 +30,7 @@ fn plugin_guard<'a>(state: &'a AppState) -> std::sync::MutexGuard<'a, crate::plu
 pub async fn nota_plugins_list(app: tauri::AppHandle) -> Result<Vec<PluginInfo>> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let host = plugin_guard(&state);
+        let host = plugin_guard(&state)?;
         Ok(host.list_info())
     })
     .await
@@ -35,7 +45,7 @@ pub async fn nota_plugin_set_enabled(
 ) -> Result<()> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let mut host = state.plugins.lock().unwrap();
+        let mut host = plugin_lock(&state)?;
         host.set_enabled(&id, enabled)
     })
     .await
@@ -50,7 +60,7 @@ pub async fn nota_plugin_set_enabled(
 pub async fn nota_plugin_install(app: tauri::AppHandle, path: String) -> Result<String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let mut host = state.plugins.lock().unwrap();
+        let mut host = plugin_lock(&state)?;
         host.install_2(std::path::Path::new(&path))
     })
     .await
@@ -61,7 +71,7 @@ pub async fn nota_plugin_install(app: tauri::AppHandle, path: String) -> Result<
 pub async fn nota_plugin_uninstall(app: tauri::AppHandle, id: String) -> Result<()> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let mut host = state.plugins.lock().unwrap();
+        let mut host = plugin_lock(&state)?;
         host.uninstall(&id)
     })
     .await
@@ -70,7 +80,7 @@ pub async fn nota_plugin_uninstall(app: tauri::AppHandle, id: String) -> Result<
 
 #[tauri::command]
 pub fn nota_plugin_trust(state: State<'_, AppState>, id: String) -> Result<()> {
-    let mut host = state.plugins.lock().unwrap();
+    let mut host = plugin_lock(&state)?;
     host.trust_2(&id)
 }
 
@@ -82,7 +92,7 @@ pub async fn nota_plugin_export(
 ) -> Result<crate::plugin::export::ExportReport> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let host = state.plugins.lock().unwrap();
+        let host = plugin_lock(&state)?;
         host.export_2(&id, std::path::Path::new(&path))
     })
     .await
@@ -93,7 +103,7 @@ pub async fn nota_plugin_export(
 pub async fn nota_plugin_export_name(app: tauri::AppHandle, id: String) -> Result<String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let host = plugin_guard(&state);
+        let host = plugin_guard(&state)?;
         host.default_export_name(&id)
     })
     .await
@@ -129,7 +139,7 @@ pub fn nota_plugin_setting_set(
 
     let declaration_2 = {
         let state = app.state::<AppState>();
-        let host = state.plugins.lock().unwrap();
+        let host = plugin_lock(&state)?;
         let p = host
             .get(&plugin)
             .ok_or_else(|| NotaError::other(format!("Extension not found: {plugin}")))?;
@@ -148,6 +158,27 @@ pub fn nota_plugin_setting_set(
     let receive_3 = declaration_2.receive_value(&value)?;
     crate::lua::api::settings::host_write_one(&plugin, &key, receive_3)?;
 
+    if !declaration_2.change_command.is_empty() {
+        let state = app.state::<AppState>();
+        let host = plugin_lock(&state)?;
+        let extension = host
+            .get(&plugin)
+            .ok_or_else(|| NotaError::other(format!("Extension not found: {plugin}")))?;
+        let lua_args = extension
+            .lua
+            .to_value(&serde_json::json!({ "value": value }))
+            .map_err(|error| {
+                NotaError::other(format!(
+                    "Could not convert the setting value to Lua: {error}"
+                ))
+            })?;
+        host.call_command(
+            &extension.manifest.meta.id,
+            &declaration_2.change_command,
+            lua_args,
+        )?;
+    }
+
     app.emit(
         crate::plugin::EVENT_PANEL_DIRTY,
         serde_json::json!({ "plugin": plugin, "id": serde_json::Value::Null }),
@@ -165,7 +196,7 @@ pub async fn nota_plugin_trust_list(
 ) -> Result<Vec<crate::plugin::TrustRecord>> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let host = plugin_guard(&state);
+        let host = plugin_guard(&state)?;
         Ok(host.trust_records())
     })
     .await
@@ -180,7 +211,7 @@ pub async fn nota_plugin_updates(
 ) -> Result<Vec<crate::plugin::updater::PluginUpdateStatus>> {
     let sources = {
         let state = app.state::<AppState>();
-        let host = state.plugins.lock().unwrap();
+        let host = plugin_lock(&state)?;
         crate::plugin::updater::sources(&host)
     };
     let replacements_2 = {
@@ -205,7 +236,7 @@ pub async fn nota_plugin_update(
 ) -> Result<crate::plugin::updater::PluginUpdateResult> {
     let source = {
         let state = app.state::<AppState>();
-        let host = state.plugins.lock().unwrap();
+        let host = plugin_lock(&state)?;
         crate::plugin::updater::sources(&host)
             .into_iter()
             .find(|source| source.id == id)
@@ -233,7 +264,7 @@ pub async fn nota_plugin_update(
 
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let mut host = state.plugins.lock().unwrap();
+        let mut host = plugin_lock(&state)?;
         crate::plugin::updater::install_update(&mut host, prepared)
     })
     .await
@@ -249,7 +280,7 @@ pub async fn nota_plugin_call(
 ) -> Result<serde_json::Value> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let host = state.plugins.lock().unwrap();
+        let host = plugin_lock(&state)?;
 
         let plug = host
             .get(&plugin)
@@ -285,7 +316,7 @@ pub async fn nota_plugin_panel_content(
     tauri::async_runtime::spawn_blocking(move || -> Result<serde_json::Value> {
         let state = app.state::<AppState>();
         let mut content_2 = {
-            let host = state.plugins.lock().unwrap();
+            let host = plugin_lock(&state)?;
             host.panel_content(&plugin, &id)?
         };
         crate::lua::api::devserver::field_frame(&app, &plugin, &mut content_2);
@@ -334,7 +365,7 @@ pub fn nota_plugin_find_command(
     state: State<'_, AppState>,
     command: String,
 ) -> Result<Option<String>> {
-    let host = state.plugins.lock().unwrap();
+    let host = plugin_lock(&state)?;
     Ok(host.find_command_owner(&command).map(str::to_owned))
 }
 
@@ -342,7 +373,7 @@ pub fn nota_plugin_find_command(
 pub async fn nota_plugin_panels(app: tauri::AppHandle) -> Result<Vec<PluginPanel>> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let host = plugin_guard(&state);
+        let host = plugin_guard(&state)?;
         Ok(host.panels())
     })
     .await
@@ -353,7 +384,7 @@ pub async fn nota_plugin_panels(app: tauri::AppHandle) -> Result<Vec<PluginPanel
 pub async fn nota_plugin_menus(app: tauri::AppHandle) -> Result<Vec<PluginMenuItem>> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let host = plugin_guard(&state);
+        let host = plugin_guard(&state)?;
         Ok(host.menus())
     })
     .await

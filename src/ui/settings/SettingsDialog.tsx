@@ -122,15 +122,15 @@ const SECTIONS: Record<SectionId, iconName> = {
 
 
 
-  files: "folio-document-open-symbolic",
-  editor: "folio-edit-symbolic",
-  image: "folio-insert-image-symbolic",
+  files: "nota-document-open-symbolic",
+  editor: "nota-edit-symbolic",
+  image: "nota-insert-image-symbolic",
 
 
   markdown: "nota-markdown-symbolic",
-  export: "folio-document-export-symbolic",
+  export: "nota-document-export-symbolic",
 
-  appearance: "folio-window-symbolic",
+  appearance: "nota-window-symbolic",
 
 
 
@@ -143,8 +143,8 @@ const SECTIONS: Record<SectionId, iconName> = {
 
 
   focus: "nota-force-focus-symbolic",
-  pluginSettings: "folio-configure-symbolic",
-  general: "folio-configure-symbolic",
+  pluginSettings: "nota-configure-symbolic",
+  general: "nota-configure-symbolic",
   debug: "nota-advanced-symbolic",
 };
 
@@ -349,13 +349,10 @@ export function SettingsDialog({
 
 
   const paneFor = (id: SectionId) => {
-    const settingLocks = new Set(
-      plugins
-        .filter((plugin) => plugin.state === "loaded")
-        .flatMap((plugin) => plugin.setting_locks),
-    );
     const props: PaneProps = {
       settings,
+      settingsPresentation:
+        standalone ? "full" : openingWindowStyle === "full" ? "full" : "embedded",
       onChange,
       docThemes,
       onOpenThemesDir,
@@ -370,7 +367,6 @@ export function SettingsDialog({
       onClearRecent,
       onRestoreDrafts,
       menus,
-      settingLocks,
     };
     switch (id) {
       case "files":

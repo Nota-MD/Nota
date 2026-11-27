@@ -25,6 +25,21 @@ CodeMirror、`input` / `textarea` / `select` 和 `contenteditable` 区域显式�
 `data-ui-text-selectable` 设为 `true`，临时放开整个外壳。不要再按按钮逐个补
 `user-select`。
 
+Standalone Preferences mounts the same developer bridges as the main editor:
+`general.select_ui_text` controls the root selectable-text attribute, and
+`general.element_inspector` mounts the hover inspector in that window. Developer
+settings must work in the dedicated Settings process, not only in the editor
+process.
+
+The settings-package export surface loads its inventory once per opening.
+Checkbox changes therefore cannot be overwritten by a callback identity change.
+When Preferences uses the standalone presentation, the export surface occupies
+that window instead of nesting another centered card.
+
+Opening a standalone Preferences window first asks the registered Settings
+process to show, unminimize and focus itself. Only when no live control endpoint
+exists does Nota launch a new Settings process.
+
 ### ⚠️ 全局口径：**界面文案一律中文，不中英混杂**
 
 用户 2026-09-22 定的，原话：「注意不要像他一样中英混杂。」被举作反例的那份界面里，
@@ -1252,14 +1267,14 @@ remains a current rendering limitation.
 | 控件 | 文案 | 数据来源 → 动作 | 当前状态 |
 |---|---|---|---|
 | 左·第一枚 | 无字，一枚图标：侧栏**开着**时是 `‹`（`nota-sidebar-collapse-symbolic`）／**关着**时是空心圆（`nota-sidebar-toggle-symbolic`） | `sidebarOpen`；点它 → `setSidebarOpen(v => !v)` | ✅ **2026-09-30 加**。⚠️ 与菜单「视图 → 显示/隐藏侧边栏」、「`Ctrl+Shift+L`」、侧栏自己那个 `×` **共用同一份状态**，四个入口一个结果。⚠️ `aria-pressed` 跟着 `sidebarOpen` 走（读屏要靠它，图标里没有字） |
-| 左·第二枚 | 无字，一枚 `</>`（`folio-insert-code-symbolic`） | 点它 → `设模式(viewMode === "source" ? "wysiwyg" : "source")`（`ui/useFileKindMode.ts` 的出口） | ✅ **2026-09-30 加**。⚠️ **它是"切到另一档"，不是"切到源码"**：在源码模式下点它就回所见即所得。⚠️ 亮着（`data-on` → 强调色）表示**此刻是源码模式**。⚠️ **分屏那一档按源码处理**（点一下回所见即所得，不会卡在分屏里出不来）。⚠️ 与菜单「视图 → 源码模式 / 所见即所得」改的是**同一份会话内状态**（2026-10-07 起不落盘，那条 `设模式` 顺手还会解除这一份的大文件降级） |
+| 左·第二枚 | 无字，一枚 `</>`（`nota-insert-code-symbolic`） | 点它 → `设模式(viewMode === "source" ? "wysiwyg" : "source")`（`ui/useFileKindMode.ts` 的出口） | ✅ **2026-09-30 加**。⚠️ **它是"切到另一档"，不是"切到源码"**：在源码模式下点它就回所见即所得。⚠️ 亮着（`data-on` → 强调色）表示**此刻是源码模式**。⚠️ **分屏那一档按源码处理**（点一下回所见即所得，不会卡在分屏里出不来）。⚠️ 与菜单「视图 → 源码模式 / 所见即所得」改的是**同一份会话内状态**（2026-10-07 起不落盘，那条 `设模式` 顺手还会解除这一份的大文件降级） |
 | 右 | **一个数**：默认 `N 词`（中文按字计）。**显示哪一个由设置说了算** | `countText(doc.text, appearance.reading_speed)` 的 `words` / `characters` / `lines` / `readingMinutes`，取哪个看 `appearance.status_metric` | ✅ **2026-09-30 改成"极简"**：原先四个数并排（词 / 字符 / 行 / 分钟），现在条上只留一个。⚠️ 悬停 `title` 仍是**完整一句详情**：`{0} words · {1} characters · {2} lines · about {3} min`——**中英通用**（中文按字、英文按词，两种数都在同一句里）。用户原话「随意，要求中英文通用。鼠标悬停显示详细信息」。⚠️ 阅读速度那个除数仍然生效（在 `title` 里与菜单的分钟那一项上），`appearance.reading_speed` 写 0 时按默认 382 算，理由没变。⚠️ **晚批新增**：那一格显示的是哪一项由 `appearance.status_metric` 决定（`words` / `characters` / `lines` / `minutes`，默认 `words`），改它只有**一个入口**——右边那颗箭头弹出的小菜单（没有设置页控件，判据同 `sidebar_width`） |
 | 右·最右（**悬停才出现**） | 无字，一枚上下双箭头（`nota-unfold-more-symbolic`） | 点它 → 弹出「字数统计」菜单：`≤1 分钟` / `1 行` / `0 词` / `0 字符`（**四项各带此刻的数值**，选中的那项打勾）→ 挑一项 → `updateSettings({ appearance: { status_metric } })` | ✅ **2026-09-30 晚加**（图4、图5）。⚠️ 排在那一个数**右边**，与拼写那颗分列两侧。⚠️ 菜单是**往上弹**的（这一栏贴着窗口底边），锚是零高度的 `.status-menu-anchor`——与标签栏右键那个锚同一套做法，只有"往上"这一处不同，理由在 `styles/tabs-status.css` |
 | 右·最左（**悬停才出现**） | 无字，一枚 `A✓`（`nota-spellcheck-symbolic`） | 点它 → 弹出拼写菜单（`自动检测语言`（配了语言时改写成 `Languages: …`）/ `不使用拼写检查`，两项互斥）→ `updateSettings({ editor: { spellcheck } })` | ✅ **2026-09-30 晚加**（图2、图3）。⚠️ 它是**设置页那个开关的第二个入口**，两处读写的是同一格 `editor.spellcheck`，值一变 `ui/useSpellcheck.ts` 那条 effect 就把它拨到 WebKitGTK 上。⚠️ **设置没读回来时两项都灰**（不拿一个假设值去拨引擎）。⚠️ **这个小菜单里不放语言列表**（十几项塞不进这条小菜单），语言在设置页——但第一项的**措辞**会说出当下挂着的那几门。 |
 | 右·第一格 | 「强制专注」＋ 余额进度条，悬停提示三档 | `FocusState`（`nota:focus-state`，每秒一发） | ✅ 2026-09-26 加，**2026-09-30 之后它是条上唯一"不是统计"的东西**——用户点名「其余全删。**除了强制专注余额在需要时显示**」。⚠️ 仍然**没在跑就整个不画、不占位**；⚠️ **它排在统计那一格左边**（下栏从右往左是"数 / 专注"——"需要时才出现"的东西不该把恒显的那个数挤来挤去）。条宽按比例算并夹到 `[0,1]`，见 §2.11 |
 | `OVR` 小标（**覆写模式开着时才出现**） | 三个字母 `OVR`（`.status-ovr`），无按钮、不可点 | `commandState.overtype`（`ui/useStatusBar.ts` 把 `光标` 那一格透传进来） | ✅ **2026-10-16 加**（朋友清单第 12 条「INSERT 键无法使用」）：按 `Insert` 切覆写，开着时敲一个字会**顶掉右边那一个**（`editor/overtype.ts`）。⚠️ 状态栏这一格是"现在是不是覆写"的**唯一**可见处（那颗键没有菜单项）。⚠️ 开关住在插件 state 里、**不改文档**，所以它靠 `command-state.ts::签名` 被发现——`docs/09` §2.2 记着那一格漏掉的症状（开着但永不出示） |
-| 「拓展」那颗开关（**只在顶栏整条不画时才出现**） | 一枚 `folio-columns-symbolic` ＋ 悬停提示「显示 / 隐藏拓展栏」 | `插件栏`（`useStatusBar` 接第二入口）：`开: dockOpen` / `切换: setDockOpen(v => !v)` | ✅ **2026-10-16 加**：它原来只长在**顶栏最右**，而顶栏在 `hideMenuBar` 时**整条 `return null`**（§2.1）——不搬过来就等于"菜单栏一藏、拓展栏再也没法开"。⚠️ **三个入口同一个状态**（「视图 → 拓展栏」＋ 顶栏那颗 ＋ 这一颗）。⚠️ 判据是 `usingNativeMenu || !menuBarOpen`，与 `TopBar` 里那个布尔**逐字同一个**（见 `src/App.tsx` 那两行注释） |
-| **右·最右端那颗「×」**（2026-10-04，第 49 项） | 无字，一枚 `folio-close-symbolic`。`title` / `aria-label` 都是「收起状态栏」 | 点它 → `useStatusBar` 的 `onHide` → `设界面({ show_status_bar: false })`，而 `设界面` 就是 `App.tsx` 那个 `setChrome` ——**与菜单「视图 → 状态栏」写的是同一格** | ✅ **2026-10-04 加**（`docs/07` 第 49 项的口径：「每个可关的面板都有一颗就地的 ×，三条入口汇到同一个 setter」）。⚠️ **只关不开**（菜单那条才是切换）：那颗 × 不在屏幕上时若写 `!`，点它会**把栏打开**。⚠️ 它**不跟**悬停才出现的那两颗（`.status-aux`）：关掉这一栏是这一栏的正事。⚠️ **排在 `.status-right` 里面**（不是 `footer` 的第三个孩子），否则 `space-between` 会把字数那一格挤到中间。⚠️ **再打开只有菜单那条路**（这一栏没有"回来"的入口——不像菜单栏另配了 `Alt+M`，状态栏藏了不影响任何别的入口） |
+| 「拓展」那颗开关（**只在顶栏整条不画时才出现**） | 一枚 `nota-columns-symbolic` ＋ 悬停提示「显示 / 隐藏拓展栏」 | `插件栏`（`useStatusBar` 接第二入口）：`开: dockOpen` / `切换: setDockOpen(v => !v)` | ✅ **2026-10-16 加**：它原来只长在**顶栏最右**，而顶栏在 `hideMenuBar` 时**整条 `return null`**（§2.1）——不搬过来就等于"菜单栏一藏、拓展栏再也没法开"。⚠️ **三个入口同一个状态**（「视图 → 拓展栏」＋ 顶栏那颗 ＋ 这一颗）。⚠️ 判据是 `usingNativeMenu || !menuBarOpen`，与 `TopBar` 里那个布尔**逐字同一个**（见 `src/App.tsx` 那两行注释） |
+| **右·最右端那颗「×」**（2026-10-04，第 49 项） | 无字，一枚 `nota-close-symbolic`。`title` / `aria-label` 都是「收起状态栏」 | 点它 → `useStatusBar` 的 `onHide` → `设界面({ show_status_bar: false })`，而 `设界面` 就是 `App.tsx` 那个 `setChrome` ——**与菜单「视图 → 状态栏」写的是同一格** | ✅ **2026-10-04 加**（`docs/07` 第 49 项的口径：「每个可关的面板都有一颗就地的 ×，三条入口汇到同一个 setter」）。⚠️ **只关不开**（菜单那条才是切换）：那颗 × 不在屏幕上时若写 `!`，点它会**把栏打开**。⚠️ 它**不跟**悬停才出现的那两颗（`.status-aux`）：关掉这一栏是这一栏的正事。⚠️ **排在 `.status-right` 里面**（不是 `footer` 的第三个孩子），否则 `space-between` 会把字数那一格挤到中间。⚠️ **再打开只有菜单那条路**（这一栏没有"回来"的入口——不像菜单栏另配了 `Alt+M`，状态栏藏了不影响任何别的入口） |
 | 无文档时 | **照画那两枚开关 ＋ 右端那颗 ×**，右边只留专注那一格 | — | ⚠️ **不能再写「就绪」两个字**：那句话连同"左半格显示路径 / 未保存"整片删了（见下）。⚠️ **BUG-45 的教训仍然有效**：没文档时 **两枚开关 ＋ 专注余额都要画**，只把统计那一格省掉。⚠️ **2026-09-30 晚新增的三样（那一个数 ＋ 悬停才出现的两颗）一起省掉**——它们说的都是"**这份文档**有多少内容"，没有正文时没有一个可拨的对象。⚠️ 别顺手把拼写那颗留下：`editor.spellcheck` 本身是全局的，但在没文档的地方拨它没有任何可观察的结果，留在那儿只会让人以为它坏了。⚠️ **那颗 × 不省**：它说的是"这一栏画不画"，与有没有文档无关（同那两枚开关） |
 
 ⚠️ **删掉的那几格，和它们各自的新落点**：
@@ -1627,14 +1642,16 @@ WebKitGTK 在这台机器上用的是**浮层滚动条**（没有轨道、直接
 
 ### 2.9 图标（`ui/Icon.tsx` + `styles/icons.css`）—— 2026-09-24 起
 
-界面上的图形来自 **Folio 的 `actions/` 那 96 枚**，逐字节复制进
+界面上的动作图形来自 **Folio 的 `actions/` 那 96 枚**，逐字节复制进
 `src/assets/icons/`（来源/许可/为什么能搬，见 `THIRD-PARTY.md` §5）。
+Folio 与 Nota 同属一个作者；这些资产原先使用 `folio-*` 命名，2026-11-24
+起与 Nota 自绘图标统一为 `nota-*`，来源与许可记录保持不变。
 代码只有两个文件：`ui/Icon.tsx`（约 130 行，名字表 + 查表 + 缺图兜底）
 与 `styles/icons.css`（`.icon` 的遮罩画法）。
 
 | 方面 | 事实 |
 |---|---|
-| 用法 | `<Icon name="folio-format-text-bold-symbolic" />`，`size` 默认 16 |
+| 用法 | `<Icon name="nota-format-text-bold-symbolic" />`，`size` 默认 16 |
 | 名字 | `图标名` 类型 = `Icon.tsx` 里手写的一张 `as const` 元组。**用错名字过不了 `tsc`**（`import.meta.glob` 的键是 `string`，不手写这张表就没有类型保护） |
 | 缺图 | 启动时逐个查一遍，缺了 `console.error` 一次并画 `.icon-missing`（虚线框）——**看得见**，不是静默空白 |
 | 上色 | SVG 里 355 处写死的 `fill="#2e3436"`（GTK 深灰）**不参与渲染**：`.icon` 用 `background-color: currentColor` + `mask-image` 抠出来，所以图标**跟着 `color` 走**（hover / `data-on` / 明暗都跟着走） |
@@ -1651,16 +1668,17 @@ WebKitGTK 在这台机器上用的是**浮层滚动条**（没有轨道、直接
 📌 **2026-11-22**：底部浮动格式化工具栏不再写死胶囊圆角。容器使用
 `--format-bar-radius: var(--radius)`，段落选择器和工具栏按钮使用
 `var(--radius-sm)`，因此 Adwaita、Carbon、CDE 等风格都会得到各自配套的圆角。
-| **下栏那几枚**（2026-09-30）：`nota-sidebar-toggle-symbolic`（空心圆）/ `nota-sidebar-collapse-symbolic`（`‹`）/ `folio-insert-code-symbolic`（`</>`）／**悬停才出现的两枚**：`nota-spellcheck-symbolic`（`A✓`）/ `nota-unfold-more-symbolic`（上下双箭头） | ⚠️ **状态栏 2026-09-30 起从这一列搬到了左边那一列**——它现在**整条都是图形**（四枚按钮 ＋ 一个字数列）；三枚 `nota-*` 是**照 Typora 自己画的**（见下） |
+| **下栏那几枚**（2026-09-30）：`nota-sidebar-toggle-symbolic`（空心圆）/ `nota-sidebar-collapse-symbolic`（`‹`）/ `nota-insert-code-symbolic`（`</>`）／**悬停才出现的两枚**：`nota-spellcheck-symbolic`（`A✓`）/ `nota-unfold-more-symbolic`（上下双箭头） | ⚠️ **状态栏 2026-09-30 起从这一列搬到了左边那一列**——它现在**整条都是图形**（四枚按钮 ＋ 一个字数列）；三枚 `nota-*` 是**照 Typora 自己画的**（见下） |
 
 ⚠️ **H1/H2/H3 已经不再是文字**：Folio 那套里没有对应动作图标，所以 2026-10-25
 为 Nota 自绘了三枚 SVG。字母 H 与数字都由路径组成，切换界面主题或字体时字节形状不变。
 **汉字不能走这条路**——「引」「任」原先就是汉字字形，16px 下笔画糊成一团，
 2026-09-24 换成了自己画的两枚（`nota-quote` / `nota-task`，见下）。
 ⚠️ 工具栏当前这一排全部是图形；新增命令若暂时没有图标，`format-glyph` 只作短文字兜底。
-**哪些是搬来的、哪些是自画的，看前缀**（`folio-` / `nota-`）。
+**哪些是搬来的、哪些是自画的，看来源名单，不看前缀**：两类文件现在都叫
+`nota-*`。来源与许可记录看 `THIRD-PARTY.md` §5。
 
-⚠️ **只搬动作图标，不搬应用图标**：`folio-*.svg` 是 Folio 自己的脸，
+⚠️ **只搬动作图标，不搬应用图标**：Folio 的 `apps/` 应用图标没有复制进来。
 Nota 的脸是用户逆向出来的 `src-tauri/icons/nota.svg`。
 
 #### 设置对话框左栏那九枚（2026-09-24 并入，2026-09-25 换掉两枚）
@@ -1677,8 +1695,8 @@ Nota 的脸是用户逆向出来的 `src-tauri/icons/nota.svg`。
 
 | 页 | 原来 | 现在 | 为什么换 |
 |---|---|---|---|
-| Markdown | `folio-format-show-marks-symbolic`（段落符 `¶`） | `nota-markdown-symbolic`（框里的 **MD**） | `¶` 说的是"显示编辑标记"——那是**另一个设置项**，不是 Markdown 这一页在讲的事 |
-| 文档主题 | `folio-page-guides-symbolic`（页面 + 分页参考线） | `nota-doc-theme-symbolic`（框里的 **Aa**） | 分页参考线说的是"打印/页码"，与"正文的字体和配色"无关 |
+| Markdown | `nota-format-show-marks-symbolic`（段落符 `¶`） | `nota-markdown-symbolic`（框里的 **MD**） | `¶` 说的是"显示编辑标记"——那是**另一个设置项**，不是 Markdown 这一页在讲的事 |
+| 文档主题 | `nota-page-guides-symbolic`（页面 + 分页参考线） | `nota-doc-theme-symbolic`（框里的 **Aa**） | 分页参考线说的是"打印/页码"，与"正文的字体和配色"无关 |
 
 用户原话：「markdown 左侧的图标你可以画一个 MD，用一个框框框起来」「文档主题
 你也不要用这个啊」。教训是**图标画得再好看，指错了东西也没用**：挑法要能被
@@ -2250,7 +2268,7 @@ WebView 冷启动解析时间。界面与文档都选
 
 📌 **主题图标也是 CSS 变量**：`Icon` 输出 `data-icon="<逻辑名>"` 并拼成
 `--icon-<逻辑名>`，主题 CSS 只需声明
-`--icon-folio-close-symbolic: url("../任意相对路径/close.svg")`。
+`--icon-nota-close-symbolic: url("../任意相对路径/close.svg")`。
 资源路径相对主题 CSS 文件，允许在 `themes/ui/` 根内共享；后端
 `theme_assets.rs` 统一把图片与字体内联成 data URI。CDE 外置主题的自绘 16 格
 硬边图标放在 `src/styles/external-themes/cde/assets/icons/`，由主题自己的
@@ -2540,7 +2558,7 @@ Adwaita 的 headerbar 是 44px、Yaru 的是 40px。它现在**默认值仍在 `
   设了 `font-family: var(--font-doc)`，而 `--font-doc` 是**文档**的正文字体栈，
   里面第一个非空项就是衬线（Songti / 宋体那一类）。**界面里用它画字形本身就是错的**，
   哪怕只为了一个字母。
-- 现在那颗 `I` **是图标**（`folio-format-text-italic-symbolic`），规则整条删了，
+- 现在那颗 `I` **是图标**（`nota-format-text-italic-symbolic`），规则整条删了，
   原地留了一条 ⛔ 注释说明它为什么不能回来。
 
 `tools/doc-sync-check.sh` 的**第 ⑥ 项**就是查这个，两条路都堵：
@@ -2942,7 +2960,7 @@ React 那边组件照样渲染（拿临时 `<pre>` 试过，兄弟节点在、�
 | 看到的 | Nota 做的 |
 |---|---|
 | 小工具条里"链接 / 图片 / 列表 / 代码"是**图形**，不是字 | 工具栏那 9 枚换成图标（§2.9 那张表） |
-| 面板收起的叉是一枚**图标**，不是字符 `×` | 侧栏 / 插件栏 / 标签页 / 提示条 / 查找条五处的 × 全换成 `folio-close-symbolic` |
+| 面板收起的叉是一枚**图标**，不是字符 `×` | 侧栏 / 插件栏 / 标签页 / 提示条 / 查找条五处的 × 全换成 `nota-close-symbolic` |
 | 设置窗口左栏的节名**前面有一枚小图标** | **Nota 本来就有**（原先在 `ui/settings/primitives.tsx` 里手写；2026-09-24 并入应用那同一套，见 §2.9）——不是照着这几张截图加的，看截图时才发现两边都有 |
 
 **看清了但不跟的**：
@@ -2978,9 +2996,6 @@ React 那边组件照样渲染（拿临时 `<pre>` 试过，兄弟节点在、�
 - 出菜单子项时先尝试右侧；右侧放不下且左侧有空间就从左侧展开，动画起点随之翻到右上角。
 - 光标进入表格后，表格上方显示与表格同宽的结构快捷栏：调整行列数、当前列左 / 中 / 右对齐，删除按钮位于最右侧；
   表格内右键菜单增加「表格」子菜单，集中放置插入、移动、删除、复制与格式化命令。
-- Optional spreadsheet mode adds row and column headers, A1 references, a
-  formula bar, rectangular range selection and a fill handle. It edits only the
-  existing GFM table nodes; no private workbook or formula data is stored.
 - 软件更新下载显示百分比、已下载 / 总大小，并在完成后切换为安装阶段。
 - 自动配对采用保守上下文：单词内部 `_`、链接区域不补；`^` 与 `=` 只有在对应
   上标 / 高亮功能开启时才参与。
@@ -3348,26 +3363,6 @@ plugin 13 / frontendReady 1 / startupFile 1），**从未被调用过的有 4 �
 
 ---
 
-## 6A. Table extension controls
-
-Spreadsheet mode keeps the existing GFM table and adds a formula bar, range
-selection and extension context actions. A table-capable extension may publish
-temporary values: an unselected computed cell shows the value, while selecting
-the cell reveals and edits the Markdown source.
-
-When `[[setting_lock]]` owns `editor.spreadsheet_tables`, the Editor settings
-toggle stays visibly enabled but disabled. The note says it is managed by an
-installed extension. Disabling or uninstalling that extension restores the
-user's prior value.
-
-The right-click table section includes actions registered through
-`nota.table.register_action`. `nota.sheet-formulas` registers **Keep Values**,
-which replaces selected formulas in one undoable transaction.
-
-Row and column headers enter the same immediate range-selection path as pointer
-drags, and active ranges use the theme accent surface. Preferences creation uses
-the in-process fast path on Linux/macOS and a dedicated process directly on
-Windows.
 
 ## 7. ✅ 与 `07` / `10` 的四处不一致（**已全部结清，2026-09-22**）
 

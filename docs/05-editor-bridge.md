@@ -719,7 +719,7 @@ ctx.update(editorViewOptionsCtx, (prev) => ({
 `replaceCurrent` 在"光标没停在任何命中上"时返回 `false`，`App.tsx` 据此提示
 「光标没停在命中上，先按「下一个」」——**不是**静默什么都不做。
 
-⚠️ 查找条右边那颗 ×（关掉查找）2026-09-24 起是图标（`folio-close-symbolic`），
+⚠️ 查找条右边那颗 ×（关掉查找）2026-09-24 起是图标（`nota-close-symbolic`），
 不再是字符 `×`。**只换长相**：`aria-label` 原来就有（「关闭查找」），
 点击走的那条路一个字没动。图标那一套见 `docs/04` §2.9。
 
@@ -2539,29 +2539,24 @@ $ 你好 $
 覆盖为 `inclusive: false`，因此链接尾后的新字符默认不进入链接；编辑事务只摘
 link 存储标记，不会清空加粗等其他格式状态。
 
+自动配对提前插入 `)` 时，用户不需要再把同一颗 `)` 敲一遍。目标地址形成完整
+URL 后，输入规则等待 280ms 再提交；期间继续输入会取消上一轮等待。因此输入
+`[github](github.com` 会先在 `.co` 形成暂定地址、再在 `.com` 重新计时，最终得到
+完整链接，不会把最后的 `m` 留到链接外。继续输入会看到链接源码态，移到链接外
+后恢复显示态。判据 `tests/url-link.test.ts` 现为 **51** 条。
+
 「键盘体验优化」（`settings.editor.keyboard_experience`，默认关）开启后，
-光标进入链接内部或左右端点时，`editor/keyboard-experience.ts` 原地显示完整
-`[标签](地址)` 的原生内联 input。方向键在输入框里按每个源码字符逐个移动，
-Enter、失焦或在首尾继续越界时解析源码并写回普通 link mark。底层链接仍是一段
-普通文本 mark，没有被原子化，输入期间也不修改文档。源码宽度用隐藏尺子按实际
-像素测量；重挂载、聚焦与字体加载都会复测，避免错误测成 0 宽。图片在
-NodeSelection 或相邻空光标时由节点装饰显示已有的 Markdown 源码框。激活只通过
-decoration 显示，只有用户提交源码时才写回目标节点。开启时普通点击链接只把
-光标留在链接里，不再打开链接框；
+光标触及链接或单击链接文字时，`editor/link-source-reveal.ts` 把整段 link mark
+原位换成普通内联源码 `[标签](地址)`。它不是 input 覆盖层：标签、URL 和标点都是
+真实文档字符，方向键逐个字符移动，Delete、IME、Ctrl+A 和撤销都走原生选区。
+方括号与圆括号淡化，标签使用 `--link` 并加下划线，URL 使用正文色并加下划线；
+光标离开后解析回普通 link mark。开启时普通点击只进入源码编辑，不再打开链接框；
 `Ctrl`/`⌘` 单击仍交给系统浏览器。
 
-边界预览与源码编辑是两态：文档刚发生变化（包括敲下 `)` 把 Markdown 变成链接）
-时只进入预览，不抢光标；点击链接或明确按左右键后才创建真实源码输入框。因此
-最后这个 `)` 之后继续输入的文字始终留在链接外，不会因 DOM 映射落进链接或跑到
-链接前面。两个“闭括号已经存在／刚刚输入”的入口都必须把匹配式末尾那颗虚拟
-`)` 从事务起点里扣回去；漏掉这一格会让替换和选区整体左移一位，真窗口里表现为
-`github` 后继续输入却得到 `githuXb`。源码编辑层之外再加一道尾部输入校正，
-即使 WebKit 报来偏一位的 DOM 插入点，也按 ProseMirror 的 `link.to` 写事务。
-
-源码编辑层自身的颜色范围与普通链接一致：标签用 `--link`，URL 用正文色并加
-下划线，方括号和圆括号保持正文色。input 用透明字色覆盖在只读镜像上，输入法
-组字时临时显示原文。该层激活时正文自绘光标与 Vim 块光标都停绘，只保留 input
-的原生插入符，避免黑块或双光标。
+边界按源码字符顺序处理：从链接右侧 Left 先展开源码并停在最后一个 `)` 前，
+继续 Left 逐个经过 URL、`](`、标签和 `[`，越过开头后恢复显示态。单击链接会用
+指针坐标定位源码字符。自动配对提前插入 `)` 时，完整目标地址由 debounce 提交；
+之后继续输入的文字仍留在链接外。
 
 #### ② 口径（四条，都是取舍）
 
@@ -4127,19 +4122,21 @@ markdown 标记本身也会影响词数——`# 标题` 里 `标题` 算 1 词�
 
 ---
 
-## 8A. Table bridge
 
-`SpreadsheetTableOverlay.tsx` publishes the active table source, selection and
-active cell through `nota_table_snapshot_sync`. The host forwards that snapshot
-to `nota.table.on_snapshot` callbacks.
+## Markdown source-style preservation
 
-An extension can publish temporary values through `nota.table.render`; the
-`nota:table-render` event applies them as display-only cell attributes.
-`nota.table.replace_cells` emits `nota:table-write`; the frontend checks the
-document/table identity and dispatches `tableSetCells`, which changes every
-requested cell in one ProseMirror transaction and therefore one undo step.
+Editor creation resolves a `MarkdownSyntaxStyle` from the incoming document.
+The dominant explicit form wins for Setext/ATX headings, `-`/`*`/`+` bullets,
+and `.`/`)` ordered delimiters. If a document has not established a form, the
+Markdown settings provide the fallback. Inline review and source-mode switches
+therefore round-trip valid non-default syntax without silently normalizing it to
+the most common form.
 
-The document source remains the only persisted truth.
+The link source node is considered active only while the selection lies strictly
+inside its character range. Its two outer boundaries are document positions, so
+collapsing the source must not immediately reveal it again. This prevents the
+collapse/reveal transaction loop that can otherwise stall IME input at the right
+edge of a visible link source.
 
 When the Vim extension is enabled, embedded CodeMirror editors for fenced code,
 Mermaid source and block LaTeX use the same extension activation state. Each

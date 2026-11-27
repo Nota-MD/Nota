@@ -24,6 +24,7 @@ import type { changePreview, previewMode } from "./review";
 import type { WritingMode } from "./writing-modes";
 import type { VimInputConfig, VimInputHooks } from "./plugin-vim-types";
 import type { EditorSelectionRange } from "./selection-range";
+import type { MarkdownSyntaxStyle } from "./markdown-syntax-style";
 
 
 
@@ -73,6 +74,10 @@ export type EditorCommand =
   | "table"
   | "link"
   | "image"
+  | "imageSourceSet"
+  | "imageRemoveSource"
+  | "imageSyntaxSet"
+  | "imageZoomSet"
   | "clearFormat"
   | "tableRowAbove"
   | "tableRowBelow"
@@ -92,12 +97,6 @@ export type EditorCommand =
   | "tableCopy"
   | "tableFormat"
   | "tableRowHeaders"
-  | "tableSelectRange"
-  | "tableSelectRow"
-  | "tableSelectColumn"
-  | "tableSetCell"
-  | "tableSetCells"
-  | "tableFill"
   | "insertText"
 
 
@@ -174,6 +173,12 @@ export interface CommandPayload {
 
   src?: string;
 
+  oldSrc?: string;
+
+  syntax?: "markdown" | "html";
+
+  zoom?: number;
+
   alt?: string;
 
 
@@ -209,20 +214,7 @@ export interface CommandPayload {
 
 
   frontMatter?: string | null;
-  /** Zero-based table row used by spreadsheet-style table commands. */
-  tableRow?: number;
-  /** Zero-based table column used by spreadsheet-style table commands. */
-  tableColumn?: number;
-  /** Inclusive range end for table selection and fill commands. */
-  tableToRow?: number;
-  tableToColumn?: number;
-  /** Inclusive fill destination used by the spreadsheet fill handle. */
-  tableFillRow?: number;
-  tableFillColumn?: number;
-  /** Plain text written into the active table cell. */
-  tableText?: string;
   /** Multiple cells changed in one undoable transaction. */
-  tableCells?: readonly { row: number; column: number; text: string }[];
 }
 
 
@@ -428,6 +420,8 @@ export interface CreateOptions {
 
 
   physics?: boolean;
+  /** Syntax preferences used when the source document does not establish one. */
+  markdownSyntaxStyle?: MarkdownSyntaxStyle;
   /**
    * Recognize bare HTTP(S), www, email and explicit mailto addresses while
    * typing or when Enter starts the next block.

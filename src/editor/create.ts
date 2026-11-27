@@ -40,7 +40,7 @@ import { setVimInputConfig } from "./plugin-vim-input";
 
 import { runCommand } from "./command-table";
 import { normalizeInlineBlock } from "./mark-hint-source";
-import { rollActionToPosition } from "./scroll-into-view";
+import { scrollPositionIntoView } from "./scroll-into-view";
 
 
 import { removeViewMode, setViewMode2, type changePreview, type previewMode } from "./review";
@@ -142,6 +142,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
 
 
   const emoji = options.emoji ?? true;
+  const markdownSyntaxStyle = options.markdownSyntaxStyle;
 
 
   //
@@ -179,6 +180,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     punctuation,
     selfActionMoreCorrect,
     emoji,
+    markdownSyntaxStyle,
     onChange,
 
 
@@ -494,7 +496,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
         view.focus();
 
 
-        rollActionToPosition(view, pos + 1);
+        scrollPositionIntoView(view, pos + 1);
       }),
 
     runCommand: (name: EditorCommand, payload?: CommandPayload) => {

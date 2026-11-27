@@ -20,7 +20,6 @@ pub mod plugin;
 pub mod print;
 pub mod session;
 pub mod settings;
-pub mod table;
 pub mod table_width;
 pub mod theme;
 pub mod ui_style;

@@ -31,6 +31,15 @@ requirements are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 8. AI-assisted contributions are welcome, but the submitter must personally
    test the complete relevant behavior and accept responsibility for licensing.
 
+9. DOM-facing E2E requires both engines. Run `npm run test:e2e` and
+   `npm run test:webkit` for editor input, caret, selection, IME, clipboard,
+   drag/drop, contenteditable, and inline NodeView changes. Do not report a
+   Chromium-only pass as complete browser verification.
+10. Do not run browser E2E during iterative development. Defer Chromium and
+    WebKit E2E until immediately before a release, then run the required focused
+    `NOTA_E2E_ONLY` subsets followed by the release gate. Use unit, static,
+    typecheck and build checks during implementation.
+
 ## 1. Project
 
 Nota is a local-first Markdown editor built with:
@@ -254,6 +263,7 @@ commands/watch.rs
 commands/window_registry.rs
 debug-log.tsx
 editor/block-keys.ts
+editor/caret-commander.ts
 editor/create-types.ts
 editor/document-audit.ts
 editor/github-alert-edit.ts
@@ -262,6 +272,7 @@ editor/image-kind.ts
 editor/ime-guard.ts
 editor/inline-escape.ts
 editor/math-current.ts
+editor/math-view-dom.ts
 editor/math-inline-focus.ts
 editor/plugin-vim-engine.d.ts
 editor/plugin-vim-input.ts
@@ -308,7 +319,6 @@ ui/FocusAlarmWindow.tsx
 ui/FocusMeter.tsx
 ui/PanelDiffBlock.tsx
 ui/ReviewBar.tsx
-ui/SpreadsheetTableOverlay.tsx
 ui/WindowIdOverlay.tsx
 ui/WindowPickerDialog.tsx
 ui/ZoomHud.tsx
@@ -347,5 +357,4 @@ ui/useWindowRegistry.ts
 ui/useWorkspaceDelete.ts
 ui/window-picker.ts
 ui/zoom-hud-state.ts
-tests/spreadsheet-table.test.ts
 ```

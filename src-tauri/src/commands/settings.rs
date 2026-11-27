@@ -25,7 +25,7 @@ pub fn nota_settings_problem(state: State<'_, AppState>) -> Option<String> {
     state.settings_problem.clone()
 }
 
-#[tauri::command]
+#[tauri::command(rename = "nota_app_lang")]
 pub fn nota_app_language(state: State<'_, AppState>) -> AppLang {
     let setting = state
         .settings
@@ -103,11 +103,7 @@ pub(crate) fn save_settings(
     state: &AppState,
     next: Settings,
 ) -> Result<()> {
-    let mut next = next;
-    let locked = state.plugins.lock().unwrap().locked_setting_values();
-    if let Some(value) = locked.get("editor.spreadsheet_tables") {
-        next.editor.spreadsheet_tables = *value;
-    }
+    let next = next;
     let settings_snapshot = next.clone();
     let strict = next.strict_markdown;
     let debug_mode = next.general.debug_mode;
@@ -118,7 +114,7 @@ pub(crate) fn save_settings(
     let bridge_config_changed;
 
     {
-        let current = state.settings.lock().unwrap();
+        let mut current = state.settings.lock().unwrap();
         let previous = current.clone();
         extensions_changed = previous.general.extensions_enabled != extensions_enabled;
         lua_hot_reload_changed =
@@ -132,7 +128,9 @@ pub(crate) fn save_settings(
         let bridge_port = next.general.dev_bridge_port;
         let bridge_whitelist = next.general.dev_bridge_whitelist.clone();
 
+        *current = next.clone();
         if let Err(e) = current.save() {
+            *current = previous;
             return Err(e);
         }
         drop(current);
@@ -149,9 +147,15 @@ pub(crate) fn save_settings(
     }
 
     crate::log::set_debug_mode(debug_mode);
+    if let Err(error) = crate::webview_security::configure(
+        app,
+        debug_mode,
+        settings_snapshot.general.webview_default_shortcuts,
+    ) {
+        crate::debug_log!("[nota] WebView security update failed: {error}");
+    }
 
     state.documents.lock().unwrap().set_strict_markdown(strict);
-
     if extensions_changed {
         state
             .plugins

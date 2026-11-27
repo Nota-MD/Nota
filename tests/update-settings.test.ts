@@ -1,4 +1,4 @@
-/** 更新设置页与可交互通知的契约。 */
+/** Update settings and interactive notification contracts. */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -26,7 +26,7 @@ function read(...paragraph2: string[]): string {
   return readFileSync(join(...paragraph2), "utf8");
 }
 
-console.log("\n【更新设置与通知】");
+console.log("\n[Update settings and notifications]");
 
 testCase("update settings are persisted", () => {
   const rust = read("src-tauri", "src", "settings", "updates.rs");
@@ -34,66 +34,82 @@ testCase("update settings are persisted", () => {
   const dialog = read("src", "ui", "settings", "SettingsDialog.tsx");
   const general = read("src", "ui", "settings", "panes", "GeneralPane.tsx");
   const windowHook = read("src", "ui", "useSettingsWindow.ts");
-  assertValue(rust.includes("check_on_startup"), "Rust 缺少启动检查字段");
-  assertValue(rust.includes("notify_when_available"), "Rust 缺少更新通知字段");
-  assertValue(rust.includes("notification_position"), "Rust 缺少通知位置字段");
-  assertValue(types.includes("export interface UpdateSettings"), "前端缺少更新设置类型");
-  assertValue(!dialog.includes('| "updates"'), "设置左栏仍保留独立更新页");
-  assertValue(!dialog.includes("<UpdatePane"), "独立更新页仍在接线");
-  assertValue(general.includes('title={t("Updates")}'), "通用页缺少更新设置组");
+  const command = read("src-tauri", "src", "commands", "settings.rs");
+  assertValue(rust.includes("check_on_startup"), "Rust lacks the startup-check field");
+  assertValue(rust.includes("notify_when_available"), "Rust lacks the update-notification field");
+  assertValue(rust.includes("notification_position"), "Rust lacks the notification-position field");
+  assertValue(types.includes("export interface UpdateSettings"), "the frontend lacks update-settings types");
+  assertValue(!dialog.includes('| "updates"'), "the settings sidebar still has a standalone Updates page");
+  assertValue(!dialog.includes("<UpdatePane"), "the standalone Updates page is still wired");
+  assertValue(general.includes('title={t("Updates")}'), "the General page lacks the updates group");
   assertValue(
     general.includes("<SoftwareUpdatePane autoCheck={false} />"),
-    "通用页缺少手动更新操作",
+    "the General page lacks the manual update action",
   );
-  assertValue(windowHook.includes('setInitialSection("general")'), "更新通知没有打开通用页");
-  assertValue(!windowHook.includes('setInitialSection("updates")'), "仍会打开旧更新页");
+  assertValue(windowHook.includes('setInitialSection("general")'), "update notifications do not open General");
+  assertValue(!windowHook.includes('setInitialSection("updates")'), "update notifications still open the old page");
+  assertValue(
+    command.includes("*current = next.clone();") &&
+      command.indexOf("*current = next.clone();") < command.indexOf("current.save()"),
+    "saving settings does not publish the new settings object to shared state",
+  );
 });
 
 testCase("notification toggle depends on startup checks", () => {
   const general = read("src", "ui", "settings", "panes", "GeneralPane.tsx");
   assertValue(
     general.includes("disabled={!settings.updates.check_on_startup}"),
-    "通知开关没有依赖启动检查",
+    "the notification switch is not dependent on startup checks",
   );
-  assertValue(!general.includes('title={t("License")}'), "通用页仍重复许可证组");
+  assertValue(!general.includes('title={t("License")}'), "the General page still duplicates the license group");
 });
 
 testCase("notifications support position and actions", () => {
   const general = read("src", "ui", "settings", "panes", "GeneralPane.tsx");
   const toasts = read("src", "ui", "Toasts.tsx");
   const css = read("src", "styles", "toast.css");
-  assertValue(general.includes('label={t("Notification position")}'), "通知位置没有落在通用页");
-  assertValue(toasts.includes("data-position"), "通知容器没有位置属性");
-  assertValue(toasts.includes("ToastAction"), "通知没有操作类型");
-  assertValue(toasts.includes("toast-action"), "通知没有操作按钮");
-  assertValue(css.includes('[data-position="top-center"]'), "缺少顶部通知样式");
+  assertValue(general.includes('label={t("Notification position")}'), "notification position is missing from General");
+  assertValue(toasts.includes("data-position"), "notification container has no position attribute");
+  assertValue(toasts.includes("ToastAction"), "notifications have no action type");
+  assertValue(toasts.includes("toast-action"), "notifications have no action button");
+  assertValue(css.includes('[data-position="top-center"]'), "top-centered notification styles are missing");
 });
 
 testCase("startup checks run once after settings load", () => {
   const hook = read("src", "ui", "useUpdateNotifications.ts");
-  assertValue(hook.includes("started.current"), "没有防重复检查");
-  assertValue(hook.includes("check_on_startup"), "没有读取启动检查开关");
-  assertValue(hook.includes("notify_when_available"), "没有读取通知开关");
+  assertValue(hook.includes("started.current"), "duplicate startup checks are not prevented");
+  assertValue(hook.includes("check_on_startup"), "the startup-check switch is not read");
+  assertValue(hook.includes("notify_when_available"), "the notification switch is not read");
 });
 
-testCase("菜单栏默认 Nota 自绘，外观设置可切系统原生", () => {
+testCase("app language command matches the frontend bridge", () => {
+  const command = read("src-tauri", "src", "commands", "settings.rs");
+  const bridge = read("src", "bridge", "ipc.ts");
+  assertValue(bridge.includes('invoke<AppLang>("nota_app_lang")'), "the frontend language command changed");
+  assertValue(
+    command.includes('#[tauri::command(rename = "nota_app_lang")]'),
+    "the backend language command does not match the frontend command",
+  );
+});
+
+testCase("the menu bar defaults to Nota rendering and can use the native menu", () => {
   const rust = read("src-tauri", "src", "settings", "appearance.rs");
   const types = read("src", "bridge", "types-settings.ts");
   const pane = read("src", "ui", "settings", "panes", "AppearancePane.tsx");
   const hooks = read("src", "ui", "useMenus.ts");
-  assertValue(rust.includes("MenuBarRenderer"), "Rust 缺少菜单栏渲染枚举");
-  assertValue(rust.includes("menu_renderer: MenuBarRenderer::Nota"), "默认不是 Nota 自绘");
-  assertValue(types.includes('export type MenuBarRenderer = "nota" | "system"'), "前端类型不对");
-  assertValue(pane.includes('label={t("Menu bar rendering")}'), "外观页没有菜单样式选项");
-  assertValue(pane.includes("<Select") && pane.includes('{ value: "system", label: t("System native") }'), "菜单样式必须使用下拉框");
-  assertValue(pane.includes('label: t("Nota (self-drawn)")'), "默认选项没有说明为 Nota 自绘");
-  assertValue(hooks.includes('menuRenderer === "system"'), "菜单钩子没有尊重渲染设置");
-  assertValue(hooks.includes("nativeMenuSignature"), "原生菜单没有稳定签名，可能反复重建闪烁");
-  assertValue(hooks.includes("appliedNativeMenu"), "原生菜单没有跳过重复应用");
-  assertValue(hooks.includes("window.setTimeout"), "原生菜单状态变化没有合并到单帧更新");
+  assertValue(rust.includes("MenuBarRenderer"), "Rust lacks the menu renderer enum");
+  assertValue(rust.includes("menu_renderer: MenuBarRenderer::Nota"), "the default is not Nota rendering");
+  assertValue(types.includes('export type MenuBarRenderer = "nota" | "system"'), "frontend renderer type is wrong");
+  assertValue(pane.includes('label={t("Menu bar rendering")}'), "Appearance lacks the menu rendering option");
+  assertValue(pane.includes("<Select") && pane.includes('{ value: "system", label: t("System native") }'), "menu rendering must use a select");
+  assertValue(pane.includes('label: t("Nota (self-drawn)")'), "the default option does not identify Nota rendering");
+  assertValue(hooks.includes('menuRenderer === "system"'), "the menu hook ignores the renderer setting");
+  assertValue(hooks.includes("nativeMenuSignature"), "the native menu has no stable signature and can flicker");
+  assertValue(hooks.includes("appliedNativeMenu"), "the native menu does not skip duplicate applications");
+  assertValue(hooks.includes("window.setTimeout"), "native menu changes are not coalesced into one frame");
 });
 
-testCase("最大化或全屏时按设置强制使用 Nota 菜单", () => {
+testCase("maximized and fullscreen windows can force the Nota menu by setting", () => {
   const rust = read("src-tauri", "src", "settings", "appearance.rs");
   const types = read("src", "bridge", "types-settings.ts");
   const pane = read("src", "ui", "settings", "panes", "AppearancePane.tsx");
@@ -103,122 +119,123 @@ testCase("最大化或全屏时按设置强制使用 Nota 菜单", () => {
   const appCss = read("src", "styles", "app.css");
   assertValue(
     rust.includes("force_nota_menu_when_expanded: true"),
-    "Rust 默认没有开启最大化/全屏菜单兜底",
+    "Rust does not enable the expanded-window menu fallback by default",
   );
   assertValue(
     types.includes("force_nota_menu_when_expanded: boolean"),
-    "前端设置类型缺少最大化/全屏菜单兜底",
+    "frontend settings lack the expanded-window menu fallback",
   );
   assertValue(
     pane.includes('label={t("Force Nota menu when maximized or full screen")}'),
-    "外观页缺少最大化/全屏菜单兜底开关",
+    "Appearance lacks the expanded-window menu fallback switch",
   );
-  assertValue(immersive.includes("isMaximized()"), "没有读取窗口最大化状态");
-  assertValue(hooks.includes("effectiveMenuRenderer"), "没有统一的菜单渲染覆盖判据");
-  assertValue(hooks.includes("zenChromeActive"), "缺少强制 Nota 菜单时跳过 zen 的判据");
+  assertValue(immersive.includes("isMaximized()"), "window maximized state is not read");
+  assertValue(hooks.includes("effectiveMenuRenderer"), "there is no shared menu-renderer override");
+  assertValue(hooks.includes("zenChromeActive"), "forced Nota menus do not bypass zen chrome");
   assertValue(
     app.includes("maximized || fullscreen") || app.includes("expandedWindow"),
-    "最大化/全屏没有接到菜单渲染器",
+    "maximized or fullscreen state is not connected to the renderer",
   );
-  assertValue(app.includes("zenChromeActive"), "全屏强制 Nota 菜单没有接到 zen 判据");
+  assertValue(app.includes("zenChromeActive"), "forced Nota menus are not connected to the zen predicate");
   assertValue(
     appCss.includes(".app[data-zen=\"true\"] .zen-top:hover .toolbar"),
-    "全屏时鼠标移到窗口顶端不会唤回自绘顶栏",
+    "reaching the top edge does not reveal the custom toolbar in fullscreen",
   );
 });
 
-testCase("设置界面支持铺满、内嵌和独立窗口", () => {
+testCase("Settings supports full-window, embedded and standalone presentation", () => {
   const rust = read("src-tauri", "src", "settings", "appearance.rs");
   const types = read("src", "bridge", "types-settings.ts");
   const pane = read("src", "ui", "settings", "panes", "AppearancePane.tsx");
   const dialog = read("src", "ui", "settings", "SettingsDialog.tsx");
   const css = read("src", "styles", "settings.css");
   const windowCommand = read("src-tauri", "src", "commands", "window.rs");
-  assertValue(rust.includes("SettingsWindowStyle"), "Rust 缺少设置窗口样式枚举");
+  assertValue(rust.includes("SettingsWindowStyle"), "Rust lacks the settings presentation enum");
   assertValue(
     rust.includes("settings_window_style: SettingsWindowStyle::Embedded"),
-    "设置窗口默认不是内嵌卡片",
+    "Settings does not default to the embedded card",
   );
   assertValue(
     types.includes('export type SettingsWindowStyle = "full" | "embedded" | "external"'),
-    "前端缺少三种设置窗口样式",
+    "frontend settings lack all three presentations",
   );
   for (const label of ["Full window", "Embedded card", "Separate window"]) {
-    assertValue(pane.includes(`t("${label}")`), `外观页缺少 ${label}`);
+    assertValue(pane.includes(`t("${label}")`), `Appearance lacks ${label}`);
   }
-  assertValue(dialog.includes("standalone"), "设置框没有独立窗口模式");
-  assertValue(css.includes('.settings-shell[data-settings-window-style="full"]'), "缺少铺满样式");
-  assertValue(windowCommand.includes("nota_window_open_settings"), "缺少独立设置窗口命令");
+  assertValue(dialog.includes("standalone"), "Settings has no standalone mode");
+  assertValue(css.includes('.settings-shell[data-settings-window-style="full"]'), "full-window styles are missing");
+  assertValue(windowCommand.includes("nota_window_open_settings"), "the standalone Settings command is missing");
   assertValue(
     windowCommand.includes("window_host::launch(WindowRole::Settings"),
-    "独立设置窗口没有走统一窗口宿主",
+    "standalone Settings bypasses the shared window host",
   );
   assertValue(
     !windowCommand.includes("create_settings_window"),
-    "Windows 仍在主进程内创建辅助设置 WebView",
+    "Windows still creates the settings WebView in the main process",
   );
-  assertValue(windowCommand.includes("nota_window_open_about"), "关于窗口没有复用呈现方式");
-  assertValue(windowCommand.includes("nota_window_prepare_about"), "关于窗口没有预热");
+  assertValue(windowCommand.includes("nota_window_open_about"), "About does not reuse the presentation mode");
+  assertValue(windowCommand.includes("nota_window_prepare_about"), "About has no prewarm path");
   assertValue(
     read("src-tauri", "src", "window_host.rs").includes(
       'Self::Settings => "settings.html"',
     ),
-    "统一窗口宿主没有设置页面入口",
+    "the shared window host has no Settings page entry",
   );
   assertValue(
     read("src-tauri", "src", "lib.rs").includes('window.label() == "about"'),
-    "关闭关于窗口时没有改为隐藏复用",
+    "closing About still destroys instead of hiding for reuse",
   );
   assertValue(
     dialog.includes("{!standalone && <DialogClose"),
-    "独立设置窗口仍显示重复的内嵌关闭按钮",
+    "standalone Settings still shows a duplicate inline close button",
   );
   assertValue(
     read("src", "ui", "AboutDialog.tsx").includes("{!standalone && ("),
-    "独立关于窗口仍显示重复的内嵌关闭按钮",
+    "standalone About still shows a duplicate inline close button",
   );
   assertValue(
     read("src", "ui", "settings", "panes", "AppearancePane.tsx").includes(
       "Changes take effect the next time Preferences opens.",
     ),
-    "设置窗口说明没有写明下次打开生效",
+    "the settings presentation note does not say it applies next time",
   );
 });
 
-testCase("源码模式强制使用等宽字体", () => {
+testCase("source mode forces a monospace font", () => {
   const css = read("src", "styles", "editor.css");
   const source = read("src", "editor", "source.ts");
   assertValue(
     /\.editor-pane-source \.editor-mount \.cm-scroller[\s\S]*?font-family:\s*var\(--font-mono\)\s*!important/s.test(
       css,
     ),
-    "源码模式仍可能继承文档主题的衬线字体",
+    "source mode can still inherit a serif document font",
   );
-  assertValue(source.includes("EditorView.lineWrapping"), "源码模式仍会产生横向滚动框");
+  assertValue(source.includes("EditorView.lineWrapping"), "source mode still produces a horizontal scroller");
   assertValue(
     /\.editor-pane-source \.editor-mount \.cm-scroller\s*\{[^}]*overflow-x:\s*hidden\s*!important/s.test(
       css,
     ),
-    "源码模式没有隐藏横向滚动条",
+    "source mode does not hide the horizontal scrollbar",
   );
 });
 
-testCase("预设导出器参数可编辑且模板选择器为自绘", () => {
+testCase("preset exporter arguments are editable and the template picker is custom", () => {
   const pane = read("src", "ui", "settings", "panes", "ExportPane.tsx");
   const rust = read("src-tauri", "src", "settings", "export.rs");
-  assertValue(rust.includes("pub base_args: String"), "Rust 自定义导出器缺少可编辑基础参数");
-  assertValue(pane.includes("currentCustom.base_args"), "预设导出器参数仍然不可编辑");
-  assertValue(!pane.includes("<select"), "从模板添加仍使用原生菜单");
-  assertValue(pane.includes("<Select"), "从模板添加没有使用自绘选择器");
+  assertValue(rust.includes("pub base_args: String"), "custom exporters lack editable base arguments");
+  assertValue(pane.includes("currentCustom.base_args"), "preset exporter arguments are not editable");
+  assertValue(!pane.includes("<select"), "adding from a template still uses a native select");
+  assertValue(pane.includes("<Select"), "adding from a template does not use the custom select");
+  const colorPicker = read("src", "ui", "settings", "ColorPicker.tsx");
+  const controls = read("src", "styles", "settings-controls.css");
   assertValue(
-    /\.stg-color-hex\s*\{[^}]*color:\s*var\(--fg\)/s.test(
-      read("src", "styles", "color-picker.css"),
-    ),
-    "主题色十六进制值仍使用弱化色，而不是设置正文色",
+    colorPicker.includes('className="stg-input"') &&
+      /\.stg-input\s*\{[^}]*color:\s*var\(--fg\)/s.test(controls),
+    "accent hex values do not use the settings foreground color",
   );
 });
 
-testCase("Adwaita 的控件、开关和浮层尺寸对齐设计稿", () => {
+testCase("Adwaita control, switch and surface sizes match the design", () => {
   const shape = read("src", "styles", "theme", "shape.css");
   const color = read("src", "styles", "theme", "color.css");
   for (const token of [
@@ -229,31 +246,31 @@ testCase("Adwaita 的控件、开关和浮层尺寸对齐设计稿", () => {
     "--radius-lg: 12px",
     "--radius-sm: 6px",
   ]) {
-    assertValue(shape.includes(token), `Adwaita 设计稿数值缺失：${token}`);
+    assertValue(shape.includes(token), `Adwaita design token is missing: ${token}`);
   }
-  assertValue(color.includes("--accent: #1c71d8"), "Adwaita 浅色强调色仍不是 #1c71d8");
-  assertValue(color.includes("--sidebar-surface: #28282c"), "Adwaita 深色侧栏表面不对");
-  assertValue(color.includes("--settings-window-bg: #242424"), "Adwaita 深色设置窗口底色不对");
+  assertValue(color.includes("--accent: #1c71d8"), "Adwaita light accent is not #1c71d8");
+  assertValue(color.includes("--sidebar-surface: #28282c"), "Adwaita dark sidebar surface is wrong");
+  assertValue(color.includes("--settings-window-bg: #242424"), "Adwaita dark Settings background is wrong");
 });
 
-testCase("Yaru 深色与系统窗口统一使用同一支橙色", () => {
+testCase("Yaru dark and system windows share one orange accent", () => {
   const color = read("src", "styles", "theme", "color.css");
   const controls = read("src", "styles", "settings-controls.css");
   const yaruDark = color.slice(
     color.indexOf('[data-ui-style="yaru"][data-ui-mode="dark"]'),
-    color.indexOf("/* ⚠️ 这里原来还有一档 **Yaru Blue**"),
+    color.length,
   );
-  assertValue(yaruDark.includes("--accent: #e95420"), "Yaru 深色强调色不是系统橙");
-  assertValue(yaruDark.includes("--radio-on: #e95420"), "Yaru 深色单选仍使用另一支橙");
+  assertValue(yaruDark.includes("--accent: #e95420"), "Yaru dark accent is not the system orange");
+  assertValue(yaruDark.includes("--radio-on: #e95420"), "Yaru dark radios use another orange");
   assertValue(
     controls.includes('.stg-radio-item input[type="radio"]:checked') &&
       controls.includes("radial-gradient"),
-    "单选仍由 WebKitGTK 原生控件绘制，内外圈可能分叉",
+    "radio controls still use WebKitGTK rendering and can split their rings",
   );
 });
 
 if (fail > 0) {
-  console.error(`\n${fail} 项失败`);
+  console.error(`\n${fail} failed`);
   process.exitCode = 1;
 } else {
   console.log(`\n${pass} passed, 0 failed`);

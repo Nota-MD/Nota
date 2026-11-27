@@ -30,11 +30,11 @@ pub fn parse_2(return_large: &str) -> ParsedReview {
     let mut i = 0;
 
     while i < line.len() {
-        if line[i].trim() == FENCE_START {
+        if let Some(fence) = opening_fence(&line[i]) {
             let mut delete = Vec::new();
             let mut add_2 = Vec::new();
             i += 1;
-            while i < line.len() && line[i].trim() != FENCE_END {
+            while i < line.len() && !is_closing_fence(&line[i], fence) {
                 match match_table_record(&line[i], '-') {
                     Some(content_2) => delete.push(content_2),
                     None => match match_table_record(&line[i], '+') {
@@ -69,6 +69,39 @@ pub fn parse_2(return_large: &str) -> ParsedReview {
     }
     result_3.body_2 = body_2.join("\n");
     result_3
+}
+
+#[derive(Clone, Copy)]
+struct Fence {
+    marker: char,
+    length: usize,
+}
+
+fn opening_fence(line: &str) -> Option<Fence> {
+    let line = line.trim();
+    let marker = line.chars().next()?;
+    if marker != '`' && marker != '~' {
+        return None;
+    }
+    let length = line.chars().take_while(|character| *character == marker).count();
+    if length < 3 {
+        return None;
+    }
+    let info = line[length..].trim();
+    if info.eq_ignore_ascii_case("nota-diff") {
+        Some(Fence { marker, length })
+    } else {
+        None
+    }
+}
+
+fn is_closing_fence(line: &str, fence: Fence) -> bool {
+    let line = line.trim();
+    let length = line
+        .chars()
+        .take_while(|character| *character == fence.marker)
+        .count();
+    length >= fence.length && line[length..].trim().is_empty()
 }
 
 pub fn app_2(document_2: &str, change: &[RemovedLines]) -> Result<String, String> {
@@ -426,6 +459,31 @@ mod tests {
         let r = parse_success("\u{4e0d}\u{7528}\u{6539}\u{3002}\n\n```nota-diff\n```\n");
         assert_eq!(r.body_2, "\u{4e0d}\u{7528}\u{6539}\u{3002}");
         assert!(r.change.is_empty());
+    }
+
+    #[test]
+    fn longer_and_tilde_fences_protect_markdown_code_blocks() {
+        let long = parse_success(
+            "````nota-diff\n- ```c\n+ ```cpp\n````\n",
+        );
+        assert_eq!(long.body_2, "");
+        assert_eq!(long.broken_line, 0);
+        assert_eq!(long.change.len(), 1);
+        assert_eq!(long.change[0].delete, vec!["```c"]);
+        assert_eq!(long.change[0].add_2, vec!["```cpp"]);
+        assert_eq!(
+            app_2("```c\n", &long.change).expect("long fence should apply"),
+            "```cpp\n"
+        );
+
+        let tilde = parse_success(
+            "~~~nota-diff\n- old\n+ new\n~~~\n",
+        );
+        assert_eq!(tilde.change.len(), 1);
+        assert_eq!(
+            app_2("old\n", &tilde.change).expect("tilde fence should apply"),
+            "new\n"
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
 
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { api, type Settings } from "@/bridge/ipc";
 import { t } from "@/i18n";
@@ -22,12 +22,20 @@ export function useSettingsWindow({
 }) {
   const [open, setOpen] = useState(false);
   const [initialSection, setInitialSection] = useState<SectionId | null>(null);
+  const openingExternal = useRef<Promise<void> | null>(null);
   const style = settings?.appearance.settings_window_style ?? "embedded";
 
   const openExternal = useCallback(() => {
-    void api.window.openSettings().catch((error) => {
-      toast(t("Could not open the Preferences window: {0}", String(error)), "error");
-    });
+    if (openingExternal.current) return;
+    const request = api.window
+      .openSettings()
+      .catch((error) => {
+        toast(t("Could not open the Preferences window: {0}", String(error)), "error");
+      })
+      .finally(() => {
+        if (openingExternal.current === request) openingExternal.current = null;
+      });
+    openingExternal.current = request;
   }, [toast]);
 
   const openUpdateSettings = useCallback(() => {

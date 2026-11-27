@@ -103,7 +103,6 @@ impl PluginHost {
         });
         self.plugins
             .sort_by(|a, b| a.manifest.meta.id.cmp(&b.manifest.meta.id));
-        self.apply_setting_locks()?;
         Ok(())
     }
 
@@ -117,7 +116,6 @@ impl PluginHost {
             self.receive_probe(id);
             self.installed.mark_removed(id)?;
             self.plugins.remove(i);
-            self.apply_setting_locks()?;
             return Ok(());
         }
         self.plugins[i].unload();
@@ -126,9 +124,7 @@ impl PluginHost {
         std::fs::remove_dir_all(&dir)
             .map_err(|e| NotaError::other(format!("Could not delete `{}`: {e}", dir.display())))?;
         self.plugins.remove(i);
-        self.restore_setting_backups_for(id)?;
         self.installed.forget_drop(id)?;
-        self.apply_setting_locks()?;
         Ok(())
     }
 

@@ -151,9 +151,9 @@ export interface PressButton {
 
 
 const inlineGroup: PressButton[] = [
-  { cmd: "bold", menu: "fmt.bold", label: "B", icon: "folio-format-text-bold-symbolic", on: "bold" },
-  { cmd: "italic", menu: "fmt.italic", label: "I", icon: "folio-format-text-italic-symbolic", on: "italic" },
-  { cmd: "strike", menu: "fmt.strike", label: "S", icon: "folio-format-text-strikethrough-symbolic", on: "strike" },
+  { cmd: "bold", menu: "fmt.bold", label: "B", icon: "nota-format-text-bold-symbolic", on: "bold" },
+  { cmd: "italic", menu: "fmt.italic", label: "I", icon: "nota-format-text-italic-symbolic", on: "italic" },
+  { cmd: "strike", menu: "fmt.strike", label: "S", icon: "nota-format-text-strikethrough-symbolic", on: "strike" },
   {
     cmd: "inlineCode",
     menu: "fmt.code",
@@ -164,16 +164,16 @@ const inlineGroup: PressButton[] = [
 
 
 
-  { cmd: "highlight", menu: "fmt.highlight", label: "==", icon: "folio-marker-symbolic", on: "highlight" },
-  { cmd: "superscript", menu: "fmt.superscript", label: "x²", icon: "folio-format-text-superscript-symbolic", on: "superscript" },
-  { cmd: "subscript", menu: "fmt.subscript", label: "x₂", icon: "folio-format-text-subscript-symbolic", on: "subscript" },
-  { cmd: "underline", menu: "fmt.underline", label: "U", icon: "folio-format-text-underline-symbolic", on: "underline" },
+  { cmd: "highlight", menu: "fmt.highlight", label: "==", icon: "nota-marker-symbolic", on: "highlight" },
+  { cmd: "superscript", menu: "fmt.superscript", label: "x²", icon: "nota-format-text-superscript-symbolic", on: "superscript" },
+  { cmd: "subscript", menu: "fmt.subscript", label: "x₂", icon: "nota-format-text-subscript-symbolic", on: "subscript" },
+  { cmd: "underline", menu: "fmt.underline", label: "U", icon: "nota-format-text-underline-symbolic", on: "underline" },
 ];
 
 
 const linkGroup: PressButton[] = [
-  { cmd: "link", menu: "fmt.link", label: "Link", icon: "folio-insert-link-symbolic" },
-  { cmd: "image", menu: "fmt.image", label: "Image", icon: "folio-insert-image-symbolic" },
+  { cmd: "link", menu: "fmt.link", label: "Link", icon: "nota-insert-link-symbolic" },
+  { cmd: "image", menu: "fmt.image", label: "Image", icon: "nota-insert-image-symbolic" },
 ];
 
 
@@ -193,8 +193,8 @@ const blockGroup: PressButton[] = [
   { cmd: "h5", menu: "para.h5", label: "H5", block: "h5" },
   { cmd: "h6", menu: "para.h6", label: "H6", block: "h6" },
   { cmd: "quote", menu: "para.quote", label: "Quote", icon: "nota-quote-symbolic", block: "quote" },
-  { cmd: "ul", menu: "para.ul", label: "•", icon: "folio-view-list-bullet-symbolic", block: "ul" },
-  { cmd: "ol", menu: "para.ol", label: "1.", icon: "folio-view-list-ordered-symbolic", block: "ol" },
+  { cmd: "ul", menu: "para.ul", label: "•", icon: "nota-view-list-bullet-symbolic", block: "ul" },
+  { cmd: "ol", menu: "para.ol", label: "1.", icon: "nota-view-list-ordered-symbolic", block: "ol" },
   { cmd: "task", menu: "para.task", label: "Task", icon: "nota-task-symbolic", block: "task" },
   {
     cmd: "codeBlock",
@@ -203,7 +203,7 @@ const blockGroup: PressButton[] = [
     icon: "nota-code-block-symbolic",
     block: "codeBlock",
   },
-  { cmd: "clearFormat", menu: "fmt.clear", label: "Clear", icon: "folio-eraser-symbolic" },
+  { cmd: "clearFormat", menu: "fmt.clear", label: "Clear", icon: "nota-eraser-symbolic" },
 ];
 
 
@@ -450,10 +450,10 @@ export function FormatBar({
   })();
   const currentListIcon =
     state?.block === "ol"
-      ? "folio-view-list-ordered-symbolic"
+      ? "nota-view-list-ordered-symbolic"
       : state?.block === "task"
         ? "nota-task-symbolic"
-        : "folio-view-list-bullet-symbolic";
+        : "nota-view-list-bullet-symbolic";
   const hideToolbarLabel = t("Hide the formatting toolbar");
   const moreEntriesWithLabel = moreMenuEntries.map((entry) =>
     typeof entry !== "string" && entry.id === "view.toolbarNever"
@@ -596,7 +596,7 @@ export function FormatBar({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => setOpenMenu((current) => (current === "more" ? null : "more"))}
         >
-          <Icon name="folio-view-more-horizontal-symbolic" />
+          <Icon name="nota-view-more-horizontal-symbolic" />
         </button>
         {openMenu === "more" && (
           <MenuPopup

@@ -68,15 +68,15 @@ const topPartIntervalGap = 8;
 
 
 
-export function findRollActionContainer(el: HTMLElement | null): HTMLElement | null {
+export function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
   for (let current = el?.parentElement ?? null; current; current = current.parentElement) {
-    if (ableRollQuestion(current)) return current;
+    if (canScrollVertically(current)) return current;
   }
   return null;
 }
 
 
-function ableRollQuestion(el: HTMLElement): boolean {
+function canScrollVertically(el: HTMLElement): boolean {
   const styleStyle = getComputedStyle(el);
   return /^(auto|scroll)$/.test(styleStyle.overflowY) && el.scrollHeight > el.clientHeight + 1;
 }
@@ -97,13 +97,13 @@ function ableRollQuestion(el: HTMLElement): boolean {
 
 
 
-export function findEditorAreaRollActionContainer(attachLoadPoint: HTMLElement | null): HTMLElement | null {
+export function findEditorAreaScrollContainer(attachLoadPoint: HTMLElement | null): HTMLElement | null {
   if (!attachLoadPoint) return null;
   const sourceShell = attachLoadPoint.querySelector<HTMLElement>(".cm-scroller");
-  if (sourceShell && ableRollQuestion(sourceShell)) return sourceShell;
+  if (sourceShell && canScrollVertically(sourceShell)) return sourceShell;
   if (/^(auto|scroll)$/.test(getComputedStyle(attachLoadPoint).overflowY)) return attachLoadPoint;
   const first = attachLoadPoint.firstElementChild as HTMLElement | null;
-  return findRollActionContainer(first);
+  return findScrollContainer(first);
 }
 
 
@@ -116,14 +116,14 @@ export function findEditorAreaRollActionContainer(attachLoadPoint: HTMLElement |
 
 
 
-export function readRollActionCompareExample(attachLoadPoint: HTMLElement | null): number | null {
-  const container = findEditorAreaRollActionContainer(attachLoadPoint);
+export function readScrollRatio(attachLoadPoint: HTMLElement | null): number | null {
+  const container = findEditorAreaScrollContainer(attachLoadPoint);
   if (!container) return null;
-  return readElementRollActionCompareExample(container);
+  return readElementScrollRatio(container);
 }
 
 
-export function readElementRollActionCompareExample(container: {
+export function readElementScrollRatio(container: {
   scrollHeight: number;
   clientHeight: number;
   scrollTop: number;
@@ -143,12 +143,12 @@ export function readElementRollActionCompareExample(container: {
 
 
 
-export function restoreRestoreRollActionCompareExample(attachLoadPoint: HTMLElement | null, compareExample: number): void {
-  const container = findEditorAreaRollActionContainer(attachLoadPoint);
+export function restoreScrollRatio(attachLoadPoint: HTMLElement | null, ratio: number): void {
+  const container = findEditorAreaScrollContainer(attachLoadPoint);
   if (!container) return;
   const scrollable = container.scrollHeight - container.clientHeight;
   if (scrollable <= 0) return;
-  const clamp = Math.min(1, Math.max(0, compareExample));
+  const clamp = Math.min(1, Math.max(0, ratio));
   container.scrollTop = scrollable * clamp;
 }
 
@@ -158,12 +158,12 @@ export function restoreRestoreRollActionCompareExample(attachLoadPoint: HTMLElem
 
 
 
-export function rollActionToPosition(view: EditorView, pos: number): void {
+export function scrollPositionIntoView(view: EditorView, pos: number): void {
   if (pos < 0 || pos > view.state.doc.content.size) return;
   const { node } = view.domAtPos(pos);
   const element = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
   if (!element) return;
-  const container = findRollActionContainer(element);
+  const container = findScrollContainer(element);
   if (!container) return;
   const difference = element.getBoundingClientRect().top - container.getBoundingClientRect().top;
   container.scrollTop += difference - topPartIntervalGap;
@@ -176,8 +176,8 @@ export function rollActionToPosition(view: EditorView, pos: number): void {
 
 
 
-export function rollActionToCanSee(view: EditorView, from: number, to: number): void {
-  const container = findRollActionContainer(view.dom);
+export function scrollRangeIntoView(view: EditorView, from: number, to: number): void {
+  const container = findScrollContainer(view.dom);
   if (!container) return;
   const above = view.coordsAtPos(from, 1).top;
   const below = view.coordsAtPos(to, -1).bottom;

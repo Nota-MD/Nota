@@ -28,8 +28,9 @@ export interface NumberLearnCodeOutput {
 
 
 export function createNumberLearnCodeOutput(options: KatexOptions = {}): NumberLearnCodeOutput {
-  const element = document.createElement("div");
-  element.className = "nota-code-math-preview";
+  const element = document.createElement("pre");
+  element.className =
+    "nota-code-math-preview nota-code-theme-surface nota-source-surface md-fences ty-contain-cm";
   element.contentEditable = "false";
   const output = document.createElement("div");
   output.className = "nota-code-math-render";

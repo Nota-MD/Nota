@@ -1,5 +1,3 @@
-
-
 .table-toolbar {
   position: fixed;
   z-index: calc(var(--z-editor-widget, 24) + 2);
@@ -76,6 +74,58 @@
 .table-align-glyph.is-right i:nth-child(2) { width: 10px; justify-self: end; }
 .table-align-glyph.is-right i:nth-child(3) { width: 13px; justify-self: end; }
 
+.table-toolbar-more-wrap {
+  position: relative;
+}
+
+.table-toolbar-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 230px;
+  max-height: min(430px, calc(100vh - 72px));
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--popup-shadow);
+}
+
+.table-toolbar-menu.is-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.table-toolbar-menu button {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.table-toolbar-menu button:hover,
+.table-toolbar-menu button:focus-visible {
+  background: var(--bg-hover);
+}
+
+.table-toolbar-menu button.is-danger {
+  color: var(--danger);
+}
+
+.table-toolbar-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
 .table-size-picker {
   position: absolute;
   top: calc(100% + 5px);
@@ -115,271 +165,4 @@
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
   text-align: center;
-}
-
-.sheet-formula-bar {
-  position: fixed;
-  z-index: calc(var(--z-editor-widget, 24) + 3);
-  display: grid;
-  grid-template-columns: 78px 28px minmax(0, 1fr);
-  align-items: center;
-  height: 30px;
-  box-sizing: border-box;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg-raised);
-  box-shadow: var(--popup-shadow);
-  font-size: 0.82rem;
-  pointer-events: auto;
-}
-
-.sheet-reference {
-  padding: 0 8px;
-  color: var(--fg);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.sheet-formula-mark {
-  color: var(--fg-faint);
-  font-family: var(--font-ui);
-  font-style: italic;
-  text-align: center;
-}
-
-.sheet-formula-input-shell {
-  position: relative;
-  min-width: 0;
-  height: 100%;
-  overflow: hidden;
-  border-left: 1px solid var(--border);
-  background: var(--bg);
-}
-
-.sheet-formula-highlight {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-  overflow: hidden;
-  padding: 0 8px;
-  color: var(--fg);
-  font-family: var(--font-mono);
-  font-size: inherit;
-  line-height: 1;
-  white-space: pre;
-  pointer-events: none;
-  will-change: transform;
-}
-
-.sheet-formula-token {
-  white-space: pre;
-}
-
-.sheet-formula-plain {
-  color: var(--fg);
-}
-
-.sheet-formula-function {
-  color: color-mix(in srgb, var(--accent) 78%, var(--fg));
-}
-
-.sheet-formula-reference {
-  color: var(--sheet-range-tone);
-}
-
-.sheet-tone-0 { --sheet-range-tone: #5f8ced; }
-.sheet-tone-1 { --sheet-range-tone: #eb5e60; }
-.sheet-tone-2 { --sheet-range-tone: #8d61c2; }
-.sheet-tone-3 { --sheet-range-tone: #2d9639; }
-.sheet-tone-4 { --sheet-range-tone: #bf4c91; }
-.sheet-tone-5 { --sheet-range-tone: #e38222; }
-.sheet-tone-6 { --sheet-range-tone: #377f9e; }
-
-.sheet-formula-bar input {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 0 8px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--fg);
-  caret-color: var(--accent);
-  font: inherit;
-  font-family: var(--font-mono);
-  letter-spacing: normal;
-  line-height: 1;
-  appearance: none;
-  pointer-events: auto;
-}
-
-.sheet-formula-input-shell:focus-within {
-  background: var(--bg-raised);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.sheet-formula-bar input::selection {
-  color: transparent;
-  background: color-mix(in srgb, var(--accent) 34%, transparent);
-}
-
-.sheet-header {
-  position: fixed;
-  z-index: calc(var(--z-editor-widget, 24) + 1);
-  display: grid;
-  place-items: center;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--bg-subtle);
-  color: var(--fg-muted);
-  font-family: var(--font-ui);
-  font-size: 0.76rem;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-
-.sheet-header:hover,
-.sheet-header:focus-visible,
-.sheet-header.is-selected {
-  background: var(
-    --nota-sheet-selection-bg,
-    color-mix(in srgb, var(--accent) 24%, var(--bg-raised))
-  );
-  color: var(--nota-selection-ink, var(--accent));
-}
-
-.editor-pane .editor-mount .ProseMirror table :is(td, th).nota-sheet-range {
-  background: var(
-    --nota-sheet-selection-bg,
-    color-mix(in srgb, var(--accent) 28%, transparent)
-  ) !important;
-  color: var(--nota-selection-ink, inherit) !important;
-}
-
-.editor-pane .editor-mount .ProseMirror table :is(td, th).nota-sheet-range * {
-  color: inherit !important;
-}
-
-.sheet-column-header {
-  border-radius: 5px 5px 0 0;
-}
-
-.sheet-row-header {
-  border-radius: 5px 0 0 5px;
-}
-
-.sheet-range-box {
-  position: fixed;
-  z-index: var(--z-editor-widget, 24);
-  box-sizing: border-box;
-  border: 2px solid var(--nota-selection-outline, var(--accent));
-  background: color-mix(
-    in srgb,
-    var(--nota-sheet-selection-bg, var(--accent)) 40%,
-    transparent
-  );
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--nota-selection-outline, var(--accent)) 35%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--bg-raised) 72%, transparent);
-  pointer-events: none;
-}
-
-.sheet-reference-box {
-  position: fixed;
-  z-index: var(--z-editor-widget, 24);
-  box-sizing: border-box;
-  border: 1.5px dashed var(--sheet-range-tone);
-  border-radius: 1px;
-  background: color-mix(in srgb, var(--sheet-range-tone) 8%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sheet-range-tone) 24%, transparent);
-  pointer-events: none;
-}
-
-.sheet-computed-value {
-  position: fixed;
-  z-index: var(--z-editor-widget, 24);
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-  overflow: hidden;
-  color: var(--nota-result-ink, var(--fg));
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.sheet-computed-value.is-error {
-  color: var(--danger);
-  font-weight: 600;
-}
-
-.sheet-fill-handle {
-  position: absolute;
-  right: -6px;
-  bottom: -6px;
-  width: 10px;
-  height: 10px;
-  box-sizing: border-box;
-  padding: 0;
-  border: 2px solid var(--bg-raised);
-  border-radius: 2px;
-  background: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-  cursor: crosshair;
-  pointer-events: auto;
-}
-
-.ProseMirror td.nota-sheet-computed:not(.nota-sheet-range),
-.ProseMirror th.nota-sheet-computed:not(.nota-sheet-range) {
-  position: relative;
-}
-
-td.nota-sheet-computed:not(.nota-sheet-range) > *,
-th.nota-sheet-computed:not(.nota-sheet-range) > * {
-  color: transparent !important;
-  text-shadow: none !important;
-}
-
-td.nota-sheet-computed:not(.nota-sheet-range),
-th.nota-sheet-computed:not(.nota-sheet-range) {
-  color: transparent !important;
-  text-shadow: none !important;
-}
-
-td.nota-sheet-computed:not(.nota-sheet-range)::after,
-th.nota-sheet-computed:not(.nota-sheet-range)::after {
-  content: attr(data-nota-sheet-value);
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  padding: inherit;
-  box-sizing: border-box;
-  overflow: hidden;
-  color: var(--nota-cell-ink, var(--doc-fg, var(--fg)));
-  font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 1;
-}
-
-td.nota-sheet-range.nota-sheet-computed::after,
-th.nota-sheet-range.nota-sheet-computed::after {
-  color: var(--nota-selection-ink, var(--nota-cell-ink, var(--doc-fg, var(--fg))));
-}
-
-td.nota-sheet-error::after,
-th.nota-sheet-error::after {
-  color: var(--danger);
-  font-weight: 600;
 }

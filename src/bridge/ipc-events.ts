@@ -149,11 +149,6 @@ export const events = {
 
 
   pluginStream: "nota:plugin-stream",
-  /** A table-capable extension supplied temporary display values. */
-  tableRender: "nota:table-render",
-  /** A table-capable extension requested one undoable multi-cell edit. */
-  tableWrite: "nota:table-write",
-
 
 
 

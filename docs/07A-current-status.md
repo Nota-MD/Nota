@@ -1,6 +1,6 @@
 # Current status and execution queue
 
-Last synchronized: 2026-11-22
+Last synchronized: 2026-11-27
 
 This file is the current execution view. Permanent identifiers, evidence and
 historical decisions remain in [`07-feature-status.md`](07-feature-status.md).
@@ -11,7 +11,7 @@ Feature completeness remains authoritative in
 
 | Item | Current state |
 |---|---|
-| Source version | `0.17.0-beta` |
+| Source version | `0.18.0-beta` |
 | Supported release platforms | Linux and Windows |
 | macOS | Adaptation exists, but no supported build or release pipeline yet |
 | Extensions | Official extensions ship from `Nota-plugins`; installers do not bundle them |
@@ -56,8 +56,6 @@ verification is missing.
 | P2 | BUG-68 | Code-block appearance | Needs verification | Recheck the missing-frame report against the current code-block implementation | The current behavior is accepted as intentional or corrected with a screenshot-backed test |
 | P2 | BUG-72 | Theme switching stability | Rare | Stress repeated theme and source-mode switches | No error boundary, blank editor, or crash occurs |
 | P2 | 118 | Sidebar appearance | Partial | Recheck tree and outline spacing, resizing and CDE theme consistency | Sidebar states are visually consistent under bundled and external themes |
-| P2 | 136 | Spreadsheet table mode | Needs real-window testing | Verify A1 headers, ranges, cell bar, fill handle and Markdown round trips | The optional mode works on Linux and Windows without changing the saved GFM table format |
-| P1 | 137 | Table formulas | Needs real-window testing | Test `nota.sheet-formulas`, setting ownership and Keep Values on Linux and Windows | Formula display remains non-destructive; disable/uninstall restores the setting; Keep Values is one undo step |
 | P2 | MACOS-BUILD | macOS support | Planned | Define the CI runner, signing, notarization, DMG and Gatekeeper path | A signed build passes startup, editing, dialogs, printing, updates and installation checks |
 
 ## Recommended order
@@ -107,8 +105,6 @@ These areas still need a real-window check. Automated tests do not close them.
 
 | Area | Required check |
 |---|---|
-| Table formulas | Install `nota.sheet-formulas` on Linux and Windows; verify display-only results, setting ownership, cycle errors, context-menu Keep Values and one-step undo |
-| Spreadsheet mode | Verify A1 headers, persistent cell highlight, row and column selection, rectangular ranges, fill handles and GFM round trips |
 | Table and LaTeX layers | Verify inline and block formula suggestions above table controls, caret placement for `$`, `/` and `\`, and stable focus |
 | Source mode, code and diff | Verify fonts, line height, gutters, selection, caret, horizontal overflow and light, dark and external themes |
 | Vim in nested editors | Verify Normal, Insert and Visual modes in fenced code, Mermaid and block LaTeX editors with IME input |

@@ -220,8 +220,6 @@ pub struct Markdown {
 
     pub code_block_math: bool,
 
-    pub legacy_inline_math: bool,
-
     pub equation_numbering: EquationNumbering,
 
     pub math_output: MathOutput,
@@ -269,7 +267,6 @@ impl Default for Markdown {
 
             latex_delimiters: true,
             code_block_math: true,
-            legacy_inline_math: false,
             equation_numbering: EquationNumbering::default(),
             math_output: MathOutput::default(),
 
@@ -356,7 +353,6 @@ mod tests {
         assert_eq!(m.code_default_language, "");
 
         assert!(m.latex_delimiters && m.code_block_math);
-        assert!(!m.legacy_inline_math);
         assert_eq!(m.equation_numbering, EquationNumbering::None);
 
         assert!(!m.first_line_indent && m.show_br);

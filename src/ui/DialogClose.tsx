@@ -29,7 +29,7 @@ export const DialogClose = forwardRef<HTMLButtonElement, Props>(function DialogC
       aria-label={t("Close")}
       title={t("Close")}
     >
-      <Icon name="folio-close-symbolic" size={16} />
+      <Icon name="nota-close-symbolic" size={16} />
     </button>
   );
 });

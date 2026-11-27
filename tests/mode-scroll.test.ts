@@ -1,7 +1,7 @@
-/** 模式切换时要优先恢复刚离开的滚动位置，而不是打开文档时的旧位置。 */
+/** Mode changes restore the position just left, not the position from document load. */
 
 import { readFileSync } from "node:fs";
-import { readElementRollActionCompareExample } from "../src/editor/scroll-into-view";
+import { readElementScrollRatio } from "../src/editor/scroll-into-view";
 
 const source = readFileSync("src/ui/EditorPane.tsx", "utf8");
 let passed = 0;
@@ -23,40 +23,40 @@ function assertValue(value2: unknown, description: string): asserts value2 {
   if (!value2) throw new Error(description);
 }
 
-console.log("\n【模式切换滚动位置】");
+console.log("\n[Mode-change scroll position]");
 
-testCase("旧实例销毁前记录当前滚动比例", () => {
+testCase("the old instance records its scroll ratio before disposal", () => {
   assertValue(
-    source.includes("const splitReplaceBeforePosition = readRollActionCompareExample(mount)"),
-    "清理阶段没有读当前滚动比例",
+    source.includes("const splitReplaceBeforeRatio = readScrollRatio(mount)"),
+    "cleanup does not read the current scroll ratio",
   );
   assertValue(
-    source.includes("splitReplaceRollActionRef.current = splitReplaceBeforePosition"),
-    "当前比例没有保存给下一次实例",
-  );
-});
-
-testCase("新实例优先使用切换前比例，再回落到会话位置", () => {
-  assertValue(
-    source.includes("splitReplaceRollActionRef.current ?? initialStartRollActionRef.current"),
-    "没有建立切换位置对会话位置的优先级",
+    source.includes("splitReplaceScrollRatioRef.current = splitReplaceBeforeRatio"),
+    "the current ratio is not saved for the next instance",
   );
 });
 
-testCase("恢复计划只消费一次", () => {
+testCase("the new instance prefers the mode-change ratio over the session ratio", () => {
   assertValue(
-    source.includes("splitReplaceRollActionRef.current = null"),
-    "切换位置没有在新实例接手后清空",
+    source.includes("splitReplaceScrollRatioRef.current ?? initialScrollRatioRef.current"),
+    "mode-change position does not take priority over the session position",
   );
 });
 
-testCase("滚动比例从事件目标直接读取，并在动画帧内合并", () => {
-  assertValue(readElementRollActionCompareExample({ scrollHeight: 200, clientHeight: 100, scrollTop: 50 }) === 0.5, "比例计算错误");
-  assertValue(readElementRollActionCompareExample({ scrollHeight: 100, clientHeight: 100, scrollTop: 0 }) === 0, "短文档应给 0");
-  assertValue(source.includes("requestAnimationFrame"), "滚动记账没有按动画帧合并");
+testCase("the restore plan is consumed once", () => {
   assertValue(
-    source.includes("readElementRollActionCompareExample(currentContainer)"),
-    "滚动记账仍在重复反查滚动容器",
+    source.includes("splitReplaceScrollRatioRef.current = null"),
+    "the mode-change position is not cleared after handoff",
+  );
+});
+
+testCase("scroll ratios read the event target and coalesce per animation frame", () => {
+  assertValue(readElementScrollRatio({ scrollHeight: 200, clientHeight: 100, scrollTop: 50 }) === 0.5, "incorrect scroll ratio");
+  assertValue(readElementScrollRatio({ scrollHeight: 100, clientHeight: 100, scrollTop: 0 }) === 0, "short documents should return zero");
+  assertValue(source.includes("requestAnimationFrame"), "scroll accounting is not coalesced per animation frame");
+  assertValue(
+    source.includes("readElementScrollRatio(currentContainer)"),
+    "scroll accounting still repeatedly resolves its container",
   );
 });
 

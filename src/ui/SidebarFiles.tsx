@@ -189,7 +189,7 @@ export function FileList(props: {
     <>
       {props.searching && (
         <div className="file-list-search">
-          <Icon name="folio-edit-find-symbolic" size={15} />
+          <Icon name="nota-edit-find-symbolic" size={15} />
           <input
             ref={searchSearchBox}
             value={query}
@@ -206,7 +206,7 @@ export function FileList(props: {
             aria-label={t("Close")}
             onClick={props.onCloseSearch}
           >
-            <Icon name="folio-close-symbolic" size={14} />
+            <Icon name="nota-close-symbolic" size={14} />
           </button>
         </div>
       )}

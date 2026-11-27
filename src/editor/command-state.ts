@@ -31,6 +31,7 @@
 import { Plugin } from "@milkdown/kit/prose/state";
 import type { EditorState } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
+import { CellSelection } from "@milkdown/kit/prose/tables";
 
 import { coverWriteOpen } from "./overtype";
 
@@ -91,6 +92,7 @@ export interface CommandState {
 
 
   inTable: boolean;
+  tableCell: { row: number; column: number } | null;
 
   hasSelection: boolean;
 
@@ -120,6 +122,7 @@ export const emptyState: CommandState = {
   underline: false,
   block: "text",
   inTable: false,
+  tableCell: null,
   hasSelection: false,
   hasHeadings: false,
 };
@@ -179,6 +182,25 @@ function readBlock(state: EditorState): { block: BlockKind; inTable: boolean } {
 }
 
 
+function readTableCell(
+  state: EditorState,
+): { row: number; column: number } | null {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth >= 2; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name !== "table_cell" && node.type.name !== "table_header") {
+      continue;
+    }
+    return {
+      row: $from.index(depth - 2),
+      column: $from.index(depth - 1),
+    };
+  }
+  return null;
+}
+
+export const tableActiveCellChangedEvent = "nota-table-active-cell-changed";
+
 export function readState(state: EditorState): CommandState {
   const { $from, empty } = state.selection;
 
@@ -207,6 +229,7 @@ export function readState(state: EditorState): CommandState {
     underline: has("underline"),
     block,
     inTable,
+    tableCell: inTable ? readTableCell(state) : null,
     hasSelection: !empty,
     hasHeadings,
   };
@@ -225,7 +248,8 @@ function keyName(s: CommandState): string {
 
   return `${s.overtype ? 1 : 0}${s.bold ? 1 : 0}${s.italic ? 1 : 0}${s.strike ? 1 : 0}${s.inlineCode ? 1 : 0}` +
     `${s.highlight ? 1 : 0}${s.superscript ? 1 : 0}${s.subscript ? 1 : 0}${s.underline ? 1 : 0}` +
-    `|${s.block}|${s.inTable ? 1 : 0}${s.hasSelection ? 1 : 0}${s.hasHeadings ? 1 : 0}`;
+    `|${s.block}|${s.inTable ? 1 : 0}${s.hasSelection ? 1 : 0}${s.hasHeadings ? 1 : 0}` +
+    `|${s.tableCell?.row ?? -1}:${s.tableCell?.column ?? -1}`;
 }
 
 
@@ -242,6 +266,15 @@ export function cursorStatePlugin(onChange: (state: CommandState) => void) {
       const sig = keyName(now);
       if (sig === aboveCount) return;
       aboveCount = sig;
+      window.dispatchEvent(
+        new CustomEvent(tableActiveCellChangedEvent, {
+          detail: {
+            cell: now.tableCell,
+            range: state.selection instanceof CellSelection,
+            empty: state.selection.empty,
+          },
+        }),
+      );
       onChange(now);
     };
     return new Plugin({

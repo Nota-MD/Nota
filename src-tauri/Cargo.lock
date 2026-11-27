@@ -2926,7 +2926,7 @@ dependencies = [
 
 [[package]]
 name = "nota"
-version = "0.17.0-beta"
+version = "0.18.0-beta"
 dependencies = [
  "argon2",
  "ashpd",
@@ -2962,6 +2962,7 @@ dependencies = [
  "toml 0.9.12+spec-1.1.0",
  "ureq",
  "webkit2gtk",
+ "webview2-com",
  "windows-sys 0.59.0",
  "zip",
  "zspell",

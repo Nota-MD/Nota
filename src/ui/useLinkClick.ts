@@ -198,7 +198,7 @@ export function usePointLink({
 
 
 
-        if (DangerousProtocol(chain.href)) return;
+        if (!chain.href.trim() || DangerousProtocol(chain.href)) return;
 
 
 
@@ -213,12 +213,7 @@ export function usePointLink({
       // In keyboard-optimized mode an ordinary click behaves like placing the
       // caret at the link boundary: the source reveal is driven by the editor
       // selection, so opening a modal here would interrupt that interaction.
-      if (keyboardExperience) {
-        element?.dispatchEvent(
-          new CustomEvent("nota-focus-link-source", { bubbles: true }),
-        );
-        return;
-      }
+      if (keyboardExperience) return;
 
       void (async () => {
         const answer = await askLink({ label: chain.label, href: chain.href, editing: true });

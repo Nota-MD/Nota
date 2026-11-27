@@ -114,7 +114,7 @@ export function AvatarCropDialog({ source, fileName, onCancel, onConfirm }: Prop
         onMouseDown={(event) => event.stopPropagation()}
       >
         <button type="button" className="dialog-close" title={t("Close")} aria-label={t("Close")} onClick={onCancel}>
-          <Icon name="folio-close-symbolic" />
+          <Icon name="nota-close-symbolic" />
         </button>
         <h2>{t("Crop profile image")}</h2>
         <p className="avatar-crop-hint">{t("Drag to position the portrait. The circle is what will remain.")}</p>

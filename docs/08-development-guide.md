@@ -525,8 +525,8 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 
 ```css
 [data-ui-style="my-style"] {
-  --icon-folio-close-symbolic: url("../shared/icons/close.svg");
-  --icon-folio-format-text-bold-symbolic: url("./assets/bold.svg");
+  --icon-nota-close-symbolic: url("../shared/icons/close.svg");
+  --icon-nota-format-text-bold-symbolic: url("./assets/bold.svg");
   --font-ui: "My Theme UI", sans-serif;
 }
 

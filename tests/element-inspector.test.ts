@@ -26,12 +26,12 @@ function equal(actual: unknown, expected: unknown, label: string): void {
   check(label, JSON.stringify(actual) === JSON.stringify(expected));
 }
 
-console.log("\n【元素悬停检查】");
+console.log("\n[Element hover inspector]");
 
-equal(compactInspectorValue("  sans-serif\n  system-ui  "), "sans-serif system-ui", "空白压成一行");
+equal(compactInspectorValue("  sans-serif\n  system-ui  "), "sans-serif system-ui", "whitespace is compacted");
 check(
   compactInspectorValue("甲".repeat(80), 10) === `${"甲".repeat(9)}…`,
-  "过长值截断并保留省略号",
+  "long values are truncated with an ellipsis",
 );
 
 const fakeElement = {
@@ -42,7 +42,7 @@ const fakeElement = {
 equal(
   inspectorSelector(fakeElement),
   "button#save.btn.btn-primary",
-  "选择器显示标签、id 和前两个类名",
+  "the selector includes tag, id and the first two classes",
 );
 
 const rows = inspectorRows(
@@ -68,44 +68,50 @@ equal(rows, [
   { label: "box", value: "118 × 32 / inline-flex" },
   { label: "padding", value: "4px 10px" },
   { label: "radius", value: "6px" },
-], "字体、颜色、盒尺寸和内边距都进入提示");
+], "font, color, box size and padding are all reported");
 
 const below = inspectorPlacement(
   { left: 120, top: 100, right: 240, bottom: 140, width: 120 },
   1000,
   800,
 );
-equal(below.side, "below", "下方有空间时显示在元素下方");
-equal(below.style.top, 148, "下方间距为 8px");
-equal(below.style.width, 380, "宽屏保持紧凑面板宽度");
+equal(below.side, "below", "the panel appears below when there is room");
+equal(below.style.top, 148, "the below-gap is 8px");
+equal(below.style.width, 380, "wide windows keep the compact panel width");
 
 const above = inspectorPlacement(
   { left: 900, top: 700, right: 980, bottom: 730, width: 80 },
   1000,
   800,
 );
-equal(above.side, "above", "下方不足时翻到元素上方");
-equal(above.style.left, 612, "右侧元素的面板夹回视口内");
+equal(above.side, "above", "the panel flips above when there is no room below");
+equal(above.style.left, 612, "the panel is clamped for right-edge elements");
 
 const app = readFileSync("src/App.tsx", "utf8");
 check(
   app.includes(
     "<ElementInspector enabled={(settings?.general.debug_mode ?? false) && (settings?.general.element_inspector ?? false)} />",
   ),
-  "元素检查只在开发者模式与独立开关同时开启时挂载",
+  "the inspector mounts only when developer mode and its switch are both enabled",
 );
 
 const pane = readFileSync("src/ui/settings/panes/DebugPane.tsx", "utf8");
-check(pane.includes('t("Element hover inspector")'), "开发者设置页有元素悬停检查开关");
-check(pane.includes("element_inspector"), "开关写入通用设置");
+check(pane.includes('t("Element hover inspector")'), "the developer page exposes the inspector switch");
+check(pane.includes("element_inspector"), "the switch writes the general setting");
+const settingsWindow = readFileSync("src/ui/SettingsWindow.tsx", "utf8");
+check(
+  settingsWindow.includes("<ElementInspector") &&
+    settingsWindow.includes("settings.general.element_inspector"),
+  "standalone Preferences does not mount the element inspector",
+);
 
 const css = readFileSync("src/styles/element-inspector.css", "utf8");
-check(css.includes("pointer-events: none"), "检查浮层不抢指针命中");
-check(css.includes("position: fixed"), "检查浮层固定在视口坐标");
+check(css.includes("pointer-events: none"), "the inspector does not participate in hit testing");
+check(css.includes("position: fixed"), "the inspector uses viewport coordinates");
 
 const host = readFileSync("src-tauri/src/settings/general.rs", "utf8");
-check(host.includes("pub element_inspector: bool"), "Rust 设置字段存在");
-check(host.includes("element_inspector: false"), "元素检查默认关闭");
+check(host.includes("pub element_inspector: bool"), "the Rust setting field exists");
+check(host.includes("element_inspector: false"), "the inspector defaults off");
 
-console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

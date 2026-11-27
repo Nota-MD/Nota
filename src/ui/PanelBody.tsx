@@ -31,7 +31,7 @@ interface Props {
   plugin: string;
   nodes: PanelNode[];
 
-  onCall: (plugin: string, command: string, args?: unknown) => Promise<void>;
+  onCall: (plugin: string, command: string, args?: unknown) => Promise<unknown>;
 
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
 
@@ -365,7 +365,7 @@ function PanelInput({
 }: {
   spec: PanelInputSpec;
   disabled: boolean;
-  onSubmit: (value2: string) => Promise<void>;
+  onSubmit: (value2: string) => Promise<unknown>;
 
   onCommand: (command: string, args?: unknown) => void;
 }) {
@@ -604,7 +604,11 @@ function PanelStreamMessage({
     scrollRef.current = scroll;
     if (!scroll) return;
     const update = () => {
-      const remaining = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+      const message = rootRef.current;
+      if (!message) return;
+      const remaining =
+        message.getBoundingClientRect().bottom -
+        (scroll.getBoundingClientRect().top + scroll.clientHeight);
       setFollow(remaining <= 36);
     };
     // A new stream starts in follow mode even when the previous transcript was
@@ -616,20 +620,29 @@ function PanelStreamMessage({
   const visible = useMemo(() => glyphs.slice(0, count).join(""), [count, glyphs]);
   const streaming = count < glyphs.length;
 
+  const scrollToMessageBottom = () => {
+    const scroll = scrollRef.current;
+    const message = rootRef.current;
+    if (!scroll || !message) return;
+    const remaining =
+      message.getBoundingClientRect().bottom -
+      (scroll.getBoundingClientRect().top + scroll.clientHeight);
+    if (remaining > 0) scroll.scrollTop += remaining + 8;
+  };
+
   useLayoutEffect(() => {
     const scroll = scrollRef.current;
     if (!follow || !scroll) return;
     cancelAnimationFrame(scrollFrame.current);
     scrollFrame.current = requestAnimationFrame(() => {
-      scroll.scrollTop = scroll.scrollHeight;
+      scrollToMessageBottom();
     });
     return () => cancelAnimationFrame(scrollFrame.current);
   }, [follow, visible]);
 
   const backToLatest = () => {
     setFollow(true);
-    const scroll = scrollRef.current;
-    if (scroll) scroll.scrollTop = scroll.scrollHeight;
+    scrollToMessageBottom();
   };
 
   return (

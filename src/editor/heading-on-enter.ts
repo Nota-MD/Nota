@@ -147,6 +147,7 @@
 
 import { $prose, $shortcut } from "@milkdown/kit/utils";
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { EditorView } from "@milkdown/kit/prose/view";
@@ -444,6 +445,135 @@ export const markTitleLineFirstBackCell = (strict: boolean) => $shortcut(() => (
 export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
   let bufferSave: { doc: PMNode; item: PendingDecoration[] } | null = null;
 
+  const normalizeInheritedHeadingMark = (
+    transactions: readonly Transaction[],
+    oldState: EditorState,
+    newState: EditorState,
+  ): Transaction | null => {
+    if (!transactions.some((transaction) => transaction.docChanged)) return null;
+    const selection = newState.selection;
+    if (!selection.empty || !selection.$from.parent.inlineContent) return null;
+    const current = selection.$from.parent;
+    const headingType = newState.schema.nodes.heading;
+    const paragraphType = newState.schema.nodes.paragraph;
+    if (
+      !current ||
+      current.type.name !== "paragraph" ||
+      !headingType ||
+      !paragraphType
+    ) {
+      return null;
+    }
+    const previous = oldState.selection.$from.parent;
+    const scaffoldHeading =
+      previous.type.name === "paragraph" &&
+      previous.textContent === "****"
+        ? /^\*{2}(#{1,6})\*{2}$/.exec(current.textContent)
+        : null;
+    if (scaffoldHeading) {
+      const start = selection.$from.before(selection.$from.depth);
+      const prefix = scaffoldHeading[1] ?? "";
+      const plain = paragraphType.create(
+        null,
+        prefix ? newState.schema.text(prefix) : null,
+      );
+      const tr = newState.tr
+        .replaceWith(start, start + current.nodeSize, plain)
+        .setStoredMarks([]);
+      tr.setSelection(TextSelection.create(tr.doc, start + 1 + prefix.length));
+      return tr;
+    }
+    const prefix = atxPrefix(current.textContent, strict);
+    if (!prefix || current.textContent.length <= prefix.lengthDegree) {
+      return null;
+    }
+    let prefixMarked = false;
+    current.forEach((child, offset) => {
+      if (
+        child.marks.length > 0 &&
+        offset < prefix.lengthDegree &&
+        offset + child.nodeSize > 0
+      ) {
+        prefixMarked = true;
+      }
+    });
+    if (!prefixMarked) return null;
+    const start = selection.$from.before(selection.$from.depth);
+    const body = current.textContent.slice(prefix.lengthDegree);
+    const plain = paragraphType.create(
+      null,
+      body ? newState.schema.text(body) : null,
+    );
+    const tr = newState.tr
+      .replaceWith(start, start + current.nodeSize, plain)
+      .setStoredMarks([]);
+    tr.setSelection(
+      TextSelection.near(tr.doc.resolve(tr.mapping.map(newState.selection.from))),
+    );
+    return tr;
+  };
+
+  const convertPendingHeadingAfterSplit = (
+    transactions: readonly Transaction[],
+    oldState: EditorState,
+    newState: EditorState,
+  ): Transaction | null => {
+    if (!transactions.some((transaction) => transaction.docChanged)) return null;
+    const oldSelection = oldState.selection;
+    if (!oldSelection.empty) return null;
+    const oldBlock = oldSelection.$from.parent;
+    if (
+      oldBlock.type.name !== "paragraph" ||
+      oldSelection.$from.parentOffset !== oldBlock.content.size
+    ) {
+      return null;
+    }
+    const heading = atxPrefix(oldBlock.textContent, strict);
+    if (!heading) return null;
+    const start = oldSelection.$from.before(oldSelection.$from.depth);
+    const current = newState.doc.nodeAt(start);
+    const headingType = newState.schema.nodes.heading;
+    if (
+      current?.type.name !== "paragraph" ||
+      current.textContent !== oldBlock.textContent ||
+      !headingType
+    ) {
+      return null;
+    }
+
+    const children: PMNode[] = [];
+    current.forEach((child, offset) => {
+      const skip = Math.max(0, heading.lengthDegree - offset);
+      if (skip >= child.nodeSize) return;
+      if (child.isText) {
+        const text = child.text?.slice(skip) ?? "";
+        if (!text) return;
+        const marks =
+          offset === 0 && child.text!.length > heading.lengthDegree
+            ? []
+            : child.marks;
+        children.push(newState.schema.text(text, marks));
+        return;
+      }
+      children.push(child);
+    });
+    const next = headingType.create(
+      { level: heading.layerNumber },
+      children.length > 0 ? children : null,
+    );
+    const tr = newState.tr
+      .replaceWith(start, start + current.nodeSize, next)
+      .setStoredMarks([]);
+    tr.setSelection(
+      TextSelection.near(
+        tr.doc.resolve(
+          Math.max(1, Math.min(tr.mapping.map(newState.selection.from), tr.doc.content.size)),
+        ),
+      ),
+    );
+    return tr;
+  };
+
   const insertPendingHeadingText = (
     view: EditorView,
     from: number,
@@ -486,14 +616,158 @@ export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
     return true;
   };
 
+  const insertPlainHeadingMarker = (
+    view: EditorView,
+    from: number,
+    to: number,
+    text: string,
+  ): boolean => {
+    if (
+      !/^#{1,6}$/.test(text) ||
+      !view.state.selection.empty ||
+      from !== view.state.selection.from ||
+      to !== view.state.selection.to ||
+      (view.state.storedMarks?.length ?? 0) === 0
+    ) {
+      return false;
+    }
+    const paragraph = view.state.doc.resolve(from).parent;
+    if (paragraph.type.name !== "paragraph") {
+      return false;
+    }
+    const emptyStrongScaffold = paragraph.textContent === "****";
+    if (paragraph.content.size !== 0 && !emptyStrongScaffold) return false;
+    if (emptyStrongScaffold) {
+      const paragraphType = view.state.schema.nodes.paragraph;
+      if (!paragraphType) return false;
+      const blockStart = view.state.selection.$from.before(
+        view.state.selection.$from.depth,
+      );
+      const next = paragraphType.create(null, view.state.schema.text(text));
+      const tr = view.state.tr
+        .replaceWith(blockStart, blockStart + paragraph.nodeSize, next)
+        .setStoredMarks([]);
+      tr.setSelection(TextSelection.create(tr.doc, blockStart + 1 + text.length));
+      view.dispatch(tr);
+      view.focus();
+      return true;
+    }
+    const tr = view.state.tr
+      .replaceWith(from, to, view.state.schema.text(text))
+      .setStoredMarks([]);
+    tr.setSelection(TextSelection.create(tr.doc, from + text.length));
+    view.dispatch(tr);
+    view.focus();
+    return true;
+  };
+
   return new Plugin({
     key: new PluginKey("nota-heading-on-enter"),
-    appendTransaction: (transactions, _oldState, newState) => {
+    view: (editorView) => {
+      const commitBeforeDefaultEnter = (event: KeyboardEvent) => {
+        if (
+          event.key !== "Enter" ||
+          event.shiftKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.altKey ||
+          event.isComposing ||
+          editorView.composing
+        ) {
+          return;
+        }
+        if (returnCarBecomeMarkTitle(editorView, strict)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      };
+      const normalizeBeforeDefaultInput = (rawEvent: Event) => {
+        const event = rawEvent as InputEvent;
+        if (
+          editorView.composing ||
+          event.isComposing ||
+          event.inputType !== "insertText" ||
+          !event.data ||
+          event.data === " " ||
+          event.data === "\u00a0" ||
+          !editorView.state.selection.empty
+        ) {
+          return;
+        }
+        const position = editorView.state.selection.from;
+        if (
+          insertPlainHeadingMarker(
+            editorView,
+            position,
+            position,
+            event.data,
+          )
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        if (
+          insertPendingHeadingText(
+            editorView,
+            position,
+            position,
+            event.data,
+          )
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      };
+      editorView.dom.addEventListener("keydown", commitBeforeDefaultEnter, true);
+      editorView.dom.addEventListener(
+        "beforeinput",
+        normalizeBeforeDefaultInput,
+        true,
+      );
+      return {
+        destroy() {
+          editorView.dom.removeEventListener(
+            "keydown",
+            commitBeforeDefaultEnter,
+            true,
+          );
+          editorView.dom.removeEventListener(
+            "beforeinput",
+            normalizeBeforeDefaultInput,
+            true,
+          );
+        },
+      };
+    },
+    appendTransaction: (transactions, oldState, newState) => {
+      const normalizedHeading = normalizeInheritedHeadingMark(
+        transactions,
+        oldState,
+        newState,
+      );
+      if (normalizedHeading) return normalizedHeading;
+      const pendingSplit = convertPendingHeadingAfterSplit(
+        transactions,
+        oldState,
+        newState,
+      );
+      if (pendingSplit) return pendingSplit;
       if (!transactions.some((transaction) => transaction.docChanged || transaction.selectionSet)) {
         return null;
       }
       const { $from, empty } = newState.selection;
       const block = $from.parent;
+      const oldBlock = oldState.selection.$from.parent;
+      if (
+        empty &&
+        oldBlock.type.name !== "heading" &&
+        block.type.name === "heading" &&
+        block.content.size === 0 &&
+        (newState.storedMarks?.length ?? 0) > 0
+      ) {
+        return newState.tr.setStoredMarks([]);
+      }
       if (
         empty &&
         block.type.name === "paragraph" &&
@@ -506,6 +780,9 @@ export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
     },
     props: {
       handleTextInput: (view, from, to, text) => {
+        if (insertPlainHeadingMarker(view, from, to, text)) {
+          return true;
+        }
         if (
           view.composing ||
           from !== to ||
@@ -563,6 +840,17 @@ export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
             !view.state.selection.empty
           ) {
             return false;
+          }
+          if (
+            insertPlainHeadingMarker(
+              view,
+              view.state.selection.from,
+              view.state.selection.to,
+              event.data,
+            )
+          ) {
+            event.preventDefault();
+            return true;
           }
           if (
             !insertPendingHeadingText(

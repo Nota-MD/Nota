@@ -75,6 +75,14 @@ impl WindowRole {
         }
     }
 
+    pub fn min_size(self) -> (f64, f64) {
+        match self {
+            Self::About => (420.0, 500.0),
+            Self::Editor => (720.0, 520.0),
+            Self::Settings | Self::DebugLog => (420.0, 320.0),
+        }
+    }
+
     pub fn utility(self) -> bool {
         self != Self::Editor
     }
@@ -120,6 +128,12 @@ pub fn current_role() -> Option<WindowRole> {
 }
 
 pub async fn launch(role: WindowRole, path: Option<&Path>) -> Result<u32> {
+    if role == WindowRole::Settings {
+        if let Some(pid) = crate::settings_window_host::focus_existing() {
+            crate::debug_log!("[nota] focused existing Settings window pid={pid}");
+            return Ok(pid);
+        }
+    }
     let program = std::env::current_exe().map_err(|error| {
         NotaError::other(format!("Could not locate the Nota executable: {error}"))
     })?;

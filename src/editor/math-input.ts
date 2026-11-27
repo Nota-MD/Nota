@@ -87,7 +87,7 @@ import { $inputRule, $prose } from "@milkdown/kit/utils";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
 import type { NodeType } from "@milkdown/kit/prose/model";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
-import { NodeSelection, Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import { NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { mathBlockSchema, mathInlineSchema } from "./math-schema";
 
@@ -96,7 +96,6 @@ import {
   mathDelimiterAttribute,
   type MathDelimiter,
 } from "./math-delim";
-import { inlineMathFocusRequest } from "./math-current";
 
 
 
@@ -143,6 +142,17 @@ function escapedAt(text: string, index: number): boolean {
   return slashes % 2 === 1;
 }
 
+function unescapedIndex(text: string, needle: string, from: number): number {
+  for (
+    let at = text.indexOf(needle, from);
+    at >= 0;
+    at = text.indexOf(needle, at + 1)
+  ) {
+    if (!escapedAt(text, at)) return at;
+  }
+  return -1;
+}
+
 /** Recognize a formula whose closing delimiter is to the right of the caret. */
 export function mathSourceAroundCursor(
   text: string,
@@ -162,16 +172,37 @@ export function mathSourceAroundCursor(
     { close: "\\]", open: "\\[", delimiter: "bracket", dollars: 1 },
   ];
   for (const candidate of closes) {
-    if (!right.startsWith(candidate.close)) continue;
-    const start = left.lastIndexOf(candidate.open);
-    if (start < 0 || start + candidate.open.length >= cursor) continue;
-    if (escapedAt(text, start)) continue;
-    const source3 = text.slice(start + candidate.open.length, cursor);
+    if (right.startsWith(candidate.close)) {
+      const start = left.lastIndexOf(candidate.open);
+      if (start < 0 || start + candidate.open.length >= cursor) continue;
+      if (escapedAt(text, start)) continue;
+      const source3 = text.slice(start + candidate.open.length, cursor);
+      if (!source3) continue;
+      return {
+        source: source3,
+        start,
+        end: cursor + candidate.close.length,
+        dollars: candidate.dollars,
+        delimiter: candidate.delimiter,
+      };
+    }
+
+    const start = cursor - candidate.open.length;
+    if (
+      start < 0 ||
+      text.slice(start, cursor) !== candidate.open ||
+      escapedAt(text, start)
+    ) {
+      continue;
+    }
+    const closeAt = unescapedIndex(text, candidate.close, cursor);
+    if (closeAt < 0) continue;
+    const source3 = text.slice(cursor, closeAt);
     if (!source3) continue;
     return {
       source: source3,
       start,
-      end: cursor + candidate.close.length,
+      end: closeAt + candidate.close.length,
       dollars: candidate.dollars,
       delimiter: candidate.delimiter,
     };
@@ -212,6 +243,7 @@ function replaceBecomeCommonStyle(
   source3: string,
   dollarDollar: number,
   delimiter: MathDelimiter = "dollar",
+  keepCaretInside = false,
 ): Transaction | null {
   const node = spec.createAndFill({
     [dollarCountAttribute]: dollarDollar,
@@ -220,7 +252,13 @@ function replaceBecomeCommonStyle(
   if (!node) return null;
   const tr = state.tr.replaceRangeWith(start5, end, node);
   tr.insertText(source3, start5 + 1);
-  tr.setMeta(inlineMathFocusRequest, start5);
+  const inserted = tr.doc.nodeAt(start5);
+  if (!inserted) return null;
+  tr.setSelection(
+    keepCaretInside
+      ? NodeSelection.create(tr.doc, start5)
+      : TextSelection.create(tr.doc, start5 + inserted.nodeSize),
+  );
   return tr;
 }
 
@@ -323,6 +361,7 @@ export function completeInlineMathAtCursor(state: EditorState, spec: NodeType): 
       around.source,
       around.dollars,
       around.delimiter,
+      true,
     );
   }
 

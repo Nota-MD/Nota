@@ -9,15 +9,12 @@ use crate::document::DocumentStore;
 use crate::error::{NotaError, Result};
 use crate::plugin::manifest::Manifest;
 use crate::settings::Settings;
-use crate::table_bridge::TableBridge;
 
 #[derive(Clone)]
 pub struct HostContext {
     pub app: tauri::AppHandle,
     pub documents: Arc<Mutex<DocumentStore>>,
     pub settings: Arc<Mutex<Settings>>,
-
-    pub table_bridge: Arc<Mutex<TableBridge>>,
 
     pub ai_context: Arc<Mutex<crate::lua::api::ai::ContextRegistry>>,
 

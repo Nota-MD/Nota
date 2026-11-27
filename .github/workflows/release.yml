@@ -3,7 +3,8 @@
 #   - NSIS creates the Windows `setup.exe`;
 #   - `dpkg-deb`, `rpmbuild` and linuxdeploy create Linux packages.
 #
-# A Windows runner can target both x64 and arm64. macOS packaging is disabled.
+# A Windows runner can target both x64 and arm64. macOS DMGs require separate
+# Intel and Apple Silicon runners because Tauri does not cross-package them.
 #
 # Linux dialogs use a GTK4 4.14 helper. Ubuntu 22.04 only provides GTK 4.6,
 # so release builds use Ubuntu 24.04 for both architectures.
@@ -42,6 +43,14 @@ jobs:
             target: aarch64-pc-windows-msvc
             bundles: nsis
             label: windows-arm64
+          - platform: macos-13
+            target: x86_64-apple-darwin
+            bundles: dmg
+            label: macos-x86_64
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            bundles: dmg
+            label: macos-arm64
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -100,6 +109,9 @@ jobs:
             Source commit: ${{ github.sha }}
             CI run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
+            macOS packages are unsigned. Gatekeeper may require the user to
+            approve the first launch in System Settings.
+
             This is an automatically generated draft release. The checksums job
             appends SHA256SUMS.txt and BUILD-INFO.json.
 
@@ -146,6 +158,7 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.zip
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
 
   checksums:
     if: startsWith(github.ref, 'refs/tags/')

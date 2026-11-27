@@ -8,7 +8,7 @@ export function fileIconName(name: string): iconName {
     return "nota-markdown-symbolic";
   }
   if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"].includes(extension)) {
-    return "folio-insert-image-symbolic";
+    return "nota-insert-image-symbolic";
   }
   if (
     [
@@ -21,7 +21,7 @@ export function fileIconName(name: string): iconName {
     return "nota-source-code-symbolic";
   }
   if (["txt", "log", "csv", "tsv", "rst", "org", "tex", "odt", "docx", "pdf", "epub"].includes(extension)) {
-    return "folio-document-open-symbolic";
+    return "nota-document-open-symbolic";
   }
-  return "folio-edit-symbolic";
+  return "nota-edit-symbolic";
 }

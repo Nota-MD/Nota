@@ -67,26 +67,26 @@ for (const [path, url] of Object.entries(urlTable)) {
 
 const nameTable = [
 
-  "folio-format-text-bold-symbolic",
-  "folio-format-text-italic-symbolic",
-  "folio-format-text-strikethrough-symbolic",
+  "nota-format-text-bold-symbolic",
+  "nota-format-text-italic-symbolic",
+  "nota-format-text-strikethrough-symbolic",
 
 
 
-  "folio-marker-symbolic",
-  "folio-format-text-superscript-symbolic",
-  "folio-format-text-subscript-symbolic",
-  "folio-format-text-underline-symbolic",
-  "folio-insert-code-symbolic",
+  "nota-marker-symbolic",
+  "nota-format-text-superscript-symbolic",
+  "nota-format-text-subscript-symbolic",
+  "nota-format-text-underline-symbolic",
+  "nota-insert-code-symbolic",
   "nota-inline-code-symbolic",
   "nota-code-block-symbolic",
-  "folio-insert-link-symbolic",
-  "folio-insert-image-symbolic",
-  "folio-add-symbolic",
-  "folio-view-list-bullet-symbolic",
-  "folio-view-list-ordered-symbolic",
-  "folio-view-more-horizontal-symbolic",
-  "folio-eraser-symbolic",
+  "nota-insert-link-symbolic",
+  "nota-insert-image-symbolic",
+  "nota-add-symbolic",
+  "nota-view-list-bullet-symbolic",
+  "nota-view-list-ordered-symbolic",
+  "nota-view-more-horizontal-symbolic",
+  "nota-eraser-symbolic",
 
 
   "nota-heading-1-symbolic",
@@ -106,13 +106,11 @@ const nameTable = [
 
 
 
-  "folio-columns-symbolic",
-  "folio-close-symbolic",
+  "nota-columns-symbolic",
+  "nota-close-symbolic",
 
-  "folio-document-open-symbolic",
-  "folio-edit-find-symbolic",
-
-
+  "nota-document-open-symbolic",
+  "nota-edit-find-symbolic",
 
 
 
@@ -126,17 +124,19 @@ const nameTable = [
 
 
 
-  "folio-edit-symbolic",
-  "folio-insert-image-symbolic",
+
+
+  "nota-edit-symbolic",
+  "nota-insert-image-symbolic",
   "nota-markdown-symbolic",
-  "folio-document-export-symbolic",
-  "folio-window-symbolic",
+  "nota-document-export-symbolic",
+  "nota-window-symbolic",
   "nota-doc-theme-symbolic",
   "nota-keys-symbolic",
   "nota-plugin-symbolic",
   "nota-update-symbolic",
   "nota-advanced-symbolic",
-  "folio-configure-symbolic",
+  "nota-configure-symbolic",
 
 
 
@@ -169,10 +169,10 @@ const nameTable = [
 
 
 
-  "folio-edit-cut-symbolic",
-  "folio-edit-copy-symbolic",
-  "folio-edit-paste-symbolic",
-  "folio-delete-symbolic",
+  "nota-edit-cut-symbolic",
+  "nota-edit-copy-symbolic",
+  "nota-edit-paste-symbolic",
+  "nota-delete-symbolic",
 ] as const;
 
 export type iconName = (typeof nameTable)[number];

@@ -34,7 +34,7 @@ import {
 import { paneWriter, type PaneProps } from "./props";
 import { SpellLangPicker } from "./SpellLangPicker";
 
-export function EditorPane({ settings, onChange, settingLocks }: PaneProps) {
+export function EditorPane({ settings, onChange }: PaneProps) {
 
 
   const t = useT();
@@ -121,31 +121,6 @@ export function EditorPane({ settings, onChange, settingLocks }: PaneProps) {
             checked={e.keyboard_experience}
             onChange={(keyboard_experience) => write({ keyboard_experience })}
           />
-        </SettingRow>
-      </SettingsGroup>
-
-      <SettingsGroup title={t("Spreadsheet table mode")}>
-        <SettingRow
-          label={t("Enable spreadsheet-style table controls")}
-          description={t(
-            "Shows row and column headers, cell references, a formula bar, range selection and a fill handle. The document remains a standard GFM Markdown table.",
-          )}
-        >
-          <Toggle
-            checked={e.spreadsheet_tables}
-            onChange={(spreadsheet_tables) => write({ spreadsheet_tables })}
-            disabled={settingLocks.has("editor.spreadsheet_tables")}
-            aria-describedby={
-              settingLocks.has("editor.spreadsheet_tables")
-                ? "spreadsheet-managed-by-extension"
-                : undefined
-            }
-          />
-          {settingLocks.has("editor.spreadsheet_tables") && (
-            <span id="spreadsheet-managed-by-extension" className="stg-inline-note">
-              {t("Enabled and managed by an installed extension.")}
-            </span>
-          )}
         </SettingRow>
       </SettingsGroup>
 

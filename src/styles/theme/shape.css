@@ -98,15 +98,18 @@
   --dialog-close-radius: 999px;
   --dialog-close-bg: transparent;
   --dialog-close-border: transparent;
-  --radius-sm: 6px;
-  --radius: 8px;
-  --radius-lg: 12px;
-  --control-height: 28px;
+  --radius-sm: 5px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --control-height: 22px;
   --spacing: 8px;
+  --toolbar-height: 40px;
+  --statusbar-height: 24px;
   --toolbar-shadow: none;
   --btn-font-weight: 500;
-  --font-ui: -apple-system, "SF Pro Text", "Helvetica Neue", "PingFang SC",
-    "Noto Sans CJK SC", sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+    "Helvetica Neue", "Noto Sans CJK SC", sans-serif;
+  --ui-font-size: 13px;
 
 
 
@@ -123,10 +126,10 @@
 
 
 
-  --switch-w: 48px;
-  --switch-h: 28px;
-  --switch-knob: 24px;
-  --switch-travel: 18px;
+  --switch-w: 38px;
+  --switch-h: 22px;
+  --switch-knob: 18px;
+  --switch-travel: 16px;
 }
 
 

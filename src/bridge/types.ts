@@ -513,7 +513,6 @@ export interface PluginInfo {
 
   settings: PluginSetting[];
 
-  setting_locks: string[];
 }
 
 
@@ -553,7 +552,7 @@ export interface PluginSetting {
 
   key: string;
 
-  kind: "range" | "text" | "toggle";
+  kind: "range" | "text" | "toggle" | "select";
 
   label: string;
 
@@ -575,6 +574,14 @@ export interface PluginSetting {
   placeholder: string;
 
   multiline: boolean;
+
+  options: Array<{ value: string; label: string; editable: boolean; deletable: boolean }>;
+
+  create_command: string;
+
+  rename_command: string;
+
+  delete_command: string;
 }
 
 
@@ -981,5 +988,3 @@ export interface PrintPreview {
 
 
 export type PrintBackend = "pdf" | "browser";
-
-export * from "./types-table";

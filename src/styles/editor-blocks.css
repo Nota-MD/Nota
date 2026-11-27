@@ -592,6 +592,9 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
 
 
 :where(.editor-mount .ProseMirror table) {
+  width: max-content;
+  min-width: min(100%, 20rem);
+  max-width: 100%;
   border-collapse: collapse;
   font-size: 0.96em;
 }

@@ -1,4 +1,4 @@
-/** 设置包不是安装包：选择粒度、ZIP 清单、安全边界与 IPC 接线。 */
+/** Settings packages are not installers: selection, ZIP manifest, security and IPC wiring. */
 
 import { readFileSync } from "node:fs";
 
@@ -22,54 +22,71 @@ function assertValue(value2: unknown, description: string): asserts value2 {
 }
 
 function contains(text4: string, slice: string, description: string): void {
-  assertValue(text4.includes(slice), `${description}：缺少 ${JSON.stringify(slice)}`);
+  assertValue(text4.includes(slice), `${description}: missing ${JSON.stringify(slice)}`);
 }
 
 const rust = readFileSync("src-tauri/src/settings_export.rs", "utf8");
 const dialog = readFileSync("src/ui/settings/SettingsExportDialog.tsx", "utf8");
+const settingsDialog = readFileSync("src/ui/settings/SettingsDialog.tsx", "utf8");
+const general = readFileSync("src/ui/settings/panes/GeneralPane.tsx", "utf8");
+const dialogCss = readFileSync("src/styles/settings-export.css", "utf8");
 const ipc = readFileSync("src/bridge/ipc.ts", "utf8");
 const lib = readFileSync("src-tauri/src/lib.rs", "utf8");
 
-console.log("\n【设置与数据包】");
+console.log("\n[Settings and data package]");
 
-testCase("包是标准 ZIP，并带格式清单", () => {
-  contains(rust, "ZipWriter", "ZIP 写入器");
-  contains(rust, 'FORMAT: &str = "nota-settings-package"', "包格式标识");
-  contains(rust, '"manifest.json"', "清单文件");
-  contains(rust, 'CompressionMethod::Deflated', "压缩写入");
+testCase("the package is a standard ZIP with a format manifest", () => {
+  contains(rust, "ZipWriter", "ZIP writer");
+  contains(rust, 'FORMAT: &str = "nota-settings-package"', "package format marker");
+  contains(rust, '"manifest.json"', "manifest file");
+  contains(rust, 'CompressionMethod::Deflated', "deflate compression");
 });
 
-testCase("程序设置与插件设置/数据分别可选", () => {
-  contains(rust, '"settings"', "程序设置");
-  contains(rust, '"session"', "会话");
-  contains(rust, '"themes"', "主题资源");
-  contains(rust, '"dictionaries"', "词典");
-  contains(rust, "pub settings: bool", "插件设置开关");
-  contains(rust, "pub data: bool", "插件数据开关");
-  contains(dialog, 'part: "settings" | "data"', "前端分开切换");
+testCase("program settings and extension settings or data are independently selectable", () => {
+  contains(rust, '"settings"', "program settings");
+  contains(rust, '"session"', "session");
+  contains(rust, '"themes"', "theme assets");
+  contains(rust, '"dictionaries"', "dictionaries");
+  contains(rust, "pub settings: bool", "extension settings toggle");
+  contains(rust, "pub data: bool", "extension data toggle");
+  contains(dialog, 'part: "settings" | "data"', "frontend toggles settings and data separately");
 });
 
-testCase("敏感项默认不勾选，但仍可手动选择", () => {
-  contains(dialog, "item.available && !item.sensitive", "敏感项默认排除");
-  contains(dialog, "Contains credentials", "界面明确提示凭据");
-  contains(rust, '"image-upload" => (SourceKind::File, "program/image-upload.toml", true)', "后端标记敏感");
+testCase("sensitive items start unselected but remain manually selectable", () => {
+  contains(dialog, "item.available && !item.sensitive", "sensitive items are excluded by default");
+  contains(dialog, "Contains credentials", "the UI labels credentials explicitly");
+  contains(rust, '"image-upload" => (SourceKind::File, "program/image-upload.toml", true)', "backend marks the item sensitive");
 });
 
-testCase("目录导出跳过符号链接与依赖缓存", () => {
-  contains(rust, "ft.is_symlink()", "统计时跳过链接");
-  contains(rust, "meta.file_type().is_symlink()", "收集时跳过链接");
-  contains(rust, 'name == ".git" || name == "node_modules"', "跳过依赖缓存");
-  contains(rust, "skipped_symlinks", "清单记录跳过数量");
-  contains(rust, "*skipped_symlinks += 1", "跳过链接时没有计数");
+testCase("loading the inventory cannot overwrite checkbox toggles", () => {
+  contains(dialog, "onErrorRef.current = onError", "callback ref");
+  contains(dialog, "}, []);", "inventory loads only once");
+  assertValue(!dialog.includes("}, [onError, t]);"), "inventory reload still resets selections");
 });
 
-testCase("设置包命令已注册，默认后缀不是安装包", () => {
-  contains(lib, "nota_settings_export_inventory", "库存命令");
-  contains(lib, "nota_settings_export,", "导出命令");
-  contains(ipc, 'invoke<SettingsExportInventory>("nota_settings_export_inventory")', "桥接库存");
-  contains(dialog, ".nota-backup", "设置包后缀");
-  assertValue(!dialog.toLowerCase().includes("installer.exe"), "前端仍在生成安装器名");
+testCase("standalone Preferences expands the settings package surface", () => {
+  contains(settingsDialog, 'standalone ? "full" : openingWindowStyle === "full" ? "full" : "embedded"', "presentation mapping");
+  contains(general, "presentation={settingsPresentation}", "general pane wiring");
+  contains(dialog, 'presentation = "embedded"', "dialog default presentation");
+  contains(dialogCss, '.settings-export-dialog[data-window-presentation="full"]', "full presentation styles");
+  contains(dialogCss, "height: 100vh", "full presentation height");
 });
 
-console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+testCase("directory export skips symlinks and dependency caches", () => {
+  contains(rust, "ft.is_symlink()", "symlinks are skipped while measuring");
+  contains(rust, "meta.file_type().is_symlink()", "symlinks are skipped while collecting");
+  contains(rust, 'name == ".git" || name == "node_modules"', "dependency caches are skipped");
+  contains(rust, "skipped_symlinks", "the manifest records skipped symlinks");
+  contains(rust, "*skipped_symlinks += 1", "skipped symlinks are not counted");
+});
+
+testCase("settings package commands are registered and the suffix is not an installer", () => {
+  contains(lib, "nota_settings_export_inventory", "inventory command");
+  contains(lib, "nota_settings_export,", "export command");
+  contains(ipc, 'invoke<SettingsExportInventory>("nota_settings_export_inventory")', "inventory IPC bridge");
+  contains(dialog, ".nota-backup", "settings package suffix");
+  assertValue(!dialog.toLowerCase().includes("installer.exe"), "the frontend still generates an installer name");
+});
+
+console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

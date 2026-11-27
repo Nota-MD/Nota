@@ -141,6 +141,49 @@ ${ANCHOR} .editor-mount .ProseMirror :is(p, li, blockquote, td, th) {
 }`;
 }
 
+const CODE_SURFACE_PROPERTIES = [
+  "background",
+  "background-color",
+  "color",
+  "border",
+  "border-color",
+  "border-radius",
+  "box-shadow",
+] as const;
+
+function targetsPreElement(selector: string): boolean {
+  return splitTop(selector).some(
+    (part) =>
+      !/:hover\b/.test(part) &&
+      /(?:^|[\s>+~])pre(?:[.#:[][^,\s>+~]*)?\s*$/.test(part.trim()),
+  );
+}
+
+function codeSurfaceThemeCss(css: string): string {
+  const cleaned = css.replace(AT_IMPORT_RE, "");
+  if (!cleaned.trim()) return "";
+  const sheet = new CSSStyleSheet();
+  try {
+    sheet.replaceSync(cleaned);
+  } catch {
+    return "";
+  }
+  const declarations = new Map<string, string>();
+  for (const rule of Array.from(sheet.cssRules)) {
+    if (rule.type !== CSSRule.STYLE_RULE) continue;
+    const styleRule = rule as CSSStyleRule;
+    if (!targetsPreElement(styleRule.selectorText)) continue;
+    for (const property of CODE_SURFACE_PROPERTIES) {
+      const value = styleRule.style.getPropertyValue(property).trim();
+      if (value) declarations.set(property, value);
+    }
+  }
+  if (!declarations.size) return "";
+  return `${ANCHOR} .editor-mount .ProseMirror :is(pre, .nota-code-theme-surface) {
+${Array.from(declarations, ([property, value]) => `  ${property}: ${value} !important;`).join("\n")}
+}`;
+}
+
 export interface RgbaColor {
   r: number;
   g: number;
@@ -586,6 +629,7 @@ function paintThemeCss(css: string): string {
   const painted =
     scopeDocThemeCss(css) +
     (compatibility ? `\n${compatibility}` : "") +
+    `\n${codeSurfaceThemeCss(css)}` +
     `\n${SELECTION_RULE}`;
   paintedThemeCache.set(css, painted);
   while (paintedThemeCache.size > paintedThemeCacheLimit) {

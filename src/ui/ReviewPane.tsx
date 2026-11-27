@@ -42,7 +42,7 @@ interface Props {
 
   onOpenSidebar: () => void;
 
-  onCall: (plugin: string, command: string, args?: unknown) => Promise<void>;
+  onCall: (plugin: string, command: string, args?: unknown) => Promise<unknown>;
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
 }
 
@@ -145,7 +145,7 @@ export function ReviewPane({
           onClick={onOpenSidebar}
           title={t("Open in sidebar")}
         >
-          <Icon name="folio-columns-symbolic" />
+          <Icon name="nota-columns-symbolic" />
           <span>{t("Sidebar")}</span>
         </button>
         <button

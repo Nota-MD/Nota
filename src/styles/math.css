@@ -219,10 +219,13 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: inherit;
-  font-size: 1em;
-  line-height: inherit;
-  vertical-align: baseline;
+  /* Inline delimiters are ordinary text characters. Theme and form-control
+     rules must not change their typography independently from the source. */
+  font: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  vertical-align: baseline !important;
   white-space: nowrap;
   color: var(--fg-faint);
   user-select: none;
@@ -245,7 +248,7 @@
   background: transparent;
   box-shadow: none;
   overflow: hidden;
-  color: var(--fg);
+  color: inherit;
   font-family: var(--font-mono);
   font-size: 0.88em;
   line-height: 1.6;
@@ -296,9 +299,10 @@
   background: transparent;
   padding: 0;
   font-family: var(--font-mono);
+  font-size: 1em;
   font-size: inherit;
   line-height: inherit;
-  color: var(--fg);
+  color: inherit;
 
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -333,10 +337,17 @@
 
 
 .editor-mount .ProseMirror .nota-math-inline .nota-math-source {
+  display: inline;
   min-width: 0;
   max-width: none;
   flex: none;
   box-sizing: content-box;
+  block-size: 1lh;
+  min-block-size: 1lh;
+  /* An inline-block with clipped overflow aligns its bottom edge to the
+     surrounding baseline. Text inputs do not need clipping, and that fallback
+     lifts the source text away from the adjacent dollar delimiters. */
+  overflow: visible;
 }
 
 
@@ -347,10 +358,12 @@
 }
 
 .editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-source {
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  vertical-align: baseline;
+  font: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  vertical-align: baseline !important;
+  padding-block: 0 !important;
+  border-block: 0 !important;
   color: var(--accent);
   opacity: 1;
 }

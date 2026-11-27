@@ -188,7 +188,7 @@ local 表   = require("kit")            -- <插件目录>/kit/init.lua 也行
 
 ⚠️ **当前空 `resources` 是有意的**，不是漏配；只有重新决定随包时才需要处理目录映射。
 
-跨仓库契约在插件仓库的 `compatibility.json`：宿主 `api = "v2.4"`，官方插件的版本与各自
+跨仓库契约在插件仓库的 `compatibility.json`：宿主 `api = "v2.5"`，官方插件的版本与各自
 `plugin.toml` 必须一致；`Nota-plugins/tools/check-compatibility.sh` 和两仓 CI 都会检查。
 主仓库验证工作流会检出同级插件仓库并跑它的 `tools/check.sh`。
 
@@ -626,13 +626,20 @@ nota.ui.notify(T("Committed"))
 ```toml
 [[settings]]
 key     = "base_url"          # 必填。存进设置文件时用的键
-kind    = "text"              # range（滑杆，默认）／ text（文本）／ toggle（开关）
+kind    = "text"              # range / text / toggle / select
 label   = "Endpoint URL"      # 必填。给人看的名字（**写英语**，见下）
 help    = "An OpenAI-compatible URL …"   # 可选。名字下面那句小字
 placeholder = "https://…"     # text：输入框里那句灰字（要翻译）
 secret      = true            # text：画成密码框（只管显示，不改存储）
 default_text = "gpt-4o-mini"  # text：用户还没填过时框里显示什么
 multiline   = true            # text: render a multiline textarea
+
+[[settings]]
+key             = "persona_active"
+kind            = "select"
+label           = "AI persona"
+options_command = "list_personas"
+change_command  = "persona_selected"
 
 [[settings]]
 key        = "stream"
@@ -655,7 +662,7 @@ unit    = "s"                # 可选，读数后面跟的那个单位
 | 栏 | 必填？ | 默认值 | 校验规则 | 写错了会怎样 |
 |---|---|---|---|---|
 | `key` | **必填** | — | 非空；只允许 **ASCII 字母、数字、`-`、`_`**（**不许有点**，见下） | 空 → 「key 不能为空」；有点或怪字符 → 「key `X` 不合法……」；**同一条重复** → 「有两格用同一个 key」 |
-| `kind` | 可选 | `"range"` | 认得出才行：`range`（滑杆）／`text`（文本）／`toggle`（开关） | 别的值 → 「kind `X` 认不出：只有 `range`（滑杆）、`text`（文本）与 `toggle`（开关）三种……」 |
+| `kind` | 可选 | `"range"` | `range` / `text` / `toggle` / `select` | Unknown values reject the manifest. |
 | `label` | **必填** | — | 去空白后非空 | 空 → 「`[[settings]] X` 没写 label」 |
 | `help` | 可选 | `""` | 无 | — |
 | `min` / `max` / `default` | **只有 `range`** | — | 三个都要有、都是有限数、`min < max`、`default` 落在区间里 | 缺一个 → 「……min / max / default 三个都要给（少了范围或者默认值的滑杆画不出来）」；出界或颠倒各有各的话。⚠️ 写在别的档位上 → 「是 `text`，不该写 `min / max / default / step`（那是 `range` 的）」 |
@@ -666,6 +673,8 @@ unit    = "s"                # 可选，读数后面跟的那个单位
 | `default_text` | 可选（`text`） | `""` | 无 | — |
 | `multiline` | Optional (`text`) | `false` | Boolean | Renders a multiline textarea. It is rejected on `range` and `toggle` settings. |
 | `default_on` | 可选（`toggle`） | `false` | 布尔 | — |
+| `options_command` | Required (`select`) | — | Extension command returning `{ value, label }` items | Missing or invalid command returns no options. |
+| `change_command` | Optional (`select`) | `""` | Extension command called after the selected value is saved | Receives `{ value = "..." }`. |
 
 校验在 `plugin/settings_decl.rs::check_settings()`（2026-10-04 从 `manifest.rs` 拆出，
 理由见那份文件头）。**六条罪状，每条都是"能挡在门口的就别留到运行时"**（与
@@ -820,7 +829,7 @@ SHA-256，再走原有的 `.nota-plugin` 验签、签名者连续性检查和原
 | 名字 | 是什么 |
 |---|---|
 | `nota.version` | 宿主版本字符串（`env!("CARGO_PKG_VERSION")`，当前 `"0.1.0"`） |
-| `nota.api_version` | API version string, currently `"v2.4"` |
+| `nota.api_version` | API version string, currently `"v2.5"` |
 | `nota.i18n` | `{app_lang, lang, ok, text(s)}`——插件自己的**文案表**（2026-09-25）。⭐ **不要能力**：路径由宿主用插件自己的目录拼，插件只交**键**。键就是"作者写下的那句原文"，取不到返回 `nil`（标准写法 `nota.i18n.text(s) or s`）。契约是 §2.4，代码在 `lua/api/i18n.rs` |
 | `nota.plugin_id` | 这个插件在清单里声明的 id（**原样**，如 `nota.git`——没归一化） |
 | `nota.log.info/warn/error(msg)` | 往宿主 stderr 打一行（⚠️ **默认不打**，要 `NOTA_DEBUG=1`，见 §6.3），前缀 `[nota:<插件 id>]` + 级别 |
@@ -1008,10 +1017,10 @@ Ctrl+Z 才发现"是最坏的一种错。
 ### 4.1 Format and compatibility
 
 ```toml
-api = "v2.4"
+api = "v2.5"
 ```
 
-The host currently supports `v2.4`. A plugin is accepted only when:
+The host currently supports `v2.5`. A plugin is accepted only when:
 
 1. its major version equals the host major version;
 2. its minor version is not newer than the host minor version.
@@ -1048,11 +1057,11 @@ API says "Please contact the developer."
 
 | 名字 | 在哪 | 是什么 |
 |---|---|---|
-| `api` 栏 / `nota.api_version` | 清单里 / Lua 侧 | **API 版本**，当前 `"v2.4"` |
+| `api` 栏 / `nota.api_version` | 清单里 / Lua 侧 | **API 版本**，当前 `"v2.5"` |
 | `nota.version` | Lua 侧 | **宿主应用的版本**（`0.1.0`，来自 `Cargo.toml` 的 `package.version`） |
 | `version` 栏 / `PluginInfo.version` | 清单里 / 前端 | **插件自己的版本**。`plugin.toml:12` 的注释明确说了：**不代表 ABI** |
 
-⚠️ 所以一个插件写 `version = "9.9.9"` 而 `api = "v2.4"` 是**完全合法**的。
+⚠️ 所以一个插件写 `version = "9.9.9"` 而 `api = "v2.5"` 是**完全合法**的。
 
 ---
 
@@ -1328,35 +1337,6 @@ end
 
 ---
 
-## 6A. Table capabilities (v2.4)
-
-Declare only the table capabilities the extension uses:
-
-```toml
-capabilities = [
-  "table.read",
-  "table.render",
-  "table.write",
-  "table.context_action",
-]
-```
-
-`nota.table` appears only when at least one table capability is declared.
-Individual members follow their own capability. Register a snapshot callback
-once in `on_load`; it runs whenever the active GFM table or selection changes.
-
-Extensions that require spreadsheet controls also declare:
-
-```toml
-capabilities = ["spreadsheet.require"]
-
-[[setting_lock]]
-setting = "editor.spreadsheet_tables"
-value = true
-```
-
-The capability and lock must appear together. The host records the user's
-previous value and restores it after disable or uninstall.
 
 ## 7. 插件之间怎么协作（现状）
 

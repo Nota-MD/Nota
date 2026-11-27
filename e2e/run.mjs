@@ -146,7 +146,7 @@ async function cdpClient(webSocketUrl) {
 }
 
 async function waitForReport(client) {
-  const deadline = Date.now() + 90_000;
+  const deadline = Date.now() + 300_000;
   let handledNativeRequest = "";
   for (;;) {
     const evaluated = await client.send("Runtime.evaluate", {
@@ -176,6 +176,7 @@ async function waitForReport(client) {
       const isArrowDown = nativeKey.startsWith("arrow-down");
       const isBackspace = nativeKey.startsWith("backspace");
       const isDelete = nativeKey === "delete";
+      const isEnter = nativeKey.startsWith("enter");
       const isCtrlA = nativeKey === "ctrl-a";
       const isCtrlB = nativeKey === "ctrl-b";
       const parameters =
@@ -256,6 +257,14 @@ async function waitForReport(client) {
                           windowsVirtualKeyCode: 46,
                           nativeVirtualKeyCode: 46,
                         }
+                      : isEnter
+                        ? {
+                            type: "rawKeyDown",
+                            key: "Enter",
+                            code: "Enter",
+                            windowsVirtualKeyCode: 13,
+                            nativeVirtualKeyCode: 13,
+                          }
                       : isCtrlA
                         ? {
                             type: "rawKeyDown",

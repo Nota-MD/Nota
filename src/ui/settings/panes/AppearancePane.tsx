@@ -28,7 +28,7 @@ function ModeSwatch({
   active,
   onPick,
 }: {
-  mode: "light" | "dark";
+  mode: "light" | "dark" | "auto";
   label: string;
   style: string;
 
@@ -39,6 +39,17 @@ function ModeSwatch({
 
 
   const strongConfigure = accentVars(accent);
+  const preview = (previewMode: "light" | "dark") => (
+    <span
+      className="stg-swatch-page"
+      data-ui-style={style}
+      data-ui-mode={previewMode}
+      style={strongConfigure ?? undefined}
+    >
+      <span className="stg-swatch-ink">Aa</span>
+      <span className="stg-swatch-rule" />
+    </span>
+  );
   return (
     <button
       type="button"
@@ -48,10 +59,14 @@ function ModeSwatch({
       aria-label={label}
       onClick={onPick}
     >
-      <span className="stg-swatch-page" data-ui-style={style} data-ui-mode={mode} style={strongConfigure ?? undefined}>
-        <span className="stg-swatch-ink">Aa</span>
-        <span className="stg-swatch-rule" />
-      </span>
+      {mode === "auto" ? (
+        <span className="stg-swatch-auto">
+          {preview("light")}
+          {preview("dark")}
+        </span>
+      ) : (
+        preview(mode)
+      )}
       <span className="stg-swatch-name">{label}</span>
     </button>
   );
@@ -87,7 +102,7 @@ export function AppearancePane({
   };
 
   const write = paneWriter(settings, onChange, "appearance");
-  const { style, mode: currentMode } = useResolvedAppearance(settings);
+  const { style } = useResolvedAppearance(settings);
   const auto = settings.ui_mode === "auto";
   const a = settings.appearance;
 
@@ -170,6 +185,14 @@ export function AppearancePane({
               active={!auto && settings.ui_mode === "dark"}
               onPick={() => onChange({ ui_mode: "dark" })}
             />
+            <ModeSwatch
+              mode="auto"
+              label={t("Automatic")}
+              style={style}
+              accent={a.accent}
+              active={auto}
+              onPick={() => onChange({ ui_mode: "auto" })}
+            />
           </div>
         </SettingRow>
       </SettingsGroup>
@@ -203,17 +226,6 @@ export function AppearancePane({
               <span className="stg-warn">{t("(Unrecognized: {0} — falling back to following the style)", a.accent)}</span>
             )}
           </div>
-        </SettingRow>
-      </SettingsGroup>
-
-      <SettingsGroup title={t("Follow the system preference")}>
-        <SettingRow>
-
-
-
-
-
-          <Toggle checked={auto} onChange={(on) => onChange({ ui_mode: on ? "auto" : currentMode })} />
         </SettingRow>
       </SettingsGroup>
 

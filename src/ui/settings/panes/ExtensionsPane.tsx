@@ -75,6 +75,7 @@ export function ExtensionsPane({ plugins, messageTask, updates, action }: Expand
             <SettingRow
               key={p.id}
               label={p.name}
+              layout="stacked"
 
 
               searchText={`${p.id} ${p.version} ${p.api}`}

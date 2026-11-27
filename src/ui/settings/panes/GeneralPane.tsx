@@ -49,7 +49,12 @@ import { SettingsExportDialog } from "../SettingsExportDialog";
 import { SoftwareUpdatePane } from "@/ui/SoftwareUpdatePane";
 import { paneWriter, type PaneProps } from "./props";
 
-export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) {
+export function GeneralPane({
+  settings,
+  settingsPresentation,
+  onChange,
+  onResetSettings,
+}: PaneProps) {
 
 
   const t = useT();
@@ -211,6 +216,7 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
 
       {exportPackageOpen && (
         <SettingsExportDialog
+          presentation={settingsPresentation}
           onClose={() => setExportPackageOpen(false)}
           onExported={(report) => {
             setExportResult(report);

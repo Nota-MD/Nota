@@ -23,7 +23,7 @@ import {
 import type { EditorView } from "@milkdown/kit/prose/view";
 
 import { linkRange } from "./link-edit";
-import { explicitLinkSyntax, normalizeExplicitLinkDestination } from "./url-link";
+import { parseExplicitLinkMarkdown } from "./url-link";
 import {
   fitInlineSourceWidth,
   redrawAfterMount,
@@ -63,11 +63,8 @@ export function keyboardLinkSourceText(link: keyboardLinkSource): string {
 export function parseKeyboardLinkSource(
   source: string,
 ): { label: string; href: string } | null {
-  const match = explicitLinkSyntax.exec(source);
-  if (!match) return null;
-  const label = match[1] ?? "";
-  const href = normalizeExplicitLinkDestination(match[2] ?? "");
-  return label && href !== null ? { label, href } : null;
+  const parsed = parseExplicitLinkMarkdown(source);
+  return parsed && parsed.label ? { label: parsed.label, href: parsed.href } : null;
 }
 
 /**

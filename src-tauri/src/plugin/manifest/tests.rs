@@ -87,7 +87,7 @@ fn api_minor_compatibility_is_one_way() {
 
     write_manifest(
         &dir,
-        "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v2.5\"\n",
+        "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v2.6\"\n",
     );
     assert!(Manifest::load(&dir.join("plugin.toml")).is_err());
 
@@ -213,44 +213,5 @@ manifest = "https://example.com/latest.json"
     );
     let manifest = Manifest::load(&dir.join("plugin.toml")).unwrap();
     assert!(manifest.update.is_some());
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn spreadsheet_lock_requires_matching_capability() {
-    let dir = std::env::temp_dir().join("nota-manifest-spreadsheet-lock");
-    let _ = std::fs::remove_dir_all(&dir);
-    write_manifest(
-        &dir,
-        r#"
-[plugin]
-id = "x.sheet"
-name = "Sheet"
-api = "v2.4"
-capabilities = ["spreadsheet.require"]
-
-[[setting_lock]]
-setting = "editor.spreadsheet_tables"
-value = true
-"#,
-    );
-    let manifest = Manifest::load(&dir.join("plugin.toml")).unwrap();
-    assert_eq!(manifest.setting_locks.len(), 1);
-    assert!(manifest.has(Capability::SpreadsheetRequire));
-
-    write_manifest(
-        &dir,
-        r#"
-[plugin]
-id = "x.sheet"
-name = "Sheet"
-api = "v2.4"
-
-[[setting_lock]]
-setting = "editor.spreadsheet_tables"
-value = true
-"#,
-    );
-    assert!(Manifest::load(&dir.join("plugin.toml")).is_err());
     let _ = std::fs::remove_dir_all(&dir);
 }

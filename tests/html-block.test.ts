@@ -254,8 +254,28 @@ testCase("独占一行的 HTML → 自造类型（**这就是那个 bug 的补�
   equal(types(tree), ["root", blockHtmlNodeName], "root 底下那颗换了类型");
 });
 
-testCase("Milkdown 的 paragraph(html) 形状也收成 HTML 块，原文不变", () => {
+testCase("Milkdown 的 image-only paragraph(html) uses the Markdown image model", () => {
   const source = '<p align="center">\n  <img src="a.svg">\n</p>';
+  const tree: MarkdownNode = {
+    type: "root",
+    children: [
+      {
+        type: "paragraph",
+        children: [{ type: "html", value: source }],
+      },
+    ],
+  };
+  blockHTMLConvertReplace(tree);
+  const paragraph = tree.children?.[0];
+  equal(paragraph?.type, "paragraph", "image stays inside a paragraph");
+  const image = paragraph?.children?.[0];
+  equal(image?.type, "image", "HTML-only image becomes a Markdown image node");
+  equal(image?.url, "a.svg", "image source");
+  equal(image?.syntax, "markdown", "image uses the Markdown source model");
+});
+
+testCase("Milkdown 的 non-image paragraph(html) still becomes a block", () => {
+  const source = '<p align="center">plain</p>';
   const tree: MarkdownNode = {
     type: "root",
     children: [

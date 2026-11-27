@@ -50,6 +50,7 @@ import type { MarkdownNode, ParserState, SerializerState } from "@milkdown/kit/t
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { $nodeSchema, $remark } from "@milkdown/kit/utils";
 import { debugEvent } from "@/ui/debug-log";
+import { imageFromHtmlOnly } from "./image-attrs";
 
 
 
@@ -134,16 +135,51 @@ export function blockHTMLConvertReplace(tree: MarkdownNode): void {
   const walk = (node: MarkdownNode): void => {
     const child = node.children;
     if (!Array.isArray(child)) return;
-    for (const value of child as MarkdownNode[]) {
+    const children = child as MarkdownNode[];
+    for (const [index, value] of children.entries()) {
+      const imageValue =
+        value.type === "html" && typeof value.value === "string"
+          ? imageFromHtmlOnly(value.value)
+          : null;
+      if (imageValue) {
+        const image = {
+          type: "image",
+          url: imageValue.src,
+          alt: imageValue.alt,
+          title: imageValue.title,
+          zoom: imageValue.zoom,
+          syntax: "markdown",
+        };
+        children[index] =
+          node.type === "root" ? { type: "paragraph", children: [image] } : image;
+        continue;
+      }
       if (
         value.type === "html" &&
         typeof value.value === "string" &&
-        blockLevelContainer.has(node.type)
+        blockLevelContainer.has(node.type) &&
+        imageFromHtmlOnly(value.value) === null
       ) {
         value.type = blockHtmlNodeName;
       } else if (blockLevelContainer.has(node.type)) {
         const paragraphSource = pureHTMLParagraphSource(value);
         if (paragraphSource !== null) {
+          const imageValue = imageFromHtmlOnly(paragraphSource);
+          if (imageValue) {
+            const image = {
+              type: "image",
+              url: imageValue.src,
+              alt: imageValue.alt,
+              title: imageValue.title,
+              zoom: imageValue.zoom,
+              syntax: "markdown",
+            };
+            children[index] =
+              node.type === "root"
+                ? { type: "paragraph", children: [image] }
+                : image;
+            continue;
+          }
           value.type = blockHtmlNodeName;
           value.value = paragraphSource;
           delete value.children;

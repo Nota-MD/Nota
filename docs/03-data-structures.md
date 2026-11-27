@@ -357,6 +357,9 @@ pub struct Settings { … }
 `getComputedStyle()` 的实际字体、字号、字重、行高、前景色、背景色、盒尺寸、
 内边距和圆角，并把信息放在目标下方；下方空间不足时翻到上方。提示层是 body
 portal 且 `pointer-events: none`，不会参与命中测试，也不改变文档内容。
+The same inspector and selectable-text bridge are mounted in standalone
+Preferences, so developer settings remain usable when the editor and Settings
+run in separate windows.
 
 ### 5.1f 开发者界面文字选择
 
@@ -365,6 +368,11 @@ portal 且 `pointer-events: none`，不会参与命中测试，也不改变文�
 `data-ui-text-selectable="true"`；CSS 据此临时放开菜单、状态栏、设置页、对话框
 等外壳文字的拖动选择。关闭开发者模式或该开关后属性变回 `"false"`，外壳恢复
 不可选。正文、CodeMirror 与表单控件不受这个开关控制，两种状态下始终可编辑和复制。
+
+`[markdown].heading_style`, `bullet_mark` and `ordered_mark` are serialization
+fallbacks. The editor preserves the dominant valid syntax already present in a
+document before applying these preferences, so source-mode round trips do not
+normalize Setext headings, `+` bullets or `1)` ordered lists without cause.
 
 ### 5.1g 开发者宿主桥
 
@@ -1303,10 +1311,10 @@ added_at = "2026-09-25"
 ## 8. `NOTA_PLUGIN_API_VERSION`
 
 ```rust
-pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 4);
+pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 5);
 ```
 
-The current version is `v2.4`. Plugins must use the same major version and may
+The current version is `v2.5`. Plugins must use the same major version and may
 request an older or equal minor version. Legacy integer `api = 2` is read as
 `v2.0`.
 
@@ -1507,23 +1515,6 @@ Shift_JIS、UTF-16 等不再被强行当 UTF-8；编码名也会在状态栏统�
 
 ---
 
-## 10A. Table bridge state (API v2.4)
-
-| Shape | Meaning |
-|---|---|
-| `TableSnapshot` | Document id, stable table id, source cells, selected range and active cell |
-| `TableRender` | Temporary extension-owned display values keyed by A1 references |
-| `TableCellUpdate` | Zero-based row/column plus replacement source text |
-| `TableWriteRequest` | Plugin id, document id, table id and one batch of cell updates |
-| `TableAction` | Localized context-menu label and the plugin command it invokes |
-
-`AppState.table_bridge` is an `Arc<Mutex<TableBridge>>`. Plugin callbacks may
-hold the `plugins` lock before taking this lock; no path acquires them in the
-opposite order.
-
-`PluginRecord.setting_backups` stores the value the user had before an active
-extension acquired `editor.spreadsheet_tables`. Disable, uninstall or turning
-off all extensions restores and clears that backup.
 
 ## 11. 已知缺陷与容易踩的坑
 

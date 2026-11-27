@@ -27,8 +27,6 @@ pub struct Editor {
 
     pub keyboard_experience: bool,
 
-    pub spreadsheet_tables: bool,
-
     pub emoji_autocomplete: bool,
 
     pub line_ending: LineEnding,
@@ -47,7 +45,6 @@ impl Default for Editor {
             paragraph_indent_chars: 2,
             auto_pair: false,
             keyboard_experience: false,
-            spreadsheet_tables: false,
             emoji_autocomplete: true,
             line_ending: LineEnding::default(),
             spellcheck: true,
@@ -105,25 +102,6 @@ mod tests {
             back.keyboard_experience,
             "toggle did not survive a TOML round trip"
         );
-    }
-
-    #[test]
-    fn spreadsheet_tables_default_off_and_round_trip() {
-        assert!(!Editor::default().spreadsheet_tables);
-        let old: Editor = toml::from_str("auto_pair = true\n").unwrap();
-        assert!(!old.spreadsheet_tables);
-
-        let enabled = Editor {
-            spreadsheet_tables: true,
-            ..Default::default()
-        };
-        let text = toml::to_string_pretty(&enabled).unwrap();
-        assert!(
-            text.contains("spreadsheet_tables = true"),
-            "actual:\n{text}"
-        );
-        let back: Editor = toml::from_str(&text).unwrap();
-        assert!(back.spreadsheet_tables);
     }
 
     #[test]

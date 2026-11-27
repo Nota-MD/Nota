@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Re-upload Release assets in the order shown on GitHub:
-# Windows x64, Linux x64, Windows ARM64, Linux ARM64, then index manifests.
+# Windows x64, Linux x64, macOS x64, Windows ARM64, Linux ARM64,
+# macOS ARM64, then index manifests.
 #
 # GitHub keeps upload order, while the matrix build jobs upload concurrently.
 # This runs only after every build artifact has reached the draft Release.
@@ -21,11 +22,15 @@ mapfile -d '' linux_x64_deb < <(find_group -name '*_amd64.deb')
 mapfile -d '' linux_x64_rpm < <(find_group -name '*x86_64.rpm')
 mapfile -d '' linux_x64_appimage < <(find_group -name '*_amd64.AppImage')
 linux_x64=("${linux_x64_deb[@]}" "${linux_x64_rpm[@]}" "${linux_x64_appimage[@]}")
+mapfile -d '' macos_x64 < <(find_group -name '*_x64.dmg')
 mapfile -d '' win_arm64 < <(find_group -name '*_arm64-setup.exe' -o -name '*_arm64-portable.zip')
 mapfile -d '' linux_arm64 < <(find_group -name '*_arm64.deb' -o -name '*aarch64.rpm' -o -name '*_aarch64.AppImage')
+mapfile -d '' macos_arm64 < <(find_group -name '*_aarch64.dmg')
 
 for pair in "Windows x64:${#win_x64[@]}:2:required" "Linux x64:${#linux_x64[@]}:3:required" \
-            "Windows ARM64:${#win_arm64[@]}:2:optional" "Linux ARM64:${#linux_arm64[@]}:3:optional"; do
+            "macOS Intel:${#macos_x64[@]}:1:required" \
+            "Windows ARM64:${#win_arm64[@]}:2:optional" "Linux ARM64:${#linux_arm64[@]}:3:optional" \
+            "macOS Apple Silicon:${#macos_arm64[@]}:1:required"; do
   IFS=: read -r label actual expected requirement <<<"$pair"
   if [[ "$actual" == "$expected" ]]; then
     continue
@@ -46,7 +51,8 @@ for name in BUILD-INFO.json SHA256SUMS.txt latest.json; do
 done
 
 declare -A expected=()
-for file in "${win_x64[@]}" "${linux_x64[@]}" "${win_arm64[@]}" "${linux_arm64[@]}" \
+for file in "${win_x64[@]}" "${linux_x64[@]}" "${macos_x64[@]}" \
+            "${win_arm64[@]}" "${linux_arm64[@]}" "${macos_arm64[@]}" \
             "$dir/BUILD-INFO.json" "$dir/SHA256SUMS.txt" "$dir/latest.json"; do
   expected[$(basename "$file")]=1
 done
@@ -80,8 +86,10 @@ upload_group() {
 
 upload_group "${win_x64[@]}"
 upload_group "${linux_x64[@]}"
+upload_group "${macos_x64[@]}"
 if (( ${#win_arm64[@]} )); then upload_group "${win_arm64[@]}"; fi
 if (( ${#linux_arm64[@]} )); then upload_group "${linux_arm64[@]}"; fi
+upload_group "${macos_arm64[@]}"
 upload_group "$dir/BUILD-INFO.json" "$dir/SHA256SUMS.txt"
 # latest.json is deliberately the final asset in the list.
 upload_group "$dir/latest.json"

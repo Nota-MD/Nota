@@ -27,6 +27,12 @@ These rules are mandatory for every source change.
    releases may make incompatible changes. Hosts accept plugins from the same
    major version only, and the plugin's minor version must not exceed the
    host's supported minor version.
+10. DOM-facing E2E must pass in both Chromium and WebKitGTK.
+    Editor input, caret, selection, IME, clipboard, drag/drop, contenteditable,
+    and inline NodeView behavior require both `npm run test:e2e` and
+    `npm run test:webkit`. A Chromium-only pass is insufficient evidence.
+    Pure source, filesystem, command-contract, and compilation checks do not
+    require the WebKit run.
 
 ## Exceptions
 

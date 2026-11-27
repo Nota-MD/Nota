@@ -69,7 +69,6 @@ import {
 } from "@/editor/spell-check";
 import {
   buildRows,
-  tableActionPrefix,
   inlineBelowValueCell,
   determineDropPoint,
   wholeLineDisabled,
@@ -98,13 +97,13 @@ type FlipTranslate = ReturnType<typeof useT>;
 
 
 const cutPasteBoardIcon: Record<string, iconName> = {
-  "edit.cut": "folio-edit-cut-symbolic",
-  "edit.copy": "folio-edit-copy-symbolic",
-  "edit.paste": "folio-edit-paste-symbolic",
+  "edit.cut": "nota-edit-cut-symbolic",
+  "edit.copy": "nota-edit-copy-symbolic",
+  "edit.paste": "nota-edit-paste-symbolic",
 
 
 
-  "edit.delete": "folio-delete-symbolic",
+  "edit.delete": "nota-delete-symbolic",
 };
 
 
@@ -685,9 +684,9 @@ export interface contextMenuWiring {
 
   copyImage: (image: HTMLImageElement) => Promise<void>;
 
+  imageCommand: (id: string, image: HTMLImageElement) => void | Promise<void>;
+
   developerMode: boolean;
-  tableActions: readonly import("@/bridge/ipc").TableContextAction[];
-  onTableAction: (plugin: string, command: string, actionId: string) => void;
 }
 
 
@@ -745,9 +744,8 @@ export function ContextMenu(wiring: contextMenuWiring) {
     cursor,
     toast,
     copyImage,
+    imageCommand,
     developerMode,
-    tableActions,
-    onTableAction,
   } = wiring;
   const t = useT();
   const [open2, setOpen] = useState<isOpen | null>(null);
@@ -795,7 +793,6 @@ export function ContextMenu(wiring: contextMenuWiring) {
 
       const contextImage = el.closest("img");
       const onImage = contextImage instanceof HTMLImageElement ? contextImage : null;
-      const onTable = Boolean(el.closest(".ProseMirror table"));
       const hasSelection = cursor?.hasSelection ?? Boolean(window.getSelection()?.toString());
       const rows = buildRows(
         drop,
@@ -803,8 +800,7 @@ export function ContextMenu(wiring: contextMenuWiring) {
         CombineWriteLineSearch,
         Boolean(onImage),
         hasSelection,
-        tableActions,
-        onTable,
+        t,
       );
 
       if (rows.length === 0) return setOpen(null);
@@ -855,8 +851,7 @@ export function ContextMenu(wiring: contextMenuWiring) {
                   { createProposalPlural, addWordDictionary: t("Add to dictionary"), ignoreOmit: t("Ignore") },
                   false,
                   hasSelection,
-                  tableActions,
-                  onTable,
+                  t,
                 ),
               };
             });
@@ -872,7 +867,7 @@ export function ContextMenu(wiring: contextMenuWiring) {
 
 
 
-  }, [developerMode, tableActions]);
+  }, [developerMode]);
 
   const collapse = useCallback(() => {
     setOpen(null);
@@ -903,17 +898,12 @@ export function ContextMenu(wiring: contextMenuWiring) {
         return;
       }
       if (id === "edit.copyImage" && thisOneDocument.image) return void copyImage(thisOneDocument.image);
-      if (id.startsWith(tableActionPrefix)) {
-        const action = tableActions.find(
-          (item) => `${tableActionPrefix}${item.plugin}:${item.id}` === id,
-        );
-        if (action) onTableAction(action.plugin, action.command, action.id);
-        return;
+      if (id.startsWith("image.") && thisOneDocument.image) {
+        return void imageCommand(id, thisOneDocument.image);
       }
-
       commandTable[id]?.();
     },
-    [open2, commandTable, collapse, copyImage, onTableAction, t, tableActions, toast],
+    [open2, commandTable, collapse, copyImage, imageCommand, t, toast],
   );
 
   useEffect(() => {
@@ -952,6 +942,23 @@ export function ContextMenu(wiring: contextMenuWiring) {
   }, [open2]);
 
   if (!open2) return;
+  const currentZoom = String(
+    open2.image?.dataset.notaImageZoom ?? "100",
+  );
+  const imageChecks: Record<string, boolean> = open2.image
+    ? {
+        "image.syntax.markdown":
+          open2.image.dataset.notaImageSyntax !== "html",
+        "image.syntax.html":
+          open2.image.dataset.notaImageSyntax === "html",
+        ...Object.fromEntries(
+          [25, 33, 50, 67, 80, 100, 150, 200].map((zoom) => [
+            `image.zoom.${zoom}`,
+            currentZoom === String(zoom),
+          ]),
+        ),
+      }
+    : {};
   return createPortal(
     <ContextMenuPanel
       line3={open2.line3}
@@ -959,7 +966,7 @@ export function ContextMenu(wiring: contextMenuWiring) {
 
 
       disabled2={disabledForLocation(open2.DropPoint, disabled2)}
-      check={check}
+      check={{ ...check, ...imageChecks }}
       cursor={cursor}
       onPick={select}
       onDismiss={collapse}

@@ -1,4 +1,4 @@
-/** 设置页下拉已从原生 select 换成主题可完整控制的自绘 combobox。 */
+/** Settings selects are theme-controlled comboboxes instead of native select elements. */
 
 import { readFileSync } from "node:fs";
 
@@ -25,48 +25,56 @@ const primitives = readFileSync("src/ui/settings/primitives.tsx", "utf8");
 const controls = readFileSync("src/styles/settings-controls.css", "utf8");
 const theme = readFileSync("src/styles/theme/base.css", "utf8");
 const modalTrap = readFileSync("src/ui/useModalTrap.ts", "utf8");
+const pluginPane = readFileSync("src/ui/settings/panes/PluginSettingsPane.tsx", "utf8");
+const pluginState = readFileSync("src/ui/usePlugins.ts", "utf8");
 
-console.log("\n【自绘下拉】");
+console.log("\n[Custom settings select]");
 
-testCase("Select 不再渲染原生 select", () => {
+testCase("Select no longer renders a native select", () => {
   const selectStart = primitives.indexOf("export function Select");
   const toggleStart = primitives.indexOf("export function Toggle", selectStart);
   const component = primitives.slice(selectStart, toggleStart);
-  assertValue(selectStart >= 0 && toggleStart > selectStart, "找不到 Select 组件边界");
-  assertValue(!component.includes("<select"), "Select 仍渲染原生 select");
-  assertValue(!component.includes("<option"), "Select 仍渲染原生 option");
-  assertValue(component.includes('role="combobox"'), "触发器没有 combobox 语义");
-  assertValue(component.includes('role="listbox"'), "弹层没有 listbox 语义");
-  assertValue(component.includes('role="option"'), "选项没有 option 语义");
+  assertValue(selectStart >= 0 && toggleStart > selectStart, "Select component bounds were not found");
+  assertValue(!component.includes("<select"), "Select still renders a native select");
+  assertValue(!component.includes("<option"), "Select still renders native options");
+  assertValue(component.includes('role="combobox"'), "the trigger lacks combobox semantics");
+  assertValue(component.includes('role="listbox"'), "the popup lacks listbox semantics");
+  assertValue(component.includes('role="option"'), "options lack option semantics");
 });
 
-testCase("自绘下拉保留 portal、受控值、禁用态和键盘操作", () => {
+testCase("the custom select preserves portal, controlled value, disabled state and keyboard input", () => {
   const selectStart = primitives.indexOf("export function Select");
   const toggleStart = primitives.indexOf("export function Toggle", selectStart);
   const component = primitives.slice(selectStart, toggleStart);
-  assertValue(component.includes("createPortal("), "列表没有 portal，滚动容器会裁切");
-  assertValue(component.includes("onChange(option.value)"), "选项没有更新受控值");
-  assertValue(component.includes('"ArrowDown"'), "缺少向下键");
-  assertValue(component.includes('"ArrowUp"'), "缺少向上键");
-  assertValue(component.includes('"Home"'), "缺少 Home 键");
-  assertValue(component.includes('"End"'), "缺少 End 键");
-  assertValue(component.includes('"Escape"'), "缺少 Escape 键");
-  assertValue(component.includes("typeaheadRef"), "缺少原生下拉常见的首字母跳转");
+  assertValue(component.includes("createPortal("), "the list is not portaled and can be clipped by scrollers");
+  assertValue(component.includes("onChange(option.value)"), "choosing an option does not update the controlled value");
+  assertValue(component.includes('"ArrowDown"'), "ArrowDown is missing");
+  assertValue(component.includes('"ArrowUp"'), "ArrowUp is missing");
+  assertValue(component.includes('"Home"'), "Home is missing");
+  assertValue(component.includes('"End"'), "End is missing");
+  assertValue(component.includes('"Escape"'), "Escape is missing");
+  assertValue(component.includes("typeaheadRef"), "first-letter navigation is missing");
   assertValue(
     component.includes("popup.scrollTop") && component.includes("getBoundingClientRect()"),
-    "键盘高亮越界时没有滚动弹层自身",
+    "keyboard navigation does not scroll the popup when the active option leaves view",
+  );
+  assertValue(
+    component.includes("contentWidth") &&
+      component.includes("option.label.length") &&
+      component.includes('document.createElement("span")'),
+    "the popup does not expand to the longest option",
   );
   assertValue(
     primitives.includes("OWN_CONTROLS") && primitives.includes("  Select,"),
-    "SettingRow 不再把 Select 当成可标注控件",
+    "SettingRow no longer treats Select as a labelable control",
   );
   assertValue(
     modalTrap.includes('[role="combobox"][aria-haspopup="listbox"][aria-expanded="true"]'),
-    "Escape 会越过展开中的下拉，直接关闭整个设置框",
+    "Escape bypasses the open select and closes Settings",
   );
 });
 
-testCase("trigger、popup、active 与 selected 全由主题 CSS 控制", () => {
+testCase("trigger, popup, active and selected states are controlled by theme CSS", () => {
   for (const selector of [
     ".stg-select-trigger",
     ".stg-select-popup",
@@ -74,7 +82,7 @@ testCase("trigger、popup、active 与 selected 全由主题 CSS 控制", () => 
     '.stg-select-option[data-active="true"]',
     '.stg-select-option[aria-selected="true"]',
   ]) {
-    assertValue(controls.includes(selector), `CSS 缺少 ${selector}`);
+    assertValue(controls.includes(selector), `CSS is missing ${selector}`);
   }
   for (const variable of [
     "--select-bg",
@@ -85,10 +93,33 @@ testCase("trigger、popup、active 与 selected 全由主题 CSS 控制", () => 
     "--select-option-selected-bg",
     "--select-option-selected-fg",
   ]) {
-    assertValue(theme.includes(variable), `主题变量缺少 ${variable}`);
+    assertValue(theme.includes(variable), `theme variable is missing ${variable}`);
   }
-  assertValue(!controls.includes(".stg-select-native"), "旧原生 select 样式仍有残留");
+  assertValue(!controls.includes(".stg-select-native"), "legacy native select styles remain");
 });
 
-console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+testCase("extension settings can render command-backed selects", () => {
+  assertValue(
+    pluginPane.includes('setting.kind === "select"') &&
+      pluginPane.includes("<SelectManager"),
+    "plugin setting selects do not render their list manager",
+  );
+  assertValue(
+    pluginPane.includes("if (setting.options.length === 0) return null;"),
+    "a select with missing management commands can disappear entirely",
+  );
+  assertValue(
+    pluginPane.includes("plugin-setting-manager-delete") &&
+      pluginPane.includes('name="nota-delete-symbolic"') &&
+      pluginPane.includes("New persona"),
+    "the persona list lacks edit, delete or create affordances",
+  );
+  assertValue(
+    pluginState.includes('setting.kind === "select"') &&
+      pluginState.includes("if (refreshOptions) await heavyPull()"),
+    "select changes do not refresh command-backed options and values",
+  );
+});
+
+console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

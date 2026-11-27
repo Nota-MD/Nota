@@ -1,8 +1,8 @@
 /**
- * 正文插入光标的覆盖层与闪烁样式。
+ * Body caret overlay and blink styles.
  *
- * 这里用真实的 ProseMirror schema 与 EditorState 验证哪些选区应显示光标，
- * 并核对实现没有重新使用会阻断 WebKitGTK 输入的 Widget 装饰。
+ * Real ProseMirror schemas and EditorStates verify caret eligibility and ensure
+ * that the implementation does not reintroduce input-blocking widget decorations.
  */
 
 import { Schema } from "@milkdown/kit/prose/model";
@@ -13,10 +13,10 @@ import { readFileSync } from "node:fs";
 import {
   caretHeightInLine,
   caretTopInLine,
-  flashSparkCursor,
+  blinkingCaretPlugin,
   inlineMathBoundary,
   inlineSyntaxBoundary,
-  isNoShowCursor,
+  shouldShowBodyCaret,
   usableCaretCoordinate,
 } from "../src/editor/blink-caret";
 
@@ -41,7 +41,7 @@ function assertValue(value: unknown, message: string): asserts value {
 
 function equal(actual: unknown, expected: unknown, message: string): void {
   if (actual !== expected) {
-    throw new Error(`${message}：期望 ${String(expected)}，实际 ${String(actual)}`);
+    throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
   }
 }
 
@@ -78,78 +78,78 @@ function makeEditorState(doc: PMNode, selection = 1): EditorState {
     schema,
     doc,
     selection: TextSelection.create(doc, selection),
-    plugins: [flashSparkCursor()],
+    plugins: [blinkingCaretPlugin()],
   });
 }
 
-console.log("\n【正文闪烁光标】");
+console.log("\n[Body blinking caret]");
 
-testCase("普通段落里的空选区产生一颗光标", () => {
+testCase("a collapsed selection in a paragraph produces a caret", () => {
   const editorState = makeEditorState(document(paragraph2("正文")));
-  equal(isNoShowCursor(editorState), true, "普通段落应该显示光标");
+  equal(shouldShowBodyCaret(editorState), true, "a paragraph should show the caret");
 });
 
-testCase("标题里的空选区同样产生光标", () => {
+testCase("a collapsed selection in a heading also produces a caret", () => {
   const heading = schema.nodes.heading.create({ level: 1 }, schema.text("标题"));
   const editorState = makeEditorState(document(heading), 2);
-  equal(isNoShowCursor(editorState), true, "标题应该显示光标");
+  equal(shouldShowBodyCaret(editorState), true, "a heading should show the caret");
 });
 
-testCase("标题光标跟随标题字号，正文保持原行高", () => {
-  equal(caretHeightInLine("heading", 48, 18), 48, "标题光标没有跟随标题文字高度");
-  equal(caretHeightInLine("paragraph", 30, 18), 30, "正文光标被错误缩短");
-  equal(caretHeightInLine("heading", 12, 18), 12, "小行盒不应被继续压缩");
+testCase("heading carets follow heading text size while body carets keep line height", () => {
+  equal(caretHeightInLine("heading", 48, 18), 48, "heading caret does not follow heading text height");
+  equal(caretHeightInLine("paragraph", 30, 18), 30, "body caret is shortened incorrectly");
+  equal(caretHeightInLine("heading", 12, 18), 12, "small line boxes should not be compressed further");
 });
 
-testCase("图片等超高行内原子的边界光标只画一行", () => {
-  equal(caretHeightInLine("paragraph", 720, 18), 22, "图片高度被误当成光标高度");
-  equal(caretTopInLine(720, 22, 180, 18), 180, "超高原子前光标没有贴着顶部");
-  equal(caretTopInLine(30, 30, 180, 18), 180, "普通正文光标顶部发生偏移");
+testCase("carets beside tall inline atoms occupy one line", () => {
+  equal(caretHeightInLine("paragraph", 720, 18), 22, "image height was mistaken for caret height");
+  equal(caretTopInLine(720, 22, 180, 18), 180, "the caret before a tall atom is not at the line top");
+  equal(caretTopInLine(30, 30, 180, 18), 180, "ordinary body caret top is shifted");
 });
 
-testCase("正文与行内标记交界时光标回退到正文侧坐标", () => {
+testCase("carets at inline-mark boundaries fall back to body coordinates", () => {
   equal(
     usableCaretCoordinate([
       { left: 100, top: 20, bottom: 20 },
       { left: 98, top: 18, bottom: 42 },
     ])?.left,
     98,
-    "零高度标记坐标没有触发向前回退",
+    "zero-height marker coordinates do not trigger fallback",
   );
   equal(
     usableCaretCoordinate([null, { left: 10, top: 0, bottom: 18 }])?.bottom,
     18,
-    "有效坐标被丢掉",
+    "valid coordinates are discarded",
   );
-  equal(usableCaretCoordinate([null, undefined]), null, "没有有效坐标时不该猜");
+  equal(usableCaretCoordinate([null, undefined]), null, "the implementation should not guess without valid coordinates");
 });
 
-testCase("选中文字时不额外画一条光标", () => {
+testCase("selected text does not draw an extra caret", () => {
   const doc = document(paragraph2("选中我"));
   const editorState = makeEditorState(doc);
   const selected = editorState.apply(
     editorState.tr.setSelection(TextSelection.create(doc, 1, 4)),
   );
-  equal(isNoShowCursor(selected), false, "选中文字时不显示折叠光标");
+  equal(shouldShowBodyCaret(selected), false, "a collapsed caret is shown while text is selected");
 });
 
-testCase("代码块与公式块交给内部编辑器画光标", () => {
+testCase("code blocks and math blocks delegate caret drawing to inner editors", () => {
   const code = makeEditorState(document(schema.nodes.code_block.create(null, schema.text("x"))));
   const math = makeEditorState(document(schema.nodes.math_block.create(null, schema.text("x"))));
-  equal(isNoShowCursor(code), false, "代码块不应显示正文光标");
-  equal(isNoShowCursor(math), false, "公式块不应显示正文光标");
+  equal(shouldShowBodyCaret(code), false, "code blocks should not show the body caret");
+  equal(shouldShowBodyCaret(math), false, "math blocks should not show the body caret");
 });
 
-testCase("行内语法标记之间的光标仍由正文层显示", () => {
+testCase("carets between inline syntax markers remain in the body layer", () => {
   const marker = schema.nodes.notaSyntax.create();
   const state = makeEditorState(
     document(schema.nodes.paragraph.create(null, [schema.text("Typora"), marker, marker])),
     8,
   );
-  equal(isNoShowCursor(state), true, "`Typora|**` 边界仍把光标藏掉");
+  equal(shouldShowBodyCaret(state), true, "the `Typora|**` boundary still hides the caret");
 });
 
-testCase("行内语法原子的两侧使用真实字符边界", () => {
+testCase("both sides of inline syntax atoms use real character boundaries", () => {
   const marker = schema.nodes.notaSyntax.create();
   const paragraph = schema.nodes.paragraph.create(null, [
     schema.text("word"),
@@ -177,7 +177,7 @@ testCase("行内语法原子的两侧使用真实字符边界", () => {
   );
 });
 
-testCase("链接源码节点仍由正文层显示光标", () => {
+testCase("link source nodes still use the body caret layer", () => {
   const source = schema.nodes.notaLinkSource.create(
     null,
     schema.text("[github](https://github.com)"),
@@ -186,10 +186,10 @@ testCase("链接源码节点仍由正文层显示光标", () => {
     document(schema.nodes.paragraph.create(null, [source])),
     3,
   );
-  equal(isNoShowCursor(state), true, "链接源码节点把正文光标藏掉了");
+  equal(shouldShowBodyCaret(state), true, "link source nodes hide the body caret");
 });
 
-testCase("公式边界光标使用公式节点坐标，而不是主题行盒坐标", () => {
+testCase("math-boundary carets use node coordinates instead of theme line-box coordinates", () => {
   const formula = schema.nodes.math_inline.create(null, schema.text("LaTeX"));
   const paragraph2 = schema.nodes.paragraph.create(
     null,
@@ -204,7 +204,7 @@ testCase("公式边界光标使用公式节点坐标，而不是主题行盒坐�
   equal(
     JSON.stringify(inlineMathBoundary(after)),
     JSON.stringify({ position: after3 - formula.nodeSize, side: "after" }),
-    "闭 `$` 右侧没有识别公式边界",
+    "the boundary after the closing `$` was not recognized",
   );
   const before3 = after3 - formula.nodeSize;
   const before = EditorState.create({
@@ -214,104 +214,106 @@ testCase("公式边界光标使用公式节点坐标，而不是主题行盒坐�
   equal(
     JSON.stringify(inlineMathBoundary(before)),
     JSON.stringify({ position: before3, side: "before" }),
-    "开 `$` 左侧没有识别公式边界",
+    "the boundary before the opening `$` was not recognized",
   );
 });
 
-testCase("插件使用 view 覆盖层，不注册 ProseMirror 装饰", () => {
-  const plugin = flashSparkCursor();
-  assertValue(typeof plugin.spec.view === "function", "插件没有 view");
-  equal(plugin.spec.props?.decorations, undefined, "不能再注册会阻断输入的装饰");
+testCase("the plugin uses a view overlay and registers no ProseMirror decorations", () => {
+  const plugin = blinkingCaretPlugin();
+  assertValue(typeof plugin.spec.view === "function", "the plugin has no view");
+  equal(plugin.spec.props?.decorations, undefined, "input-blocking decorations were registered again");
 });
 
-console.log("\n【光标样式】");
+console.log("\n[Caret styles]");
 
 const css = readFileSync(`${process.cwd()}/src/styles/editor.css`, "utf8");
 const assemble = readFileSync(`${process.cwd()}/src/editor/assemble.ts`, "utf8");
 const blinkSource = readFileSync(`${process.cwd()}/src/editor/blink-caret.ts`, "utf8");
 
-testCase("原生光标隐藏，装饰光标随主题强调色闪烁", () => {
-  assertValue(css.includes("caret-color: transparent"), "原生光标没有隐藏");
-  assertValue(css.includes("background: var(--accent)"), "光标没有跟随主题强调色");
-  assertValue(css.includes(".nota-blink-caret-dim"), "缺少低功耗闪烁状态");
-  assertValue(blinkSource.includes("setInterval"), "缺少低频闪烁定时器");
+testCase("the native caret is hidden and the overlay follows the accent color", () => {
+  assertValue(css.includes("caret-color: transparent"), "the native caret is not hidden");
+  assertValue(css.includes("background: var(--accent)"), "the caret does not follow the theme accent");
+  assertValue(css.includes(".nota-blink-caret-dim"), "the low-power blink state is missing");
+  assertValue(blinkSource.includes("setInterval"), "the low-frequency blink timer is missing");
 });
 
-testCase("覆盖层不进入正文 DOM，并由焦点和选区控制", () => {
+testCase("the overlay stays outside the body DOM and follows focus and selection", () => {
   const source = readFileSync(`${process.cwd()}/src/editor/blink-caret.ts`, "utf8");
-  assertValue(css.includes("position: fixed"), "覆盖层没有固定定位");
-  assertValue(css.includes("display: none"), "覆盖层没有默认隐藏");
-  assertValue(source.includes("view.hasFocus()"), "没有检查编辑区焦点");
-  assertValue(source.includes("view.dom.parentElement"), "覆盖层没有挂到正文 DOM 之外");
-  assertValue(!source.includes("Decoration.widget("), "仍在使用 ProseMirror 装饰");
-  assertValue(!source.includes("decorations("), "仍注册了 ProseMirror 装饰");
+  assertValue(css.includes("position: fixed"), "the overlay is not fixed-positioned");
+  assertValue(css.includes("display: none"), "the overlay is not hidden by default");
+  assertValue(source.includes("view.hasFocus()"), "editor focus is not checked");
+  assertValue(source.includes("view.dom.parentElement"), "the overlay is not mounted outside the body DOM");
+  assertValue(!source.includes("Decoration.widget("), "ProseMirror widgets are still used");
+  assertValue(!source.includes("decorations("), "ProseMirror decorations are still registered");
 });
 
-testCase("IME 组合态交还原生光标并暂停覆盖层闪烁", () => {
+testCase("IME composition restores the native caret and pauses the overlay", () => {
   assertValue(
     blinkSource.includes('const imeComposingClass = "nota-ime-composing"'),
-    "缺少 IME 组合态标记",
+    "the IME composition marker is missing",
   );
   assertValue(
     blinkSource.includes('addEventListener("compositionstart", beginComposition)'),
-    "compositionstart 没有交还原生光标",
+    "compositionstart does not restore the native caret",
   );
   assertValue(
     blinkSource.includes('addEventListener("compositionupdate", beginComposition)'),
-    "compositionupdate 没有保持 IME 光标状态",
+    "compositionupdate does not preserve the IME caret state",
   );
   assertValue(
     blinkSource.includes('addEventListener("compositionend", endComposition)'),
-    "compositionend 没有恢复覆盖层光标",
+    "compositionend does not restore the overlay caret",
   );
   assertValue(
     blinkSource.includes("view.dom.classList.contains(imeComposingClass)"),
-    "组合态后续刷新仍可能把覆盖层光标画回来",
+    "later refreshes can redraw the overlay during composition",
   );
   assertValue(
     blinkSource.includes("view.composing && attempts < 5"),
-    "compositionend 没有等待 ProseMirror 收回最终上屏文本",
+    "compositionend does not wait for ProseMirror to receive the committed text",
   );
   assertValue(
     css.includes(".ProseMirror.nota-ime-composing *") &&
       css.includes("caret-color: var(--accent) !important"),
-    "IME 组合态没有恢复可移动的原生光标",
+    "IME composition does not restore a movable native caret",
   );
 });
 
-testCase("内部输入框自己画光标时隐藏正文覆盖层", () => {
+testCase("the body overlay hides while inner editors draw their own caret", () => {
   assertValue(
     blinkSource.includes("export function innerEditorOwnsCaret"),
-    "没有识别内部编辑器的焦点",
+    "inner-editor focus is not recognized",
   );
   assertValue(
-    blinkSource.includes(
-      'active.matches("input, textarea, .cm-content, .nota-keyboard-link-source")',
-    ),
-    "输入框与 CodeMirror 不在内部光标判据里",
+    blinkSource.includes("textCaretOwner(active)") &&
+      readFileSync(
+        `${process.cwd()}/src/editor/caret-ownership.ts`,
+        "utf8",
+      ).includes('".nota-keyboard-link-source"'),
+    "inputs and CodeMirror are not part of the shared inner-caret predicate",
   );
   assertValue(
     blinkSource.includes("innerEditorOwnsCaret(active, view.dom)"),
-    "绘制正文光标前没有检查内部编辑器焦点",
+    "inner-editor focus is not checked before drawing the body caret",
   );
   assertValue(
     blinkSource.includes("nota-inline-math-input-focused"),
-    "公式源码框聚焦时没有显式隐藏正文覆盖光标",
+    "the body overlay is not explicitly hidden while the formula source is focused",
   );
 });
 
-testCase("减少动态效果时保持静态可见", () => {
+testCase("reduced motion keeps the caret statically visible", () => {
   const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
-  assertValue(reduced.includes("opacity: 1"), "未保持光标常亮");
-  assertValue(reduced.includes("opacity: 1"), "静态光标不可见");
+  assertValue(reduced.includes("opacity: 1"), "the caret is not kept fully visible");
+  assertValue(reduced.includes("opacity: 1"), "the static caret is invisible");
 });
 
-testCase("可编辑实例才挂闪烁光标插件", () => {
+testCase("only editable instances mount the blinking-caret plugin", () => {
   assertValue(
-    assemble.includes(".use(readOnly ? [] : [$prose(() => flashSparkCursor())])"),
-    "插件未接入",
+    assemble.includes(".use(readOnly ? [] : [$prose(() => blinkingCaretPlugin())])"),
+    "the plugin is not wired",
   );
 });
 
-console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

@@ -62,13 +62,19 @@ pub fn install_2(manifest: &Manifest, application_language: &str) -> LanguagePac
         None => (lang::PLUGIN_FALLBACK.to_owned(), false),
     };
 
-    let table_2 = read_2(&manifest.dir, &tag).unwrap_or_else(|reason_2| {
-        crate::debug_log!(
-            "[nota:{id}] missing lang/{}.toml ({reason_2}); falling back to source strings",
-            lang::normalize_language_tag(&tag)
-        );
+    let normalized = lang::normalize_language_tag(&tag);
+    let english_source_is_default =
+        normalized == lang::PLUGIN_FALLBACK && !LanguagePack::file_3(&manifest.dir, &tag).is_file();
+    let table_2 = if english_source_is_default {
         HashMap::new()
-    });
+    } else {
+        read_2(&manifest.dir, &tag).unwrap_or_else(|reason_2| {
+            crate::debug_log!(
+                "[nota:{id}] missing lang/{normalized}.toml ({reason_2}); falling back to source strings"
+            );
+            HashMap::new()
+        })
+    };
 
     LanguagePack {
         declaration_2: true,
@@ -138,7 +144,6 @@ mod tests {
             update: None,
 
             settings: Vec::new(),
-            setting_locks: Vec::new(),
         }
     }
 
@@ -213,6 +218,16 @@ mod tests {
         assert!(!should.ok, "zh-CN \u{4e0d}\u{5728}\u{5b83}\u{7684}\u{5217}\u{8868}\u{91cc} \u{2192} \u{8bf4}\u{8fd9}\u{53e5}\u{ff0c}\u{7528} en");
         assert_eq!(should.language.as_deref(), Some("en"));
         assert!(should.table_2.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn english_source_does_not_require_an_english_language_file() {
+        let dir = temp_directory("english-source");
+        let package = install_2(&manifest_2(dir.clone(), &["en", "zh-CN"]), "en-US");
+        assert!(package.ok);
+        assert_eq!(package.language.as_deref(), Some("en"));
+        assert!(package.table_2.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

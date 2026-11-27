@@ -95,6 +95,7 @@ import type { VimInputConfig, VimInputHooks } from "./plugin-vim-types";
 
 import { wordRange, type range } from "./select";
 import { codeBlockSourceEdge } from "./code-block-boundary";
+import { registerCaretSurface } from "./caret-commander";
 
 export { codeBlockSourceEdge } from "./code-block-boundary";
 
@@ -906,6 +907,11 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
     element.style.setProperty("forced-color-adjust", "none", "important");
   }
   view.contentDOM.dataset.notaCaretBuild = "inline-mark-v8";
+  const unregisterCaretSurface = registerCaretSurface({
+    element: view.contentDOM,
+    kind: "code-block",
+    handle: () => false,
+  });
 
   const watchSettings = new MutationObserver(() => {
     if (alreadyCancelDestroy) return;
@@ -976,6 +982,7 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
     hasFocusPoint: () => view.hasFocus,
     cancelDestroy: () => {
       alreadyCancelDestroy = true;
+      unregisterCaretSurface();
       watchSettings.disconnect();
       view.destroy();
     },

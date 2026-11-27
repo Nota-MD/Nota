@@ -1,10 +1,16 @@
 import { $inputRule } from "@milkdown/kit/utils";
 import { linkSchema } from "@milkdown/kit/preset/commonmark";
-import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import {
+  Plugin,
+  PluginKey,
+  Selection,
+  TextSelection,
+} from "@milkdown/kit/prose/state";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
 import type { MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
-import type { EditorView } from "@milkdown/kit/prose/view";
+import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
 
@@ -97,6 +103,14 @@ export function normalizeExplicitLinkDestination(candidate: string): string | nu
   return isLikeMainMachineName(host) ? `https://${text4}` : text4;
 }
 
+export function validateExplicitLinkDestination(
+  candidate: string,
+): string | null {
+  const text4 = candidate.trim();
+  if (text4 === "" || /\s/.test(text4) || DangerousProtocol(text4)) return null;
+  return text4;
+}
+
 
 const rightConfigureLeft: Readonly<Record<string, string>> = {
   ")": "(",
@@ -178,39 +192,91 @@ export function selfActionLinkInput(enabled = true) {
 }
 
 
-export const explicitLinkSyntax = /\[([^\]\n]+)\]\(([^()\s]+)\)$/;
+export const explicitLinkSyntax = /\[([^\]\n]+)\]\(([^\n]*)\)$/;
+export const explicitLinkCompletedKey = new PluginKey(
+  "nota-explicit-link-completed",
+);
+
+interface MarkdownLinkNode {
+  type: string;
+  value?: string;
+  url?: string;
+  title?: string | null;
+  children?: MarkdownLinkNode[];
+  position?: {
+    start: { offset?: number };
+    end: { offset?: number };
+  };
+}
+
+function plainMarkdownText(node: MarkdownLinkNode): string | null {
+  if (node.type === "text") return node.value ?? "";
+  if (!node.children?.length) return null;
+  const parts = node.children.map(plainMarkdownText);
+  return parts.every((part) => part !== null) ? parts.join("") : null;
+}
+
+export function parseExplicitLinkMarkdown(
+  source: string,
+): { label: string; href: string; title: string } | null {
+  const tree = fromMarkdown(source) as MarkdownLinkNode;
+  const paragraph = tree.children?.[0];
+  const link = paragraph?.children?.[0];
+  if (
+    tree.children?.length !== 1 ||
+    paragraph?.type !== "paragraph" ||
+    paragraph.children?.length !== 1 ||
+    link?.type !== "link" ||
+    link.position?.start.offset !== 0 ||
+    link.position?.end.offset !== source.length
+  ) {
+    return null;
+  }
+  const label = plainMarkdownText(link);
+  if (label === null || link.url === undefined) return null;
+  return { label, href: link.url, title: link.title ?? "" };
+}
 
 function explicitLinkTransaction(
   state: EditorState,
   match2: RegExpMatchArray,
   start6: number,
   end3: number,
+  allowEmpty = false,
 ): Transaction | null {
-  const label = match2[1] ?? "";
-  const href = normalizeExplicitLinkDestination(match2[2] ?? "");
+  if (
+    start6 > 1 &&
+    state.doc.textBetween(start6 - 1, start6, "\n", "\uFFFC") === "!"
+  ) {
+    return null;
+  }
+  const parsed = parseExplicitLinkMarkdown(match2[0] ?? "");
   const link = state.schema.marks.link;
-  if (!label || href === null || !link) return null;
+  if (
+    !parsed ||
+    !parsed.label ||
+    (parsed.href === "" && !allowEmpty) ||
+    DangerousProtocol(parsed.href) ||
+    !link
+  ) {
+    return null;
+  }
   const currentMarks = state.storedMarks ?? state.selection.$from.marks();
-  const textNode = state.schema.text(label, [
+  const textNode = state.schema.text(parsed.label, [
     ...currentMarks.filter((mark) => mark.type !== link),
-    link.create({ href }),
+    link.create({
+      href: parsed.href,
+      ...(parsed.title ? { title: parsed.title } : {}),
+    }),
   ]);
   const transaction = state.tr.replaceWith(start6, end3, textNode);
-  transaction.setSelection(TextSelection.create(transaction.doc, start6 + label.length));
+  transaction.setSelection(
+    TextSelection.create(transaction.doc, start6 + parsed.label.length),
+  );
   transaction.removeStoredMark(link);
+  transaction.setMeta(explicitLinkCompletedKey, true);
   return transaction;
 }
-
-export function explicitLinkInput() {
-  return [
-    $inputRule(() =>
-      new InputRule(explicitLinkSyntax, (state, match2, start6, end3) => {
-        return explicitLinkTransaction(state, match2, start6, end3);
-      }),
-    ),
-  ];
-}
-
 
 export function explicitLinkAtClosingParenthesis(
   state: EditorState,
@@ -231,6 +297,13 @@ export function explicitLinkAtClosingParenthesis(
 
   const start6 = resolved.start() + before.length - match2[0].length + 1;
   return explicitLinkTransaction(state, match2, start6, position + 1);
+}
+
+export function explicitLinkAtAutoClosedParenthesis(
+  state: EditorState,
+  position: number,
+): Transaction | null {
+  return explicitLinkAtClosingParenthesis(state, position);
 }
 
 export function explicitLinkAtTypedParenthesis(
@@ -322,56 +395,222 @@ export function explicitLinkAtTrailingWhitespace(
   return transaction;
 }
 
+export interface ExplicitLinkDraft {
+  from: number;
+  to: number;
+  labelFrom: number;
+  labelTo: number;
+}
 
-export function explicitLinkTyping() {
-  const key = new PluginKey("nota-explicit-link-typing");
+function escapedAt(text: string, index: number): boolean {
+  let slashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === "\\"; cursor--) {
+    slashes++;
+  }
+  return slashes % 2 === 1;
+}
+
+export function explicitLinkDrafts(state: EditorState): ExplicitLinkDraft[] {
+  const drafts: ExplicitLinkDraft[] = [];
+  const link = state.schema.marks.link;
+  const code = state.schema.marks.code;
+  state.doc.descendants((node, position) => {
+    if (!node.isTextblock || node.type.spec.code) return true;
+    const text4 = node.textBetween(0, node.content.size, "\n", "\uFFFC");
+    const pattern = /\[([^\]\n]+)\]\(([^\n]*?)\)/g;
+    for (const match of text4.matchAll(pattern)) {
+      const index = match.index ?? 0;
+      if (escapedAt(text4, index) || (index > 0 && text4[index - 1] === "!")) {
+        continue;
+      }
+      const parsed = parseExplicitLinkMarkdown(match[0] ?? "");
+      if (!parsed || DangerousProtocol(parsed.href)) continue;
+      const from = position + 1 + index;
+      const to = from + (match[0]?.length ?? 0);
+      let marked = false;
+      state.doc.nodesBetween(from, to, (child) => {
+        if (
+          child.isText &&
+          ((link && link.isInSet(child.marks)) ||
+            (code && code.isInSet(child.marks)))
+        ) {
+          marked = true;
+          return false;
+        }
+        return true;
+      });
+      if (marked) continue;
+      drafts.push({
+        from,
+        to,
+        labelFrom: from + 1,
+        labelTo: from + 1 + (match[1]?.length ?? 0),
+      });
+    }
+    return false;
+  });
+  return drafts;
+}
+
+function draftContainsSelection(
+  draft: ExplicitLinkDraft,
+  selection: EditorState["selection"],
+): boolean {
+  if (selection.empty) {
+    return selection.from >= draft.from && selection.from <= draft.to;
+  }
+  return selection.from <= draft.to && selection.to >= draft.from;
+}
+
+const explicitLinkDraftKey = new PluginKey("nota-explicit-link-draft");
+
+export function commitExplicitLinkDrafts(
+  state: EditorState,
+  force = false,
+): Transaction | null {
+  const drafts = explicitLinkDrafts(state);
+  if (!drafts.length) return null;
+  const transaction = state.tr;
+  let changed = false;
+  for (const draft of drafts.reverse()) {
+    if (!force && draftContainsSelection(draft, state.selection)) continue;
+    const source = state.doc.textBetween(
+      draft.from,
+      draft.to,
+      "\n",
+      "\uFFFC",
+    );
+    const match2 = explicitLinkSyntax.exec(source);
+    if (!match2) continue;
+    const transactionForLink = explicitLinkTransaction(
+      state,
+      match2,
+      draft.from,
+      draft.to,
+      true,
+    );
+    if (!transactionForLink) continue;
+    transactionForLink.steps.forEach((step) => transaction.step(step));
+    transaction.setMeta(explicitLinkCompletedKey, true);
+    changed = true;
+  }
+  if (!changed) return null;
+  const anchor = transaction.mapping.map(state.selection.anchor, 1);
+  const head = transaction.mapping.map(state.selection.head, 1);
+  transaction.setSelection(
+    anchor === head
+      ? Selection.near(transaction.doc.resolve(head), 1)
+      : TextSelection.create(transaction.doc, anchor, head),
+  );
+  return transaction.setMeta(explicitLinkDraftKey, true);
+}
+
+export function explicitLinkDraftDecorations(state: EditorState): DecorationSet {
+  return DecorationSet.create(
+    state.doc,
+    explicitLinkDrafts(state)
+      .filter((draft) => draftContainsSelection(draft, state.selection))
+      .map((draft) =>
+      Decoration.inline(draft.labelFrom, draft.labelTo, {
+        class: "nota-explicit-link-draft-label",
+      }),
+      ),
+  );
+}
+
+function selectionInOpaqueBlock(state: EditorState): boolean {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (
+      node.type.spec.code ||
+      node.type.name === "math_block" ||
+      node.type.name === "diagram" ||
+      node.type.name === "notaHtmlBlock"
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function explicitLinkDraft() {
   return $prose(
     () =>
       new Plugin({
-        key,
+        key: explicitLinkDraftKey,
         props: {
-          handleTextInput: (view, from, to, text4) => {
-            if (text4 !== ")" || view.composing) return false;
-            if (!view.state.selection.empty || from !== to) return false;
-            const transaction = explicitLinkAtTypedParenthesis(view.state, from, text4);
-            if (!transaction) return false;
-            view.dispatch(transaction);
-            return true;
-          },
+          decorations: explicitLinkDraftDecorations,
         },
-        appendTransaction: (transactions, _oldState, newState) => {
-          if (!transactions.some((transaction) => transaction.docChanged)) return null;
-          if (transactions.some((transaction) => transaction.getMeta(key))) return null;
-          if (transactions.some((transaction) => transaction.getMeta("composition") != null)) {
+        appendTransaction(transactions, _oldState, newState) {
+          if (
+            transactions.some((transaction) =>
+              transaction.getMeta(explicitLinkDraftKey),
+            )
+          ) {
             return null;
           }
-
-
-          const position = newState.selection.from;
-          const transaction =
-            explicitLinkAtCursor(newState, position) ??
-            explicitLinkAtTrailingWhitespace(newState, position);
-          return transaction?.setMeta(key, true) ?? null;
-        },
-        handleKeyDown: (view: EditorView, event: KeyboardEvent) => {
-          if (
-            event.key !== ")" ||
-            event.ctrlKey ||
-            event.metaKey ||
-            event.altKey ||
-            view.composing
-          ) {
-            return false;
+          if (!transactions.some((transaction) => transaction.docChanged)) {
+            return null;
           }
-          const { selection } = view.state;
-          if (!selection.empty) return false;
-          const transaction = explicitLinkAtClosingParenthesis(
-            view.state,
-            selection.from,
-          );
-          if (!transaction) return false;
-          view.dispatch(transaction);
-          return true;
+          return commitExplicitLinkDrafts(newState);
+        },
+        view(editorView) {
+          let navigationFrame = 0;
+          const commitAfterNavigation = (force = false) => {
+            cancelAnimationFrame(navigationFrame);
+            navigationFrame = requestAnimationFrame(() => {
+              navigationFrame = 0;
+              if (editorView.isDestroyed) return;
+              if (selectionInOpaqueBlock(editorView.state)) return;
+              const transaction = commitExplicitLinkDrafts(
+                editorView.state,
+                force,
+              );
+              if (transaction) editorView.dispatch(transaction);
+            });
+          };
+          const pointer = (event: MouseEvent) => {
+            const target =
+              event.target instanceof Element ? event.target : null;
+            if (target?.closest("a[href], .nota-link-source")) return;
+            if (
+              target?.closest(
+                ".cm-editor, pre, .nota-math-block, .nota-diagram, .nota-html-block",
+              )
+            ) {
+              return;
+            }
+            commitAfterNavigation(
+              target === null || !editorView.dom.contains(target),
+            );
+          };
+          const navigation = (event: KeyboardEvent) => {
+            if (
+              ![
+                "ArrowLeft",
+                "ArrowRight",
+                "ArrowUp",
+                "ArrowDown",
+                "Home",
+                "End",
+                "Tab",
+                "Escape",
+              ].includes(event.key)
+            ) {
+              return;
+            }
+            commitAfterNavigation();
+          };
+          document.addEventListener("mousedown", pointer, true);
+          editorView.dom.addEventListener("keydown", navigation, true);
+          return {
+            destroy() {
+              cancelAnimationFrame(navigationFrame);
+              document.removeEventListener("mousedown", pointer, true);
+              editorView.dom.removeEventListener("keydown", navigation, true);
+            },
+          };
         },
       }),
   );

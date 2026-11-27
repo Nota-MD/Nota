@@ -9,6 +9,7 @@ import "./styles/theme/adwaita-fonts.css";
 import "./styles/app.css";
 import "./styles/toast.css";
 import "./styles/overlay.css";
+import "./styles/dialog-close.css";
 import "./styles/file-picker.css";
 import "./styles/update-debug.css";
 import "./styles/panel.css";

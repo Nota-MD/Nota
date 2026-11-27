@@ -20,6 +20,25 @@ export const accentPalette = [
   "#1567af", "#0d7a43", "#aa8508", "#aa4a0e", "#a91d24", "#67206f", "#57341b", "#5a6068", "#11151b",
 ] as const;
 
+export const defaultAccentDots = [
+  "#007aff",
+  "#a550a7",
+  "#f74f9e",
+  "#ff5257",
+  "#f7821b",
+  "#ffc600",
+  "#62ba46",
+  "#8c8c8c",
+] as const;
+
+function themeAccentDots(): string[] {
+  const styles = getComputedStyle(document.documentElement);
+  return defaultAccentDots.map((fallback, index) => {
+    const value = styles.getPropertyValue(`--accent-choice-${index + 1}`).trim();
+    return parseAccent(value) ?? fallback;
+  });
+}
+
 export function ColorPicker({
   value,
   onChange,
@@ -29,13 +48,17 @@ export function ColorPicker({
 }) {
   const t = useT();
   const id = useId();
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
+  const dots = themeAccentDots();
+  const selected = dots.findIndex(
+    (color) => color.toLowerCase() === value.toLowerCase(),
+  );
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const [place, setPlace] = useState<CSSProperties | null>(null);
-  const selected = accentPalette.findIndex((color) => color.toLowerCase() === value.toLowerCase());
-  const [active, setActive] = useState(Math.max(0, selected));
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dotRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => setDraft(value), [value]);
 
@@ -43,15 +66,14 @@ export function ColorPicker({
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    const width = Math.min(360, Math.max(0, window.innerWidth - 16));
+    const width = Math.min(300, Math.max(0, window.innerWidth - 16));
     const left = Math.min(
-      Math.max(8, rect.left),
+      Math.max(8, rect.right - width),
       Math.max(8, window.innerWidth - width - 8),
     );
     const below = rect.bottom + 6;
-    const openAbove = window.innerHeight - below < 380 && rect.top > 380;
     setPlace(
-      openAbove
+      window.innerHeight - below < 150
         ? { left, width, bottom: window.innerHeight - rect.top + 6 }
         : { left, width, top: below },
     );
@@ -60,30 +82,31 @@ export function ColorPicker({
   useLayoutEffect(() => {
     if (!open) return;
     placePopup();
+    requestAnimationFrame(() => inputRef.current?.focus());
     window.addEventListener("resize", placePopup);
     return () => window.removeEventListener("resize", placePopup);
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const onPointer = (event: PointerEvent): void => {
+    const closeOnPointer = (event: PointerEvent): void => {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (popupRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
       setOpen(false);
     };
-    const onKey = (event: globalThis.KeyboardEvent): void => {
+    const closeOnEscape = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
       setOpen(false);
       triggerRef.current?.focus();
     };
-    document.addEventListener("pointerdown", onPointer, true);
-    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("pointerdown", closeOnPointer, true);
+    document.addEventListener("keydown", closeOnEscape, true);
     return () => {
-      document.removeEventListener("pointerdown", onPointer, true);
-      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("pointerdown", closeOnPointer, true);
+      document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [open]);
 
@@ -91,49 +114,66 @@ export function ColorPicker({
     onChange(color);
     setDraft(color);
     setOpen(false);
-    triggerRef.current?.focus();
   };
 
-  const onGridKey = (event: KeyboardEvent<HTMLDivElement>): void => {
-    let next = active;
-    if (event.key === "ArrowLeft") next -= 1;
-    else if (event.key === "ArrowRight") next += 1;
-    else if (event.key === "ArrowUp") next -= 9;
-    else if (event.key === "ArrowDown") next += 9;
-    else if (event.key === "Home") next = Math.floor(active / 9) * 9;
-    else if (event.key === "End") next = Math.floor(active / 9) * 9 + 8;
-    else if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      const color = accentPalette[active];
-      if (color) choose(color);
-      return;
-    } else return;
+  const onDotKey = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ): void => {
+    let next: number | null = null;
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      next = (index - 1 + dots.length) % dots.length;
+    } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      next = (index + 1) % dots.length;
+    }
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = dots.length - 1;
+    if (next === null) return;
     event.preventDefault();
-    setActive(Math.max(0, Math.min(accentPalette.length - 1, next)));
+    dotRefs.current[next]?.focus();
   };
 
   const custom = parseAccent(draft);
+  const customSelected = value !== "" && selected < 0;
+
   return (
     <span className="stg-color-picker" data-open={open || undefined}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className="stg-color-trigger"
+      <span
+        className="stg-color-dots"
+        role="radiogroup"
         aria-label={t("Accent color")}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={open ? `${id}-popup` : undefined}
-        onClick={() => setOpen((current) => !current)}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            setOpen(true);
-          }
-        }}
       >
-        <span className="stg-color-chip" style={{ background: value || "#000000" }} />
-        <span className="stg-color-hex">{value || t("Follow the style")}</span>
-      </button>
+        {dots.map((color, index) => (
+          <button
+            key={`${index}-${color}`}
+            ref={(element) => {
+              dotRefs.current[index] = element;
+            }}
+            type="button"
+            role="radio"
+            className="stg-color-dot"
+            style={{ background: color }}
+            aria-label={color}
+            aria-checked={index === selected}
+            tabIndex={index === Math.max(0, selected) ? 0 : -1}
+            onKeyDown={(event) => onDotKey(event, index)}
+            onClick={() => choose(color)}
+          />
+        ))}
+        <button
+          ref={triggerRef}
+          type="button"
+          className="stg-color-add"
+          aria-label={t("Custom color code")}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls={open ? `${id}-popup` : undefined}
+          data-selected={customSelected ? "true" : undefined}
+          onClick={() => setOpen((current) => !current)}
+        >
+          +
+        </button>
+      </span>
       {open &&
         place &&
         createPortal(
@@ -145,48 +185,23 @@ export function ColorPicker({
             role="dialog"
             aria-modal="false"
             data-modal-layer="true"
-            aria-label={t("Select Color")}
+            aria-label={t("Custom color code")}
           >
             <div className="stg-color-popup-head">
-              <strong>{t("Select Color")}</strong>
+              <strong>{t("Custom color code")}</strong>
               <button type="button" className="btn btn-primary" onClick={() => setOpen(false)}>
                 {t("Done")}
               </button>
             </div>
-            <div
-              className="stg-color-grid"
-              role="grid"
-              aria-label={t("Accent color")}
-              aria-activedescendant={`${id}-color-${active}`}
-              tabIndex={0}
-              onKeyDown={onGridKey}
-            >
-              {accentPalette.map((color, index) => (
-                <button
-                  key={color}
-                  id={`${id}-color-${index}`}
-                  type="button"
-                  role="gridcell"
-                  tabIndex={-1}
-                  className="stg-color-cell"
-                  style={{ background: color }}
-                  data-active={index === active ? "true" : undefined}
-                  data-selected={color.toLowerCase() === value.toLowerCase() ? "true" : undefined}
-                  aria-label={color}
-                  aria-selected={color.toLowerCase() === value.toLowerCase()}
-                  onMouseEnter={() => setActive(index)}
-                  onFocus={() => setActive(index)}
-                  onClick={() => choose(color)}
-                />
-              ))}
-            </div>
             <div className="stg-color-custom">
               <label htmlFor={`${id}-hex`}>{t("Custom")}</label>
               <input
+                ref={inputRef}
                 id={`${id}-hex`}
                 className="stg-input"
                 value={draft}
                 spellCheck={false}
+                placeholder="#007aff"
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && custom) {

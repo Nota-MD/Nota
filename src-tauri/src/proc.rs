@@ -10,6 +10,11 @@ pub(crate) fn background_command(program: impl AsRef<OsStr>) -> Command {
     command
 }
 
+/** Create a visible console process for explicit diagnostic surfaces. */
+pub fn console_command(program: impl AsRef<OsStr>) -> Command {
+    Command::new(program)
+}
+
 #[cfg(windows)]
 pub(crate) fn hide_console_window(command: &mut Command) {
     use std::os::windows::process::CommandExt;

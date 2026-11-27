@@ -294,7 +294,7 @@ export function Sidebar({
                 aria-label={t("New Document")}
                 onClick={() => startNewFile()}
               >
-                <Icon name="folio-add-symbolic" />
+                <Icon name="nota-add-symbolic" />
               </button>
               <span className="sidebar-workspace" title={workspace}>
                 {workspaceName}

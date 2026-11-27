@@ -52,7 +52,7 @@ export function insertPlainInlineText(
 }
 
 /** Markdown delimiters that may receive an automatic partner. */
-export const inlinePairCharacters = "*_$~";
+export const inlinePairCharacters = "*_~";
 
 /**
  * Mirrors Typedown's Markdown-syntax pair gate.

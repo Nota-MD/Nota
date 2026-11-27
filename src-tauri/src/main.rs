@@ -41,7 +41,7 @@ fn start_diagnostic_console() {
          Write-Host 'Nota diagnostic log (live)'; \
          Get-Content -LiteralPath '{quoted}' -Wait"
     );
-    let _ = std::process::Command::new("powershell.exe")
+    let _ = nota_lib::proc::console_command("powershell.exe")
         .args([
             "-NoLogo",
             "-NoExit",

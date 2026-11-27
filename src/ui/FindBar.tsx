@@ -211,7 +211,7 @@ export function FindBar({
           onMouseDown={(e) => e.preventDefault()}
           onClick={onClose}
         >
-          <Icon name="folio-close-symbolic" />
+          <Icon name="nota-close-symbolic" />
         </button>
       </div>
       {(showReplaceReplace || manualExpand) && (

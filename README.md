@@ -22,13 +22,13 @@
 
 <p align="center">
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="Release" src="https://img.shields.io/badge/release-v0.17.0--beta-e95420?style=flat-square">
+    <img alt="Release" src="https://img.shields.io/badge/release-v0.18.0--beta-e95420?style=flat-square">
   </a>
   <a href="LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-BSD--2--Clause-2e3440?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="Platforms" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-5e6272?style=flat-square">
+    <img alt="Platforms" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-5e6272?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota-plugins">
     <img alt="Extensions" src="https://img.shields.io/badge/extensions-Nota--plugins-6f42c1?style=flat-square">
@@ -96,8 +96,24 @@ from **Settings → Appearance → Styles folder** or from the documented theme 
 Download the package for your platform from
 **[GitHub Releases](https://github.com/Nota-MD/Nota/releases)**.
 
-The release builds include Linux packages and Windows installers.
-Official extensions and themes are installed separately.
+The release builds include Linux packages, Windows installers and unsigned
+macOS disk images. Official extensions and themes are installed separately.
+
+### Unsigned macOS packages
+
+macOS builds are currently unsigned and not notarized, so Gatekeeper may block
+the first launch. Only disable the quarantine flag for a package downloaded from
+the official Nota releases and after checking `SHA256SUMS.txt`.
+
+1. Open the DMG and drag **Nota.app** into **Applications**.
+2. In **Applications**, Control-click **Nota**, choose **Open**, then confirm **Open**.
+3. If macOS still blocks it, open **System Settings → Privacy & Security** and
+   choose **Open Anyway** for Nota.
+4. If Terminal is preferred:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Nota.app
+```
 
 ## Build from source
 

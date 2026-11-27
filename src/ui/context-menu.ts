@@ -66,9 +66,6 @@ import {
   type MenuEntry,
   type MenuItemSpec,
 } from "@/ui/commands";
-import type { TableContextAction } from "@/bridge/ipc";
-
-export const tableActionPrefix = "table.action:";
 
 
 export type DropPoint = "editor" | "Input" | "shell" | "no menu";
@@ -148,6 +145,71 @@ export const inlineIcon: readonly string[] = ["fmt.bold", "fmt.italic", "fmt.cod
 
 
 export const blockIcon: readonly string[] = ["para.quote", "para.ul", "para.ol", "para.task"];
+
+const imageZoomLevels = [25, 33, 50, 67, 80, 100, 150, 200] as const;
+
+function imageMenuItems(
+  t: (source: string, ...parameter: (string | number)[]) => string,
+): readonly MenuItemSpec[] {
+  return [
+    {
+      id: "image.openLocation",
+      label: t("Open Image Location"),
+      needsDoc: true,
+    },
+    {
+      id: "image.copyTo",
+      label: t("Copy Image To..."),
+      needsDoc: true,
+    },
+    {
+      id: "image.moveTo",
+      label: t("Rename / Move Image To..."),
+      needsDoc: true,
+    },
+    {
+      id: "image.upload",
+      label: t("Upload Image"),
+      needsDoc: true,
+    },
+    {
+      id: "image.zoom",
+      label: t("Zoom Image"),
+      needsDoc: true,
+      submenu: imageZoomLevels.map((level) => ({
+        id: `image.zoom.${level}`,
+        label: t("{0}%", String(level)),
+        needsDoc: true,
+        checkable: true,
+      })),
+    },
+    {
+      id: "image.syntax",
+      label: t("Convert Image Syntax"),
+      needsDoc: true,
+      submenu: [
+        {
+          id: "image.syntax.markdown",
+          label: t("Markdown"),
+          needsDoc: true,
+          checkable: true,
+        },
+        {
+          id: "image.syntax.html",
+          label: t("HTML"),
+          needsDoc: true,
+          checkable: true,
+        },
+      ],
+    },
+    {
+      id: "image.deleteFile",
+      label: t("Delete Image File"),
+      needsDoc: true,
+      danger: true,
+    },
+  ];
+}
 
 
 
@@ -263,8 +325,9 @@ export function buildRows(
   onImage = false,
 
   hasSelection = true,
-  tableActions: readonly TableContextAction[] = [],
-  onTable = false,
+
+  t: (source: string, ...parameter: (string | number)[]) => string = (source) =>
+    source,
 ): line3[] {
   if (position2 === "Input") {
 
@@ -279,23 +342,54 @@ export function buildRows(
 
   const rows: line3[] = [
     ...(combineWrite ? combineWriteLine(combineWrite) : []),
-    ...(onImage ? itemLine(["edit.copyImage"], "image") : []),
+    ...(onImage
+      ? [
+          ...imageMenuItems(t).map((spec) => ({
+            kind: "item" as const,
+            key: `image-${spec.id}`,
+            spec,
+          })),
+          { kind: "sep" as const, key: "image-sep-1" },
+          ...itemLine(["edit.copyImage"], "image"),
+          {
+            kind: "item" as const,
+            key: "image-copyAs",
+            spec: {
+              id: "image.copyAs",
+              label: t("Copy As"),
+              needsDoc: true,
+              submenu: [
+                {
+                  id: "image.copyAs.markdown",
+                  label: t("Markdown"),
+                  needsDoc: true,
+                },
+                {
+                  id: "image.copyAs.html",
+                  label: t("HTML"),
+                  needsDoc: true,
+                },
+              ],
+            },
+          },
+          {
+            kind: "item" as const,
+            key: "image-saveAs",
+            spec: {
+              id: "image.saveAs",
+              label: t("Save Image As..."),
+              needsDoc: true,
+            },
+          },
+          { kind: "sep" as const, key: "image-sep-2" },
+        ]
+      : []),
     { kind: "icons", key: "icons-clip", ids: cutPasteIcon },
     ...(hasSelection && !onImage ? itemLine(["edit.copyAs"], "copy as") : []),
     { kind: "sep", key: "sep-1" },
     { kind: "icons", key: "icons-inline", ids: inlineIcon },
     { kind: "icons", key: "icons-block", ids: blockIcon },
     { kind: "sep", key: "sep-2" },
-    ...(onTable && tableActions.length > 0
-      ? tableActions.map((action) => ({
-          kind: "item" as const,
-          key: `table-action-${action.plugin}-${action.id}`,
-          spec: {
-            id: `${tableActionPrefix}${action.plugin}:${action.id}`,
-            label: action.label,
-          },
-        }))
-      : []),
     { kind: "item", key: "ctx.paragraph", spec: contextParagraphItems },
     { kind: "item", key: "ctx.table", spec: contextTableItems },
     { kind: "item", key: "ctx.insert", spec: contextInsertItems },

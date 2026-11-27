@@ -417,6 +417,26 @@ testCase("编辑器 → 三排图标 ＋ 三个子菜单父项", () => {
   assertValue(rows.some((r) => r.kind === "item" && r.spec.id === "ctx.table"), "少了「表格」那一栏");
 });
 
+testCase("image context menu exposes persistent image actions", () => {
+  const rows = buildRows("editor", false, null, true);
+  const ids = rows
+    .filter((row) => row.kind === "item")
+    .map((row) => row.spec.id);
+  for (const id of [
+    "image.openLocation",
+    "image.copyTo",
+    "image.moveTo",
+    "image.upload",
+    "image.zoom",
+    "image.syntax",
+    "image.deleteFile",
+    "image.copyAs",
+    "image.saveAs",
+  ]) {
+    assertValue(ids.includes(id), `image context menu is missing ${id}`);
+  }
+});
+
 testCase("没有选中文本时隐藏「复制为」", () => {
   const rows = buildRows("editor", false, null, false, false);
   assertValue(

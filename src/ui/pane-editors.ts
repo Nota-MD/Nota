@@ -43,6 +43,7 @@ import type { SourceHandle } from "@/editor/source";
 import type { punctuationSettings } from "@/editor/smart-punctuation";
 import type { WritingMode } from "@/editor/writing-modes";
 import type { VimInputConfig, VimInputHooks } from "@/editor/plugin-vim-types";
+import type { MarkdownSyntaxStyle } from "@/editor/markdown-syntax-style";
 
 
 export interface MainWindowCellCommonCommon {
@@ -79,6 +80,7 @@ export interface WysiwygParameter extends MainWindowCellCommonCommon {
   punctuation: punctuationSettings;
   selfActionMoreCorrect: boolean;
   emoji: boolean;
+  markdownSyntaxStyle: MarkdownSyntaxStyle;
   vimInput?: {
     config: VimInputConfig | null;
     hooks?: VimInputHooks;
@@ -116,6 +118,7 @@ export async function createWysiwygEditor(parameter: WysiwygParameter): Promise<
     punctuation,
     selfActionMoreCorrect,
     emoji,
+    markdownSyntaxStyle,
     vimInput,
     WritingMode,
     preview,
@@ -162,6 +165,7 @@ export async function createWysiwygEditor(parameter: WysiwygParameter): Promise<
 
 
     emoji,
+    markdownSyntaxStyle,
     vimInput,
     writingModes: WritingMode,
 

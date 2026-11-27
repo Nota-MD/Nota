@@ -79,9 +79,33 @@ testCase("WebView shortcuts require the developer setting", () => {
     "developer settings toggle is missing",
   );
   const menus = readFileSync("src/ui/useMenus.ts", "utf8");
+  const nativeKeys = readFileSync("src-tauri/src/format_keys.rs", "utf8");
+  const webviewSecurity = readFileSync("src-tauri/src/webview_security.rs", "utf8");
   assert(
     menus.includes('item.id === "view.devtools" && !developerMode'),
     "Developer Tools menu item is not gated by developer mode",
+  );
+  assert(
+    nativeKeys.includes("is_devtools_key") &&
+      nativeKeys.includes('EVENT, "devtools"'),
+    "native F12 handling can bypass the developer setting",
+  );
+  assert(
+    menus.includes('name2 === "devtools"') &&
+      menus.includes("developerMode && webviewDefaultShortcuts") &&
+      /events\.formatKey[\s\S]*?\[[\s\S]*?developerMode,[\s\S]*?webviewDefaultShortcuts,[\s\S]*?\]/.test(
+        menus,
+      ),
+    "native DevTools shortcut is not gated by settings",
+  );
+  assert(
+    webviewSecurity.includes("SetAreBrowserAcceleratorKeysEnabled") &&
+      webviewSecurity.includes("SetAreDevToolsEnabled"),
+    "Windows browser accelerator/DevTools policy is not applied",
+  );
+  assert(
+    webviewSecurity.includes("set_enable_developer_extras(developer_mode)"),
+    "Linux WebKit DevTools policy is not applied",
   );
 });
 

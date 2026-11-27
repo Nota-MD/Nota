@@ -59,6 +59,11 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
+import {
+  htmlImageSource,
+  type ImageSourceAttributes,
+} from "./image-source-schema";
+import { imageFromHtmlOnly } from "./image-attrs";
 
 import { api } from "@/bridge/ipc";
 import { t } from "@/i18n";
@@ -187,8 +192,11 @@ function createElement(isVisionFrequency: boolean): viewItem {
     source.spellcheck = false;
     source.autocomplete = "off";
     source.setAttribute("aria-label", "Image Markdown source");
+    const sourceIcon = document.createElement("span");
+    sourceIcon.className = "nota-image-source-icon";
+    sourceIcon.setAttribute("aria-hidden", "true");
     const img = document.createElement("img");
-    box.append(source, img, errorBody, deleteBody);
+    box.append(sourceIcon, source, img, errorBody, deleteBody);
     return {
       dom: box,
       mediaBody: img,
@@ -248,6 +256,17 @@ function writeAttribute(item3: viewItem, node: PMNode, documentPath: string | nu
   const alt = text2(node.attrs.alt);
   const title = text2(node.attrs.title);
   const represent = ++item3.represent;
+  item3.mediaBody.hidden = false;
+  item3.deleteBody.hidden = false;
+  item3.dom.classList.remove("has-invalid-source");
+  item3.mediaBody.dataset.notaSource = src;
+  item3.mediaBody.dataset.notaImageSyntax = text2(node.attrs.syntax) || "markdown";
+  const zoom = Number(node.attrs.zoom ?? 100);
+  item3.mediaBody.dataset.notaImageZoom = String(zoom);
+  item3.dom.style.setProperty(
+    "--nota-image-zoom",
+    String(Number.isFinite(zoom) && zoom > 0 ? zoom / 100 : 1),
+  );
 
   const localLocal = localLocalImageSliceAbsoluteCorrectPath(src, documentPath);
   if (!localLocal) {
@@ -291,24 +310,52 @@ function resizeImageSource(source: HTMLTextAreaElement): void {
   }
 }
 
+export function imageSourceSelectionRange(
+  source: string,
+  attributes: { alt?: unknown; syntax?: unknown; zoom?: unknown },
+): { start: number; end: number } {
+  if (
+    attributes.syntax === "html" ||
+    Number(attributes.zoom ?? 100) !== 100
+  ) {
+    return { start: 0, end: source.length };
+  }
+  const selectedAlt = text2(attributes.alt).replaceAll("]", "\\]");
+  return { start: 2, end: 2 + selectedAlt.length };
+}
+
 
 export function imageMarkdownSource(node: PMNode): string {
-  const src = text2(node.attrs.src);
-  const alt = text2(node.attrs.alt).replaceAll("]", "\\]");
-  const title = text2(node.attrs.title).replaceAll('"', '\\"');
+  const attributes: ImageSourceAttributes = {
+    src: text2(node.attrs.src),
+    alt: text2(node.attrs.alt),
+    title: text2(node.attrs.title),
+    syntax: node.attrs.syntax === "html" ? "html" : "markdown",
+    zoom: Number(node.attrs.zoom ?? 100),
+  };
+  if (attributes.syntax === "html" || attributes.zoom !== 100) {
+    return htmlImageSource(attributes);
+  }
+  const src = attributes.src;
+  const alt = attributes.alt.replaceAll("]", "\\]");
+  const title = attributes.title.replaceAll('"', '\\"');
   return title ? `![${alt}](${src} "${title}")` : `![${alt}](${src})`;
 }
 
 
 export function parseImageMarkdownSource(
   source: string,
-): { src: string; alt: string; title: string } | null {
+): ImageSourceAttributes | null {
+  const html = imageFromHtmlOnly(source);
+  if (html) return html;
   const match = /^\s*!\[((?:\\.|[^\]])*)\]\(\s*(\S+?)(?:\s+["']((?:\\.|[^"'])*)["'])?\s*\)\s*$/.exec(source);
   if (!match) return null;
   return {
     alt: match[1]!.replaceAll("\\]", "]"),
     src: match[2]!,
     title: (match[3] ?? "").replaceAll('\\"', '"'),
+    syntax: "markdown",
+    zoom: 100,
   };
 }
 
@@ -331,6 +378,9 @@ export function visionFrequencyView(documentPath: string | null = null) {
       const isVisionFrequency = initial.isVisionFrequency;
       writeAttribute(initial, initialNode, documentPath);
       let currentNode = initialNode;
+      const focusEditorWithoutScroll = () => {
+        view.dom.focus({ preventScroll: true });
+      };
 
       const removeMedia = (): void => {
         const position2 = getPos();
@@ -339,8 +389,8 @@ export function visionFrequencyView(documentPath: string | null = null) {
         if (!node || node.type.name !== "image") return;
         const tr = view.state.tr.delete(position2, position2 + node.nodeSize);
         tr.setSelection(TextSelection.near(tr.doc.resolve(position2), -1));
-        view.dispatch(tr.scrollIntoView());
-        view.focus();
+        view.dispatch(tr);
+        focusEditorWithoutScroll();
       };
 
       initial.deleteBody.addEventListener("mousedown", (event) => event.preventDefault());
@@ -371,14 +421,17 @@ export function visionFrequencyView(documentPath: string | null = null) {
             );
           }
         }
-        initial.sourceBody.value = imageMarkdownSource(currentNode);
+        const sourceValue = imageMarkdownSource(currentNode);
+        initial.sourceBody.value = sourceValue;
         resizeImageSource(initial.sourceBody);
-        const selectedAlt = text2(currentNode.attrs.alt)
-          .replaceAll("]", "\\]");
+        const selection = imageSourceSelectionRange(
+          sourceValue,
+          currentNode.attrs,
+        );
         requestAnimationFrame(() => {
           if (!initial.sourceBody) return;
           initial.sourceBody.focus({ preventScroll: true });
-          initial.sourceBody.setSelectionRange(2, 2 + selectedAlt.length);
+          initial.sourceBody.setSelectionRange(selection.start, selection.end);
         });
       };
 
@@ -388,12 +441,27 @@ export function visionFrequencyView(documentPath: string | null = null) {
         showSource();
       });
 
-      const commitSource = (): void => {
+      const commitSource = (returnFocus = false): void => {
         const source = initial.sourceBody;
         if (!source) return;
         const parsed = parseImageMarkdownSource(source.value);
         if (!parsed) {
-          source.value = imageMarkdownSource(currentNode);
+          const position2 = getPos();
+          if (position2 === undefined) return;
+          const text4 = source.value;
+          const transaction = view.state.tr.replaceWith(
+            position2,
+            position2 + currentNode.nodeSize,
+            text4 ? view.state.schema.text(text4) : [],
+          );
+          transaction.setSelection(
+            TextSelection.near(
+              transaction.doc.resolve(position2 + text4.length),
+              -1,
+            ),
+          );
+          view.dispatch(transaction);
+          if (returnFocus) focusEditorWithoutScroll();
           return;
         }
         const position2 = getPos();
@@ -404,6 +472,7 @@ export function visionFrequencyView(documentPath: string | null = null) {
             ...parsed,
           }),
         );
+        if (returnFocus) focusEditorWithoutScroll();
       };
 
       const removeImageFromEmptySource = (): void => {
@@ -413,13 +482,12 @@ export function visionFrequencyView(documentPath: string | null = null) {
       initial.sourceBody?.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
-          commitSource();
-          view.focus();
+          commitSource(true);
         } else if (event.key === "Escape") {
           event.preventDefault();
           initial.sourceBody!.value = imageMarkdownSource(currentNode);
           resizeImageSource(initial.sourceBody!);
-          view.focus();
+          focusEditorWithoutScroll();
         }
       });
       initial.sourceBody?.addEventListener("input", () => {
@@ -430,7 +498,17 @@ export function visionFrequencyView(documentPath: string | null = null) {
           return;
         }
         const parsed = parseImageMarkdownSource(initial.sourceBody.value);
-        if (!parsed) return;
+        if (!parsed) {
+          initial.represent++;
+          setMediaError(initial, null);
+          initial.mediaBody.hidden = true;
+          initial.deleteBody.hidden = true;
+          initial.dom.classList.add("has-invalid-source");
+          return;
+        }
+        initial.mediaBody.hidden = false;
+        initial.deleteBody.hidden = false;
+        initial.dom.classList.remove("has-invalid-source");
         const position2 = getPos();
         if (position2 === undefined) return;
         view.dispatch(
@@ -440,7 +518,7 @@ export function visionFrequencyView(documentPath: string | null = null) {
           }),
         );
       });
-      initial.sourceBody?.addEventListener("blur", commitSource);
+      initial.sourceBody?.addEventListener("blur", () => commitSource(false));
       initial.sourceBody?.addEventListener("blur", () => {
         queueMicrotask(() => {
           if (initial.dom.isConnected && !initial.dom.contains(document.activeElement)) {

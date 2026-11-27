@@ -63,10 +63,6 @@ import type { Toast } from "@/ui/Toasts";
 import { debugError, debugEvent } from "@/ui/debug-log";
 import { savingTextOf } from "@/ui/document-save-text";
 import { useWorkspaceDelete } from "@/ui/useWorkspaceDelete";
-import {
-  clearTableExtensionContent,
-  hasExtensionTableContent,
-} from "@/ui/table-computed";
 
 
 
@@ -328,12 +324,7 @@ export function useDocuments(w: documentWiring): documentApi {
 
         if (!quiet) {
           toast(
-            hasExtensionTableContent(Number(id))
-              ? t(
-                  "Saved to {0}. Table content is rendered by extensions; the Markdown source is unchanged.",
-                  written,
-                )
-              : t("Saved to {0}", written),
+            t("Saved to {0}", written),
             "success",
           );
         }
@@ -703,7 +694,6 @@ export function useDocuments(w: documentWiring): documentApi {
         if (discardDraft) await api.draft.discardDocument(id);
         else if (doc?.dirty) await saveDraft(id);
         await api.doc.close(id);
-        clearTableExtensionContent(Number(id));
         const list = await refreshDocs();
         if (list.length === 0) {
           await api.window.quit();
@@ -784,6 +774,15 @@ export function useDocuments(w: documentWiring): documentApi {
         if (id === activeIdRef.current) {
           const editor = editorRef.current;
           editor?.setMarkdown(fresh.text);
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          // A pending editor change can arrive after the backend reload. Apply
+          // the disk snapshot once more and publish the actual editor text so
+          // stale callbacks cannot win the race.
+          editor?.setMarkdown(fresh.text);
+          const actual = editor?.getMarkdown();
+          if (actual !== undefined) {
+            await api.doc.sync(id, actual);
+          }
 
 
 

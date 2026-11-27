@@ -33,7 +33,7 @@ interface Props {
 
   messageTask: trustRecord[];
 
-  onCall: (plugin: string, command: string, args?: unknown) => Promise<void>;
+  onCall: (plugin: string, command: string, args?: unknown) => Promise<unknown>;
 
   onResize: (width: number) => void;
   onCollapse: () => void;

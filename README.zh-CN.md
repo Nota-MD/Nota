@@ -22,13 +22,13 @@
 
 <p align="center">
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="版本" src="https://img.shields.io/badge/release-v0.17.0--beta-e95420?style=flat-square">
+    <img alt="版本" src="https://img.shields.io/badge/release-v0.18.0--beta-e95420?style=flat-square">
   </a>
   <a href="LICENSE">
     <img alt="许可证" src="https://img.shields.io/badge/license-BSD--2--Clause-2e3440?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="平台" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-5e6272?style=flat-square">
+    <img alt="平台" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-5e6272?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota-plugins">
     <img alt="拓展" src="https://img.shields.io/badge/extensions-Nota--plugins-6f42c1?style=flat-square">
@@ -93,7 +93,21 @@ Nota 把 Markdown 当作一棵文档树，而不是一段等待预览的纯文�
 
 从 **[GitHub Releases](https://github.com/Nota-MD/Nota/releases)** 下载对应平台的安装包。
 
-Release 包含 Linux 与 Windows 的正式打包产物。官方拓展和主题需要单独安装。
+Release 包含 Linux、Windows 与未签名 macOS 的正式打包产物。官方拓展和主题需要单独安装。
+
+### 安装未签名的 macOS 包
+
+当前 macOS 构建未签名，也未经过公证，因此首次启动可能被 Gatekeeper 拦截。
+仅应对从 Nota 官方 Release 下载、且已核对 `SHA256SUMS.txt` 的包解除隔离。
+
+1. 打开 DMG，将 **Nota.app** 拖入 **Applications（应用程序）**。
+2. 在“应用程序”中按住 Control 点击 **Nota**，选择 **打开**，再确认 **打开**。
+3. 若仍被拦截，打开 **系统设置 → 隐私与安全性**，在 Nota 一项选择 **仍要打开**。
+4. 也可以使用终端：
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Nota.app
+```
 
 ## 从源码运行
 

@@ -71,7 +71,7 @@ export function SidebarContextMenu(props: Props) {
           aria-label={t("Close")}
           onClick={onClose}
         >
-          <Icon name="folio-close-symbolic" size={14} />
+          <Icon name="nota-close-symbolic" size={14} />
         </button>
       </div>
       {targetDirectory && (
@@ -130,7 +130,7 @@ export function SidebarContextMenu(props: Props) {
           aria-pressed={listMode}
           onClick={closeThen(onList)}
         >
-          <Icon name="folio-view-list-bullet-symbolic" size={16} />
+          <Icon name="nota-view-list-bullet-symbolic" size={16} />
         </button>
         <button
           type="button"

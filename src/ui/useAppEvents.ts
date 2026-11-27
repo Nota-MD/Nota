@@ -89,7 +89,8 @@ export function useAppEvents(w: EventWiring): void {
           if (p.origin !== "plugin" && p.origin !== "mcp") return;
 
           if (p.id === activeIdRef.current) {
-            editorRef.current?.setMarkdown(p.text);
+            editorRef.current?.setMarkdownFromHost(p.text);
+            void refreshDocs();
             return;
           }
 

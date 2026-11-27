@@ -168,10 +168,7 @@ PAIRS=(
   # ⚠️ 2026-09-27 补的两行：写作统计第二轮加的两张表（`nota.time` / `nota.data`）。
   "src-tauri/src/lua/api/time.rs                  13,11"
   "src-tauri/src/lua/api/data.rs                  13,11,12"
-  "src-tauri/src/lua/api/table.rs 13,11,12" "src-tauri/src/plugin/setting_locks.rs 02,03,11,12"
   "src-tauri/src/plugin/manifest/tests.rs         02"
-  "src-tauri/src/table_bridge.rs                  02,03,05"
-  "src-tauri/src/commands/table.rs                02,04"
   # 前端
   "src/main.tsx                                   06"
   "src/App.tsx                                    02,04"
@@ -187,7 +184,6 @@ PAIRS=(
   "src/bridge/ipc.ts                              02,05"
   "src/bridge/types.ts                            02,05"
   "src/bridge/payloads.ts                         02,05"
-  "src/bridge/types-table.ts                      02,05"
   "src/editor/create.ts                           05"
   # 2026-09-28：命令白名单（COMMANDS 表）整块搬出 `create.ts`（那边到 1010 行、破了硬线）。
   "src/editor/command-table.ts                    05"
@@ -236,7 +232,6 @@ PAIRS=(
   "src/editor/link-edit.ts                      05,02,04,10"
   "src/ui/LinkDialog.tsx                        04,02"
   "src/ui/useLinkClick.ts                       04,02,05"
-  "src/ui/useTableBridge.ts                     04,05"
   "src/ui/context-menu-spell.ts                 02,04"
   "tests/link-edit.test.ts                      02,06"
   # ⚠️ 2026-10-07 补：这一份**建好就一直在 `docs/09` §2 里、这里却没有**——
@@ -644,8 +639,6 @@ PAIRS=(
   "src/editor/url-link.ts                        05,04,10"
   "src/editor/keyboard-experience.ts             05,04,10"
   "src/editor/link-source-reveal.ts              05,02"
-  "src/ui/TableToolbar.tsx                       04,05"
-  "src/styles/table-toolbar.css                  04"
   "src/editor/paste.ts                           05,04,10"
   "src/editor/paste-clean.ts                     05,04,10"
   "src/editor/lang-guess.ts                      05,04,10"

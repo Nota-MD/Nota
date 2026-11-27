@@ -218,7 +218,6 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `styles/editor.css` | 正文编辑区的壳与版式（346 行）。⚠️ 排版是**用 token 写的**——文档主题改 token 就能换掉，不用抢选择器权重。⚠️ 2026-09-29 拆成三份（外壳 / 行内 / 块级）。📌 2026-11-04：`.ProseMirror` 显式 `width: 100%`，防止 Typora 主题的 `margin: 0 auto` 让空文档正文根缩到中间 |
 | `styles/editor-inline.css` | 行内那一层（226 行，2026-09-29 拆出）：高亮、上标、下标、下划线、裸 HTML、脚注、智能标点仅显示 |
 | `styles/editor-blocks.css` | 块级那一层（2026-09-29 拆出）：代码块、任务列表、普通表格、分隔线与引用。列宽拖动手柄已移除。📌 2026-11-04：所有 `.nota-source-surface` CodeMirror 源码面强制左对齐，避免 Typora 的 `.md-diagram-panel { text-align:center }` 把 Mermaid/LaTeX/HTML 源码居中；渲染预览仍可居中 |
-| `styles/table-toolbar.css` | 表格浮动快捷栏与行列数选择器的样式；所有颜色、圆角和阴影跟随界面主题变量 |
 | `styles/marks.css` | **「标记半透明地画回来」那一族**：`.nota-srcmark`（块级标记）＋ `.nota-markhint`（行内定界符）＋ 标题三态类。引用、无序列表与代码围栏使用可主题覆盖的自绘 SVG，图标相对整个块垂直居中；必须在 `editor.css` 后加载 |
 | `styles/doc-theme.ts` | **文档主题的限域注入器**：用 `CSSStyleSheet` 解析后把每条选择器收到 `.editor-pane` 之下。⚠️ `:root`/`html`/`body` 是**改写**成 `.editor-pane` 而不是加前缀——**这一步就是「文档主题碰不到外壳」的全部保证**。2026-11-02 起追加 Typora 变量桥与 `.cm-*` → `.token.*` 映射；2026-11-04 再补 `thead` → `data-is-header`、`.md-inline-math`、`.md-table-wrap`、任务列表、Alert、HTML 块、`figure` 表格和 `#write.first-line-indent` 别名，并把 Typora 正文块对齐兜底为 `start`，标题仍由主题控制 |
 | `styles/share.css` | **分享图那一块面板的皮**（61 行，2026-09-27）：`.panel-share` / `.panel-share-img` / `.panel-share-actions` / `.panel-share-note`。⚠️ **另开一份是因为 `dock.css` 当时 961 行、贴着 1000 行硬线**。⚠️ 卡片自己的配色**不在这里**——那张 SVG 塞在 `<img>` 里、继承不到任何 CSS 变量。⚠️ 要在 `dock.css` 之后加载（借那边的 `.panel-btn`） |
@@ -260,7 +259,6 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `ui/useEditorSettings.ts` | 把 `settings.markdown` **拼成编辑器要的那两个形状**（92 行，2026-10-07 拆出）：`行内扩展开关` ＋ `标点设置`，**记忆化留在这里**——依赖给**逐项**（三个布尔 / 六个字段），拿整个 `markdown` 当依赖会让"改字号"也顺手重建实例。⚠️ **六项里任何一项变了都要重建**（不做热更新：省下一次重建换来的是"改了字形、活着的实例闭包里还是旧的"这类**静默失效**），代价是写到一半拨标点会**丢撤销栈**，与 `physics` / `inlineMarks` 完全一样。⚠️ 设置还没回来时 `undefined` 一律落到**默认值**（自动更正落 **`true`**），不是落"关" |
 | `ui/useEditorHandle.ts` | `EditorPane` 那个 `useImperativeHandle`——**外面那 13 条命令怎么落到"当前活着的那两个实例"上**（98 行，2026-10-07 拆出）。⚠️ 每条都 `?.` 加兜底，读的给 `undefined`/`null`/`0`/`false`、写的什么都不做，**一律不抛错**：实例是异步建的，这些方法常正好压在"编辑器正在重建"上，抛出去的症状不是"命令没生效"而是**整棵 React 树被带下来**（白屏）。⚠️ `setMarkdown` 要**连 `最新文本Ref` 一起改**（不然紧接着切一次模式会把替换前那一份装回去），并**顺手推给预览那一格**（右格不接 `onChange`，不推就停在被替换之前） |
 | `ui/useCursorSnapshot.ts` | **选区快照 → 后端镜像**（103 行，第 14 项；2026-10-04 加、2026-10-07 从 `ui/EditorPane.tsx` 拆出）：编辑器每报一份选区，压一道 **250ms** 时间窗再 `api.doc.cursor(...)` 推给插件。⚠️ 编辑器那一侧的键是"快照变没变"、这里的键是"多久没推过了"——**只挪光标、不改字**不会触发 `sync`，没有这一条插件读到的选区会一直停在敲键盘之前。⚠️ 定时器与 `sync` 那条**分开**（合用一个会让"改一个字"吞掉"刚挪了光标"那次推送）；**推失败只吞掉**不弹提示条（旁路，下一笔事务自愈） |
-| `ui/TableToolbar.tsx` | **当前表格上方的浮动快捷栏**（2026-10-23 新建）：调整行列数、当前列左 / 中 / 右对齐、删除表格。只在所见即所得且光标位于表格时出现，宽度跟随当前表格并铺满上方空隙，删除按钮固定在右端；点击按钮不抢编辑器选区。滚动与选区触发的重新定位按动画帧合并，避免触摸板高频事件反复测量。 |
 | `ui/Sidebar.tsx` | 左侧栏两页（文件 / 大纲）。文件页默认是 **扁平列表**，按当前口径递归列出工作区内的 Markdown，并保留列表/树形切换；大纲页随正文选区标记当前章节。列表按 24 个一批向宿主读取 `WorkspaceExcerpt`，显示“去后缀标题 ＋ 淡色后缀 ＋ 首标题 ＋ 下一段”；读取失败静默回落到目录。树形页用 `nota-tree-folder[-open]` / `nota-tree-file` 三个可被主题覆盖的 SVG 图标。底栏「＋」在已有工作区时插入 `Untitled.md` 内联输入行，确认后创建真实文件并刷新树。 |
 | `ui/SidebarFiles.tsx` | **侧栏文件页的扁平列表**（2026-10-23 从 `Sidebar.tsx` 拆出）：递归扫描工作区、24 个一批加载 `WorkspaceExcerpt`、新文件输入行，以及文件名/摘要搜索框。右键菜单在 `Sidebar.tsx`，负责新建文件/文件夹、搜索、列表/树形切换和文件路径动作。 |
 | `ui/file-icon.ts` | **侧栏文件类型图标**（2026-11-01）：Markdown、代码、图片、普通文档、未知文件五类映射到现有内置 SVG，并保留隐藏文件与无后缀文件的兜底。 |
@@ -280,7 +278,6 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `ui/useMenus.ts` | **菜单与快捷键的接线**（2026-09-24 从 `App.tsx` 搬出）：三条判据 → `disabledCommands` / `menuChecks` / `usingNativeMenu`。⚠️ **2026-09-29（BUG-53）多接了一条判据：编辑器自己已经处理过的不再接手**——那条 `window` keydown 监听的第一句是 `if (e.defaultPrevented) return;`（ProseMirror 只要有一条 `handleKeyDown` 返回 `true` 就会 `preventDefault()`，而它的监听挂在 contenteditable 上、比 `window` 早）。少了这一句，`Mod-b` / `Mod-i` 会被上下两处各跑一遍，而两条命令都是 toggle、正好抵消 = 「按了没反应」。⚠️ 推原生菜单那个 effect 的依赖里有**语言**（`use语言()`，2026-09-26 加）。📌 **2026-10-07（497 行）：剪贴板那四颗键多了一道放行口**——`剪贴板键 = {edit.copy, edit.cut, edit.paste, edit.pastePlain}`，目标是**块里那颗 CodeMirror**（`目标.closest(".nota-code-cm")`）时**不进全局那条路**（它有自己的整行剪贴板处理，见 `editor/code-block-cm.ts`）。📌 **2026-11-23**：推原生菜单时用 `nativeMenuPayloadKey` 跳过未变载荷并短防抖——macOS 上重复 `set_menu` 会让系统菜单栏（File 等）闪开又关、点不进去。同批导出 `effectiveMenuRenderer` / `zenChromeActive`：后者在「system + force_nota + 最大化/全屏」时跳过 `data-zen`，避免强制自绘栏被 6px 唤回带藏掉；默认 `menu_renderer=nota` 的 Windows/Linux 全屏行为不变 |
 | `ui/useDialogs.ts` | **两个自绘对话框的"谁在等答案"**（2026-09-24 从 `App.tsx` 搬出）：两个 `useState` + 两个 resolve ref |
 | `ui/panel-dock-state.ts` | **插件栏那三份凭据（当前哪一页 / 每页拉回来的内容 / 正在吐的那段字）住在组件外面**（2026-10-10 新增，`docs/07` 第 111 项）：关掉插件栏 = `PluginDock` 被卸载、组件里的 state 全丢；而插件的一条命令跑着时宿主握着 `plugins` 锁，`nota_plugin_panel_content` 要的**正是同一把锁**，所以重开时那次"重拉"回不来（用户报的「关掉面板再打开就找不到了」）。这里装着那份 `记忆`（`起始页` 那个三态：`undefined` 才是"没选过"、`null` 是"用户自己停在插件清单页"；`记住内容表` 抹掉 `busy`——不抹的话重开是一排永远解不开的灰按钮）与纯函数 `这一页画什么`（其中一条是**内容拉不回来但有流式文字时先把字画出来**）。⚠️ 进程内、不落盘。判据 `tests/panel-dock-state.test.ts`（44 条） |
-| `ui/table-snapshot.ts` | Shared table identity and snapshot construction. `useTableBridge` publishes every table on document open; the spreadsheet overlay reuses the same helper for active-cell snapshots. |
 | `ui/credits.ts` | **「关于 → 鸣谢」那一页的名单**（2026-10-10 从 `ui/AboutDialog.tsx` 搬出来并补全：用户「将 Codemirror 等引入的 BSD/MIT 库写入"鸣谢"」）：判据是"**直接依赖里那些宽松许可的**"（MIT / BSD / ISC / Apache-2.0 / CDLA），逐条对着 `THIRD-PARTY.md` §1/§2 抄——**两份必须同批改**。⚠️ 写成**函数**（收一个 `t` 进来现调）而不是模块级常量，理由同 `ui/pluginText.ts`；每条 `用处` 都是字面量 `t("…")`（`tools/i18n-check.sh` 只认那种写法）。⚠️ 仍然不是"完整的传递依赖闭包"（那有几百个包） ⚠️ **2026-10-16 多了一行 `Monoton`**（「Nota」那三个字的字标字体，OFL-1.1，出处与义务在 `THIRD-PARTY.md` §8）。 |
 | `ui/settings/panes/SpellLangPicker.tsx` | **「拼写检查语言」那一格的控件 ＋ 词典从哪儿来**（2026-10-10 建，**2026-10-11 大改**）：一个**能同时勾几门**的列表（跟随系统是列表第一个勾——勾上就是清空，不是并列的开关）＋ 一格"添加自定义标签"＋ 底下那一段**装词典**（导入 `.zip` / 在文件夹里显示词典目录 / 目录路径 / 三条出路的提示）。⚠️⚠️ **候选的本事反过来了**：2026-10-10 那一版是一张**写死的表**（那时候列不出"这台机器装了什么"，四种列法全不靠谱，实测在 `commands/webview.rs` 文件头）；今天引擎是我们自己的（只认 `.aff`/`.dic`），"扫得到"与"用得了"成了同一件事，所以列表**分两档**画：**装着的**（来自 `nota_spell_dictionaries`）与**常见但没装的**（勾得上、旁边写"未安装"——做成点不动的用户会以为"这软件不支持德语"）。⚠️ 它**不是页面**，是「编辑器」页里的一格（值走 `paneWriter` 写的 `spellcheck_langs`） |
 | `ui/useExport.ts` | **导出、导入与打印的接线**（2026-09-24 从 `App.tsx` 搬出）：取正文 → 取主题 → 生成 HTML → 问落点/交给系统 → 报结果。⚠️ 正文**必须从编辑器拿**；主题取不到**不算失败**。📌 **2026-10-25 自定义导出器**：`导出为(id)` 服务固定 PDF，`导出自定义(id)` 读取设置里那一项的参数、样式文件与“导出后定位”开关；两者共用同一条 Pandoc 探测、保存对话框与 PDF 浅色闸门。2026-10-19 的五种导入仍走同一探测。⚠️ 默认落点三档，且**与「另存为」不是一回事** |
@@ -3084,9 +3081,9 @@ pub struct PluginPrompt {
 
 插件清单（`plugin.toml`）的解析与校验。文件头带着一份完整的清单样例与各栏的含义。
 
-### `pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 4);`
+### `pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 5);`
 
-The current host API is `v2.4`. API versions use `vMAJOR.MINOR`. Minor releases
+The current host API is `v2.5`. API versions use `vMAJOR.MINOR`. Minor releases
 are backward compatible; major releases are not. A plugin is accepted only when
 its major matches the host and its minor is not newer than the host minor.
 
@@ -9791,18 +9788,6 @@ handler 一直没接，`key-conflicts.ts` 里那份 `故意不摘` 名单就是�
 | 已知缺陷与 backlog（编号） | `docs/07-feature-status.md` |
 | 能力表与怎么写插件 | `docs/11-writing-a-plugin.md`、`docs/13-lua-api.md` |
 
-## Table bridge (API v2.4)
-
-`src-tauri/src/table_bridge.rs` owns the active GFM table snapshot, temporary
-display map, context actions and write intents. `commands/table.rs` exposes the
-snapshot and action registry to the frontend. `lua/api/table.rs` exposes the
-same state to extensions through `nota.table`.
-
-The bridge never edits Markdown. Snapshot sync comes from
-`SpreadsheetTableOverlay.tsx`; temporary values are applied by
-`useTableBridge.ts`; write intents become one `tableSetCells` editor
-transaction. `plugin/setting_locks.rs` owns settings declared through
-`[[setting_lock]]`.
 
 ## Inline review implementation
 
@@ -9811,3 +9796,19 @@ transaction. `plugin/setting_locks.rs` owns settings declared through
 widgets without changing the document. `tests/review-inline.test.ts` covers the
 Unicode-safe text diff, insertion/deletion offsets, CJK and emoji boundaries,
 and the large-input fallback.
+
+## Markdown syntax and utility surfaces
+
+| File | Responsibility |
+|---|---|
+| `src/editor/markdown-syntax-style.ts` | Detect the dominant source syntax for Setext headings, unordered markers and ordered delimiters. Settings provide fallback values, not replacements for syntax already present in the document. The resolver feeds remark stringify options during editor creation. |
+| `src/editor/caret-ownership.ts` | Defines which inner text surface owns caret navigation. Inputs, CodeMirror and embedded source editors receive arrow, Delete, Backspace and composition events before document-level caret or table navigation handlers. |
+| `src/editor/caret-commander.ts` | Dispatches caret commands to registered inner surfaces. Table navigation and document caret handlers ask this shared layer before consuming keyboard input. |
+| `src/editor/math-view-registry.ts` | Register inline and block math NodeViews and the active-formula/boundary plugins. This keeps Milkdown plugin registration separate from the large NodeView implementation in `math-view.ts`. |
+| `src/editor/math-view-dom.ts` | Builds the math NodeView surfaces and delimiter renderer. `math-view.ts` owns lifecycle and editing behavior; this module owns element creation. |
+| `src/ui/AppSettingsSurface.tsx` | Mount the deferred Settings surface only when the embedded or standalone Settings workflow is active. |
+| `src-tauri/src/settings_window_host.rs` | Owns the standalone Settings reuse channel. The first Settings process registers a loopback port; later open requests focus that process instead of launching a duplicate. |
+| `src-tauri/src/webview_security.rs` | Applies WebView2 DevTools and browser-accelerator availability from settings. Native DevTools shortcuts cannot bypass developer mode. |
+| `src/ui/SettingsWindow.tsx` | Standalone Preferences root. It loads settings, applies appearance, and mounts the element inspector and selectable-interface-text bridge so developer tools work in the dedicated process. |
+| `src/ui/AboutWindow.tsx` | Standalone About root using the same dedicated-window lifecycle as Preferences. |
+| `src/styles/dialog-close.css` | Theme-aware close control shared by dialogs and utility windows. |

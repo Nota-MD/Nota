@@ -23,6 +23,7 @@ import "./styles/menubar.css";
 import "./styles/command-palette.css";
 
 import "./styles/tabs-status.css";
+import "./styles/table-toolbar.css";
 
 import "./styles/toast.css";
 import "./styles/zoom-hud.css";
@@ -31,6 +32,7 @@ import "./styles/zoom-hud.css";
 
 
 import "./styles/overlay.css";
+import "./styles/dialog-close.css";
 import "./styles/window-id.css";
 import "./styles/element-inspector.css";
 import "./styles/file-picker.css";
@@ -124,7 +126,6 @@ import "./styles/heatmap.css";
 import "./styles/bars.css";
 // Vim input adapter: block cursor, disabled native caret, and the mode chip.
 import "./styles/vim.css";
-import "./styles/table-toolbar.css";
 
 
 

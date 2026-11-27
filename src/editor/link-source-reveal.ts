@@ -26,6 +26,7 @@ import {
   DecorationSet,
   type EditorView,
 } from "@milkdown/kit/prose/view";
+import { explicitLinkCompletedKey } from "./url-link";
 
 const linkSourceName = "notaLinkSource";
 
@@ -129,7 +130,8 @@ function caretInSource(visible: string, source: string, offset: number): number 
 function parseSource(
   source: string,
 ): { label: string; href: string; title: string } | null {
-  const match = /^\[([^\]]*)\]\((\S+?)(?:\s+"((?:[^"\\]|\\.)*)")?\)$/.exec(source);
+  const match =
+    /^\[([^\]]*)\]\((\S*?)(?:\s+"((?:[^"\\]|\\.)*)")?\)$/.exec(source);
   if (!match) return null;
   return {
     label: match[1] ?? "",
@@ -164,6 +166,7 @@ function revealRun(
   caret: number,
   source: string,
   syntaxType: NodeType,
+  caretAtSourceEnd = false,
 ): number {
   const { schema } = tr.doc.type;
   const href = String(run.link.attrs.href ?? "");
@@ -177,7 +180,9 @@ function revealRun(
   const at =
     caret <= run.from
       ? run.from
-      : caret >= run.to
+      : caretAtSourceEnd && caret >= run.to
+        ? run.from + node.nodeSize - 2
+        : caret >= run.to
         ? run.from + node.nodeSize
         : run.from + 1 + caretInSource(label, source, caret - run.from);
   tr.setSelection(TextSelection.create(tr.doc, at));
@@ -191,6 +196,22 @@ interface LinkSourceState {
 interface SettleResult {
   tr: Transaction;
   revealedCaret: number | null;
+}
+
+export function linkSourceContainsSelection(
+  position: number,
+  nodeSize: number,
+  from: number,
+  to: number,
+): boolean {
+  return from > position && to <= position + nodeSize;
+}
+
+export function caretRevealsLink(
+  run: { from: number; to: number },
+  position: number,
+): boolean {
+  return run.from <= position && position < run.to;
 }
 
 export const linkSourceRevealKey = new PluginKey<LinkSourceState>(
@@ -214,12 +235,29 @@ function trackSources(tr: Transaction, previous: number[]): number[] {
   return Array.from(positions).sort((a, b) => a - b);
 }
 
+function selectionInOpaqueBlock(state: EditorState): boolean {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (
+      node.type.spec.code ||
+      node.type.name === "math_block" ||
+      node.type.name === "diagram" ||
+      node.type.name === "notaHtmlBlock"
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function settleLinks(
   state: EditorState,
   syntaxType: NodeType,
   reveal: boolean,
   caretOverride?: number,
   collapseAll = false,
+  allowEndReveal = false,
 ): SettleResult | null {
   const positions = linkSourceRevealKey.getState(state)?.positions ?? [];
   const tr = state.tr;
@@ -231,8 +269,12 @@ function settleLinks(
     const end = position + node.nodeSize;
     if (
       !collapseAll &&
-      state.selection.from >= position &&
-      state.selection.to <= end
+      linkSourceContainsSelection(
+        position,
+        node.nodeSize,
+        state.selection.from,
+        state.selection.to,
+      )
     ) {
       touching = true;
       continue;
@@ -242,13 +284,17 @@ function settleLinks(
   if (reveal && !touching && state.selection.empty) {
     const caret = tr.mapping.map(caretOverride ?? state.selection.from);
     const run = linkRunAt(tr.doc, caret);
-    if (run) {
+    if (
+      run &&
+      (caretRevealsLink(run, caret) || (allowEndReveal && caret === run.to))
+    ) {
       revealedCaret = revealRun(
         tr,
         run,
         caret,
         linkSourceForRun(tr.doc, run),
         syntaxType,
+        allowEndReveal,
       );
     }
   }
@@ -261,12 +307,28 @@ function settleLinks(
 }
 
 export function linkSourceDecorations(state: EditorState): DecorationSet {
-  const positions = linkSourceRevealKey.getState(state)?.positions ?? [];
+  const tracked = linkSourceRevealKey.getState(state)?.positions ?? [];
+  const positions = new Set(tracked);
+  state.doc.descendants((node, position) => {
+    if (node.type.name === linkSourceName) {
+      positions.add(position);
+      return false;
+    }
+    return true;
+  });
   const decorations: Decoration[] = [];
   for (const position of positions) {
     const node = state.doc.nodeAt(position);
     if (node?.type.name !== linkSourceName) continue;
     const source = node.textContent;
+    if (!parseSource(source)) {
+      decorations.push(
+        Decoration.node(position, position + node.nodeSize, {
+          class: "nota-link-source-invalid",
+        }),
+      );
+      continue;
+    }
     const bracket = source.indexOf("](");
     if (source.startsWith("[")) {
       decorations.push(
@@ -278,16 +340,33 @@ export function linkSourceDecorations(state: EditorState): DecorationSet {
     if (bracket >= 0) {
       if (source.startsWith("[") && bracket > 1) {
         decorations.push(
-          Decoration.inline(position + 2, position + 1 + bracket, {
+          Decoration.inline(position + 2, position + 2 + bracket, {
             class: "nota-link-source-label",
           }),
         );
       }
+      const contentStart = position + 1;
       decorations.push(
-        Decoration.inline(position + 1 + bracket, position + node.nodeSize - 1, {
+        Decoration.inline(contentStart + bracket, contentStart + bracket + 2, {
           class: "nota-link-source-syntax",
         }),
       );
+      const destinationFrom = contentStart + bracket + 2;
+      const destinationTo = contentStart + source.length - 1;
+      if (destinationTo > destinationFrom) {
+        decorations.push(
+          Decoration.inline(destinationFrom, destinationTo, {
+            class: "nota-link-source-href",
+          }),
+        );
+      }
+      if (source.endsWith(")")) {
+        decorations.push(
+          Decoration.inline(destinationTo, destinationTo + 1, {
+            class: "nota-link-source-syntax",
+          }),
+        );
+      }
     }
   }
   return DecorationSet.create(state.doc, decorations);
@@ -298,6 +377,33 @@ export const linkSourceReveal = $prose((ctx) => {
   let view: EditorView | null = null;
   let settling = false;
   let correctionFrame = 0;
+  const insertTextAfterSource = (
+    editorView: EditorView,
+    position: number,
+    text: string,
+  ): boolean => {
+    if (!text || !editorView.state.selection.empty) return false;
+    const resolved = editorView.state.doc.resolve(position);
+    const source = resolved.nodeBefore;
+    if (source?.type !== syntaxType) return false;
+    const sourceStart = position - source.nodeSize;
+    const collapsed = collapseSource(editorView.state.schema, source);
+    const linkType = editorView.state.schema.marks.link;
+    const transaction = editorView.state.tr.replaceWith(
+      sourceStart,
+      position,
+      collapsed,
+    );
+    const afterLink = sourceStart + collapsed.size;
+    transaction.insertText(text, afterLink);
+    transaction.setSelection(
+      TextSelection.create(transaction.doc, afterLink + text.length),
+    );
+    if (linkType) transaction.removeStoredMark(linkType);
+    editorView.dispatch(transaction);
+    editorView.focus();
+    return true;
+  };
   const correctRevealedCaret = (editorView: EditorView, caret: number) => {
     const correct = () => {
       if (editorView.isDestroyed || !editorView.hasFocus()) return;
@@ -359,8 +465,12 @@ export const linkSourceReveal = $prose((ctx) => {
       if (
         !view ||
         view.composing ||
+        selectionInOpaqueBlock(state) ||
         transactions.some(
           (tr) => tr.getMeta(linkSourceRevealKey) === "settle",
+        ) ||
+        transactions.some(
+          (tr) => tr.getMeta(explicitLinkCompletedKey) === true,
         )
       ) {
         return null;
@@ -382,6 +492,8 @@ export const linkSourceReveal = $prose((ctx) => {
         syntaxType,
         view.hasFocus(),
         browserSteppedIntoLink ? oldLink.to : undefined,
+        false,
+        browserSteppedIntoLink,
       );
       if (result !== null && result.revealedCaret !== null && view) {
         correctRevealedCaret(view, result.revealedCaret);
@@ -390,6 +502,59 @@ export const linkSourceReveal = $prose((ctx) => {
     },
     view(editorView) {
       view = editorView;
+      const insertAfterVisibleSource = (rawEvent: Event) => {
+        const event = rawEvent as InputEvent;
+        if (
+          editorView.composing ||
+          event.isComposing ||
+          event.inputType !== "insertText" ||
+          !event.data ||
+          !editorView.state.selection.empty
+        ) {
+          return;
+        }
+        if (
+          insertTextAfterSource(
+            editorView,
+            editorView.state.selection.from,
+            event.data,
+          )
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      };
+      editorView.dom.addEventListener(
+        "beforeinput",
+        insertAfterVisibleSource,
+        true,
+      );
+      const repairSourceEdges = () => {
+        for (const element of Array.from(
+          editorView.dom.querySelectorAll<HTMLElement>(".nota-link-source"),
+        )) {
+          const match = /^([\s\S]*?)\[([^\]\n]+)\]\(([^()\s]*)\)([\s\S]*)$/.exec(
+            element.textContent ?? "",
+          );
+          if (!match) continue;
+          const prefix = match[1] ?? "";
+          const suffix = match[4] ?? "";
+          if (!prefix && !suffix) continue;
+          const anchorElement = document.createElement("a");
+          anchorElement.setAttribute("href", match[3] ?? "");
+          anchorElement.textContent = match[2] ?? "";
+          const replacement: Node[] = [];
+          if (prefix) replacement.push(document.createTextNode(prefix));
+          replacement.push(anchorElement);
+          if (suffix) replacement.push(document.createTextNode(suffix));
+          element.replaceWith(...replacement);
+        }
+      };
+      const queueSourceTailRepair = () => {
+        queueMicrotask(repairSourceEdges);
+        requestAnimationFrame(repairSourceEdges);
+      };
+      editorView.dom.addEventListener("input", queueSourceTailRepair, true);
       const settleFromPointer = (event: MouseEvent) => {
         if (event.ctrlKey || event.metaKey) return;
         const target =
@@ -399,6 +564,13 @@ export const linkSourceReveal = $prose((ctx) => {
               ? event.target.parentElement
               : null;
         if (target?.closest(".nota-link-source")) return;
+        if (
+          target?.closest(
+            ".cm-editor, pre, .nota-math-block, .nota-diagram, .nota-html-block",
+          )
+        ) {
+          return;
+        }
         const outsideEditor = target === null || !editorView.dom.contains(target);
         queueMicrotask(() => {
           if (!editorView.isDestroyed) {
@@ -409,6 +581,16 @@ export const linkSourceReveal = $prose((ctx) => {
       document.addEventListener("mousedown", settleFromPointer, true);
       return {
         destroy() {
+          editorView.dom.removeEventListener(
+            "beforeinput",
+            insertAfterVisibleSource,
+            true,
+          );
+          editorView.dom.removeEventListener(
+            "input",
+            queueSourceTailRepair,
+            true,
+          );
           document.removeEventListener("mousedown", settleFromPointer, true);
           cancelAnimationFrame(correctionFrame);
           view = null;
@@ -417,6 +599,12 @@ export const linkSourceReveal = $prose((ctx) => {
     },
     props: {
       decorations: linkSourceDecorations,
+      handleTextInput(editorView, from, to, text) {
+        return (
+          from === to &&
+          insertTextAfterSource(editorView, from, text)
+        );
+      },
       handleDOMEvents: {
         mousedown: (editorView, event) => {
           if (!(event instanceof MouseEvent) || (!event.ctrlKey && !event.metaKey)) return false;
@@ -424,6 +612,46 @@ export const linkSourceReveal = $prose((ctx) => {
           if (!target?.closest("a[href]")) return false;
           event.preventDefault();
           editorView.dom.focus({ preventScroll: true });
+          return true;
+        },
+        click: (editorView, event) => {
+          if (
+            !(event instanceof MouseEvent) ||
+            event.button !== 0 ||
+            event.ctrlKey ||
+            event.metaKey
+          ) {
+            return false;
+          }
+          const target =
+            event.target instanceof Element
+              ? event.target
+              : event.target instanceof Node
+                ? event.target.parentElement
+                : null;
+          if (!target?.closest("a[href]")) return false;
+          const clicked = editorView.posAtCoords({
+            left: event.clientX,
+            top: event.clientY,
+          })?.pos;
+          if (clicked === undefined) return false;
+          const run = linkRunAt(editorView.state.doc, clicked);
+          if (!run) return false;
+          event.preventDefault();
+          editorView.focus();
+          const result = settleLinks(
+            editorView.state,
+            syntaxType,
+            true,
+            clicked,
+            false,
+            true,
+          );
+          if (!result) return true;
+          editorView.dispatch(result.tr);
+          if (result.revealedCaret !== null) {
+            correctRevealedCaret(editorView, result.revealedCaret);
+          }
           return true;
         },
         compositionend: () => {
@@ -449,6 +677,46 @@ export const linkSourceReveal = $prose((ctx) => {
         }
         if (!editorView.state.selection.empty) return false;
         const { $from, from } = editorView.state.selection;
+        if (event.key === "ArrowLeft") {
+          const adjacentRun = linkRunAt(editorView.state.doc, from - 1);
+          if (adjacentRun && from === adjacentRun.to + 1) {
+            event.preventDefault();
+            const result = settleLinks(
+              editorView.state,
+              syntaxType,
+              true,
+              adjacentRun.to,
+              false,
+              true,
+            );
+            if (result) {
+              editorView.dispatch(result.tr);
+              if (result.revealedCaret !== null) {
+                correctRevealedCaret(editorView, result.revealedCaret);
+              }
+            }
+            return true;
+          }
+          const run = linkRunAt(editorView.state.doc, from);
+          if (run && from === run.to) {
+            event.preventDefault();
+            const result = settleLinks(
+              editorView.state,
+              syntaxType,
+              true,
+              from,
+              false,
+              true,
+            );
+            if (result) {
+              editorView.dispatch(result.tr);
+              if (result.revealedCaret !== null) {
+                correctRevealedCaret(editorView, result.revealedCaret);
+              }
+            }
+            return true;
+          }
+        }
         let start: number;
         if ($from.parent.type === syntaxType) start = $from.before();
         else if ($from.nodeAfter?.type === syntaxType) start = from;
@@ -460,6 +728,16 @@ export const linkSourceReveal = $prose((ctx) => {
         const node = editorView.state.doc.nodeAt(start);
         if (!node) return false;
         const end = start + node.nodeSize;
+        if (event.key === "ArrowLeft" && from === end) {
+          event.preventDefault();
+          editorView.dispatch(
+            editorView.state.tr.setSelection(
+              TextSelection.create(editorView.state.doc, end - 1),
+            ),
+          );
+          editorView.focus();
+          return true;
+        }
         if (event.key === "ArrowLeft" && from === start + 1) {
           event.preventDefault();
           editorView.dispatch(

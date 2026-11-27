@@ -229,7 +229,7 @@ export function StatusBar({
           aria-label={t("Show the extension dock")}
           aria-pressed={pluginDock.open2}
         >
-          <Icon name="folio-columns-symbolic" />
+          <Icon name="nota-columns-symbolic" />
         </button>
       )}
       <button
@@ -241,7 +241,7 @@ export function StatusBar({
         aria-label={t("Switch between source mode and WYSIWYG")}
         aria-pressed={mode === "source"}
       >
-        <Icon name="folio-insert-code-symbolic" />
+        <Icon name="nota-insert-code-symbolic" />
       </button>
     </span>
   );
@@ -310,7 +310,7 @@ export function StatusBar({
           aria-label={t("Hide the status bar")}
           onClick={onHide}
         >
-          <Icon name="folio-close-symbolic" />
+          <Icon name="nota-close-symbolic" />
         </button>
       </span>
 

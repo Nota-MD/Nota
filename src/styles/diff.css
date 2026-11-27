@@ -35,7 +35,7 @@
 
 .diff-del {
   background: var(--diff-del-bg);
-  color: var(--danger);
+  color: var(--fg);
 }
 
 .diff-del .diff-marker {
@@ -46,7 +46,7 @@
 
 .diff-add {
   background: var(--diff-add-bg);
-  color: var(--success);
+  color: var(--fg);
 }
 
 .diff-add .diff-marker {

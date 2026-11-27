@@ -183,7 +183,14 @@ export function vimInputPlugin(
             if (!state?.config?.enabled) return false;
             if (state.mode === "insert") {
               recordVimInsertText(text);
-              return false;
+              if (view.composing) return false;
+              view.dispatch(
+                view.state.tr
+                  .insertText(text, _from, _to)
+                  .setMeta(VIM_INPUT_META, true)
+                  .scrollIntoView(),
+              );
+              return true;
             }
             return true;
           },

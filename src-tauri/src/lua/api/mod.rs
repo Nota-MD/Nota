@@ -11,7 +11,6 @@ pub mod i18n;
 pub mod json;
 pub mod review;
 pub mod settings;
-pub mod table;
 pub mod time;
 pub mod ui;
 pub mod unified_diff;
@@ -121,14 +120,6 @@ pub fn build(
 
     if manifest.has(Capability::DataOwn) {
         set(nota.set("data", data::build(lua, &manifest.meta.id)?), lua)?;
-    }
-
-    if manifest.has(Capability::TableRead)
-        || manifest.has(Capability::TableRender)
-        || manifest.has(Capability::TableWrite)
-        || manifest.has(Capability::TableContextAction)
-    {
-        set(nota.set("table", table::build(lua, manifest, ctx)?), lua)?;
     }
 
     Ok(nota)

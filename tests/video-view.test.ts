@@ -33,12 +33,19 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fromMarkdown } from "mdast-util-from-markdown";
 
 import {
   visionFrequencyExtension,
   IsVideoSource,
+  imageSourceSelectionRange,
   parseImageMarkdownSource,
 } from "@/editor/video-view";
+import {
+  imageFromHtmlOnly,
+  normalizeImageHtmlNodes,
+} from "@/editor/image-attrs";
+import { htmlImageSource } from "@/editor/image-source-schema";
 
 /* ── 一支极小的测试工装（与 `file-kind.test.ts` 同一套长相）── */
 
@@ -182,6 +189,8 @@ testCase("点击后显示、离开后隐藏", () => {
   const source3 = read("src/editor/video-view.ts");
   if (!source3.includes('source.className = "nota-image-source"'))
     throw new Error("没有图片源文输入框");
+  if (!source3.includes('sourceIcon.className = "nota-image-source-icon"'))
+    throw new Error("图片源文旁边没有前导图片图标");
   if (!source3.includes('initial.mediaBody.addEventListener("mousedown"'))
     throw new Error("图片点击仍交给 ProseMirror 绘制节点选区");
   if (!source3.includes("initial.isVisionFrequency || !(event instanceof MouseEvent) || event.button !== 0"))
@@ -227,14 +236,23 @@ testCase("图片源码使用可自动换行的 textarea，长地址不会被截�
     throw new Error("图片源码没有按内容调整高度");
   if (!/\.nota-image-source\s*\{[\s\S]*?white-space:\s*pre-wrap;[\s\S]*?overflow-wrap:\s*anywhere;/s.test(css))
     throw new Error("图片源码样式不能自然换行");
+  if (
+    !/\.nota-image-source-icon\s*\{[\s\S]*?mask:\s*url\("\.\.\/assets\/icons\/nota-insert-image-symbolic\.svg"\)/s.test(
+      css,
+    )
+  )
+    throw new Error("图片源码图标没有使用主题化符号资源");
 });
 
 testCase("点击无 alt 图片会生成名称并选中源码里的名称", () => {
   const view = read("src/editor/video-view.ts");
   if (!view.includes("alt: automaticImageName(text2(currentNode.attrs.src))"))
     throw new Error("点击图片没有生成自动名称");
-  if (!view.includes("initial.sourceBody.setSelectionRange(2, 2 + selectedAlt.length)"))
-    throw new Error("点击图片没有选中 Markdown 源文中的名称");
+  if (
+    !view.includes("imageSourceSelectionRange(") ||
+    !view.includes("setSelectionRange(selection.start, selection.end)")
+  )
+    throw new Error("点击图片没有应用源码选择范围");
 });
 
 testCase("图片源码实时刷新；清空源码时删除整张图片", () => {
@@ -265,22 +283,154 @@ testCase("images expose a delete control and load-failure warning", () => {
     throw new Error("image load failure is not observed");
   if (!css.includes(".nota-media-delete") || !css.includes(".nota-media-error"))
     throw new Error("image delete and warning styles are not wired");
+  if (!css.includes("zoom: var(--nota-image-zoom, 1)"))
+    throw new Error("image zoom control is not wired");
   if (!exportSource.includes('".nota-media-delete"') || !exportSource.includes('".nota-media-error"'))
     throw new Error("editing-only image controls remain in export");
+});
+
+testCase("switching image sources does not scroll the editor back to selection", () => {
+  const view = read("src/editor/video-view.ts");
+  equal(
+    view.includes('addEventListener("blur", () => commitSource(false))'),
+    true,
+    "blur still forces focus back into the editor",
+  );
+  equal(
+    view.includes("view.focus()"),
+    false,
+    "image source transitions still use scrolling focus",
+  );
+  equal(
+    view.includes("scrollIntoView()"),
+    false,
+    "image source transitions still force scrollIntoView",
+  );
 });
 
 testCase("源文解析保留 alt、地址和可选标题", () => {
   equal(
     JSON.stringify(parseImageMarkdownSource('![图](docs/a.png "标题")')),
-    JSON.stringify({ alt: "图", src: "docs/a.png", title: "标题" }),
+    JSON.stringify({
+      alt: "图",
+      src: "docs/a.png",
+      title: "标题",
+      syntax: "markdown",
+      zoom: 100,
+    }),
     "完整图片语法",
   );
   equal(
     JSON.stringify(parseImageMarkdownSource("![](a.png)")),
-    JSON.stringify({ alt: "", src: "a.png", title: "" }),
+    JSON.stringify({
+      alt: "",
+      src: "a.png",
+      title: "",
+      syntax: "markdown",
+      zoom: 100,
+    }),
     "空 alt/标题",
   );
   equal(parseImageMarkdownSource("not an image"), null, "坏语法必须拒绝");
+});
+
+testCase("clicking an HTML image selects its complete source", () => {
+  const source = '<img src="a.png" alt="A" />';
+  equal(
+    JSON.stringify(
+      imageSourceSelectionRange(source, {
+        alt: "A",
+        syntax: "html",
+        zoom: 100,
+      }),
+    ),
+    JSON.stringify({ start: 0, end: source.length }),
+    "HTML image range",
+  );
+  equal(
+    JSON.stringify(
+      imageSourceSelectionRange("![A](a.png)", {
+        alt: "A",
+        syntax: "markdown",
+        zoom: 100,
+      }),
+    ),
+    JSON.stringify({ start: 2, end: 3 }),
+    "Markdown image alt range",
+  );
+});
+
+testCase("HTML containing only an image uses the Markdown image model", () => {
+  equal(
+    JSON.stringify(
+      imageFromHtmlOnly('<img src="a.png" alt="Example" title="Title" />'),
+    ),
+    JSON.stringify({
+      src: "a.png",
+      alt: "Example",
+      title: "Title",
+      zoom: 100,
+      syntax: "html",
+    }),
+    "standalone image tag",
+  );
+  equal(
+    JSON.stringify(
+      imageFromHtmlOnly("<p><img src='b.png' alt='Second'></p>"),
+    ),
+    JSON.stringify({
+      src: "b.png",
+      alt: "Second",
+      title: "",
+      zoom: 100,
+      syntax: "html",
+    }),
+    "paragraph image wrapper",
+  );
+  equal(
+    JSON.stringify(imageFromHtmlOnly('<div><img src="c.png" alt="Third"></div>')),
+    JSON.stringify({
+      src: "c.png",
+      alt: "Third",
+      title: "",
+      zoom: 100,
+      syntax: "html",
+    }),
+    "div image wrapper",
+  );
+  equal(
+    imageFromHtmlOnly('<img src="a.png"> caption'),
+    null,
+    "html with extra content",
+  );
+  equal(
+    imageFromHtmlOnly('<img src="a.png" style="zoom:67%;">')?.zoom,
+    67,
+    "HTML zoom",
+  );
+  equal(
+    htmlImageSource({
+      src: "a&b.png",
+      alt: 'A "quote"',
+      title: "",
+      zoom: 150,
+      syntax: "html",
+    }),
+    '<img src="a&amp;b.png" alt="A &quot;quote&quot;" style="zoom:150%;" />',
+    "HTML serialization",
+  );
+  const tree = fromMarkdown(
+    '<img src="a.png" alt="Example" title="Title" />',
+  ) as {
+    children: Array<{
+      type: string;
+      children?: Array<{ type: string; url?: string; alt?: string; title?: string }>;
+    }>;
+  };
+  normalizeImageHtmlNodes(tree as never);
+  equal(tree.children[0]?.type, "paragraph", "root HTML image wrapper");
+  equal(tree.children[0]?.children?.[0]?.type, "image", "root HTML image node");
+  equal(tree.children[0]?.children?.[0]?.url, "a.png", "root HTML image source");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

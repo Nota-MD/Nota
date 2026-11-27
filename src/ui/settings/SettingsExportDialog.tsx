@@ -17,6 +17,7 @@ interface Props {
   onClose: () => void;
   onExported: (report: SettingsExportReport) => void;
   onError: (message: string) => void;
+  presentation?: "embedded" | "full";
 }
 
 function prettyBytes(bytes: number): string {
@@ -35,9 +36,16 @@ function defaultPackageName(): string {
   return `Nota-settings-${stamp}.nota-backup`;
 }
 
-export function SettingsExportDialog({ onClose, onExported, onError }: Props) {
+export function SettingsExportDialog({
+  onClose,
+  onExported,
+  onError,
+  presentation = "embedded",
+}: Props) {
   const t = useT();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
   const [inventory, setInventory] = useState<SettingsExportInventory | null>(null);
   const [program, setProgram] = useState<Set<string>>(new Set());
   const [plugins, setPlugins] = useState<Record<string, { settings: boolean; data: boolean }>>({});
@@ -89,12 +97,16 @@ export function SettingsExportDialog({ onClose, onExported, onError }: Props) {
         );
       })
       .catch((error) => {
-        if (alive) onError(t("Could not read exportable settings and data: {0}", String(error)));
+        if (alive) {
+          onErrorRef.current(
+            t("Could not read exportable settings and data: {0}", String(error)),
+          );
+        }
       });
     return () => {
       alive = false;
     };
-  }, [onError, t]);
+  }, []);
 
   const toggleProgram = (item: SettingsExportItem) => {
     if (!item.available) return;
@@ -173,6 +185,7 @@ export function SettingsExportDialog({ onClose, onExported, onError }: Props) {
   return createPortal(
     <div
       className="confirm-backdrop"
+      data-window-presentation={presentation}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !busy) onClose();
       }}
@@ -180,6 +193,7 @@ export function SettingsExportDialog({ onClose, onExported, onError }: Props) {
       <div
         ref={dialogRef}
         className="confirm-dialog settings-export-dialog"
+        data-window-presentation={presentation}
         data-modal-layer="true"
         role="dialog"
         aria-modal="true"

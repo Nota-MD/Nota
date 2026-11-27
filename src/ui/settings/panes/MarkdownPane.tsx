@@ -307,12 +307,6 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("Use the legacy inline math parser")}>
-          <Toggle
-            checked={m.legacy_inline_math}
-            onChange={(legacy_inline_math) => write({ legacy_inline_math })}
-          />
-        </SettingRow>
 
         <SettingRow label={t("Number equations")}>
           <Select

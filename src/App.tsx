@@ -22,13 +22,10 @@ import {
 } from "@/bridge/ipc";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
 import { useFileKind } from "@/ui/useFileKindMode";
-
-
-
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import { findMenuAccel, resolvePick } from "@/ui/commands";
 import { localizedDocumentTitle, useT } from "@/i18n";
-import { DeferredFilePickerDialog, DeferredPluginDock, DeferredSettingsDialog } from "@/ui/DeferredUi";
+import { DeferredFilePickerDialog, DeferredPluginDock } from "@/ui/DeferredUi";
 import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
 import { optionKey, readMouthPath } from "@/ui/tree-options";
 import { StatusBar } from "@/ui/StatusBar";
@@ -82,6 +79,8 @@ import { StandaloneAboutWindow, aboutOnly, settingsOnly, useUtilityWindows } fro
 import { useSettingsWindow } from "@/ui/useSettingsWindow";
 import { useMenuFeatures } from "@/ui/useMenuFeatures";
 import { defaultExporter } from "@/ui/export-templates";
+import { AppSettingsSurface } from "@/ui/AppSettingsSurface";
+import { createImageCommand } from "@/ui/appImageCommand";
 export default function App() {
   const [docs, setDocs] = useState<Document[]>([]);
   const [activeId, setActiveId] = useState<DocId | null>(null);
@@ -107,17 +106,6 @@ export default function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("tree");
-
-
-
-
-
-
-
-
-
-
-
   const [typewriter, setTypewriter] = useState(false);
 
 
@@ -784,6 +772,14 @@ export default function App() {
   const { openConfigDir, resetSettings } = useSettingsFile({ setSettings, toast });
   useUtilityWindows({ settingsOnly, aboutOpen: dialog.aboutOpen, closeAbout: dialog.closeAbout, style: settings?.appearance.settings_window_style, toast });
 
+  const imageCommand = createImageCommand({
+    activeDoc,
+    settings,
+    editorRef,
+    toast,
+    askConfirm: dialog.askConfirm,
+  });
+
   // Right-click classification and keyboard behavior live in ContextMenu.
   const contextMenuWiring = {
     commandTable: menuHandlers,
@@ -792,10 +788,8 @@ export default function App() {
     cursor: commandState,
     toast,
     copyImage: cutPasteBoard.copyImageSlice,
+    imageCommand,
     developerMode: settings?.general.debug_mode ?? false,
-    tableActions: plugin.tableActions,
-    onTableAction: (pluginId: string, command: string, actionId: string) =>
-      void plugin.configure(pluginId, command, { actionId }),
   };
 
   return (
@@ -974,26 +968,14 @@ export default function App() {
         </div>
         <Toasts items={toasts} onDismiss={dismiss} position={settings?.updates.notification_position ?? "bottom-right"} tabbarVisible={docs.length >= 2} statusbarVisible={statusBarOpen} />{windowRegistry.peek && windowRegistry.id !== null && <WindowIdOverlay id={String(windowRegistry.id).padStart(String(Math.max(1, ...windowRegistry.ids)).length, "0")} />}
         <DeferredFilePickerDialog />
-        {(settingsWindow.open || settingsOnly) && !aboutOnly && settings && (
-          <DeferredSettingsDialog
-            standalone={settingsOnly} settings={settings} onChange={updateSettings}
-            onClose={settingsOnly ? () => void api.window.hideSettings() : settingsWindow.close}
-            docThemes={themes} onOpenThemesDir={() => void openThemesDir()} onRefreshThemes={() => void refreshThemes()}
-            uiStyles={uiStyles} onOpenStylesDir={() => void openStylesDir()}
-            onRefreshUiStyles={() => void refreshStyles()} onImportTheme={() => void importTheme()}
-            onImportTyporaTheme={() => void importTyporaTheme()} onOpenConfigDir={() => void openConfigDir()}
-            onResetSettings={() => void resetSettings()} onClearRecent={() => void clearEmptyRecent()}
-            onRestoreDrafts={() => void documentApi.restoreDrafts()} menus={menu} plugins={plugins}
-            pluginTrust={trustTable} pluginUpdate={pluginUpdate} pluginAction={pluginAction}
-            debugMode={settings.general.debug_mode} initialSection={settingsWindow.initialSection}
-          />
-        )}
+        <AppSettingsSurface open={(settingsWindow.open || settingsOnly) && !aboutOnly && settings !== null} standalone={settingsOnly} settings={settings!} onChange={updateSettings} onClose={settingsOnly ? () => void api.window.hideSettings() : settingsWindow.close}
+          docThemes={themes} onOpenThemesDir={() => void openThemesDir()} onRefreshThemes={() => void refreshThemes()} uiStyles={uiStyles} onOpenStylesDir={() => void openStylesDir()}
+          onRefreshUiStyles={() => void refreshStyles()} onImportTheme={() => void importTheme()} onImportTyporaTheme={() => void importTyporaTheme()} onOpenConfigDir={() => void openConfigDir()}
+          onResetSettings={() => void resetSettings()} onClearRecent={() => void clearEmptyRecent()} onRestoreDrafts={() => void documentApi.restoreDrafts()} menus={menu} plugins={plugins}
+          pluginTrust={trustTable} pluginUpdate={pluginUpdate} pluginAction={pluginAction} debugMode={settings?.general.debug_mode ?? false} initialSection={settingsWindow.initialSection} />
         {aboutOnly && <StandaloneAboutWindow debugMode={settings?.general.debug_mode ?? false} onSetDebugMode={(enabled) => settings && void updateSettings({ general: { ...settings.general, debug_mode: enabled } })} />}
         <ElementInspector enabled={(settings?.general.debug_mode ?? false) && (settings?.general.element_inspector ?? false)} />
 
-        {
-
-                                                               }
         <AppDialogs
           dialog={dialog}
           pandocGate={pandocGate}

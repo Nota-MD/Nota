@@ -148,6 +148,14 @@
 
 
   --link: var(--accent);
+  --accent-choice-1: #007aff;
+  --accent-choice-2: #a550a7;
+  --accent-choice-3: #f74f9e;
+  --accent-choice-4: #ff5257;
+  --accent-choice-5: #f7821b;
+  --accent-choice-6: #ffc600;
+  --accent-choice-7: #62ba46;
+  --accent-choice-8: #8c8c8c;
 
   --switch-w: 36px;
   --switch-h: 20px;
@@ -232,8 +240,8 @@
 
 
 
-  --diff-del-bg: #f9dbd6;
-  --diff-add-bg: #d7eedd;
+  --diff-del-bg: rgb(192 57 43 / 12%);
+  --diff-add-bg: rgb(47 133 90 / 13%);
 
 
 
@@ -306,8 +314,8 @@
 
 
 
-  --diff-del-bg: #46262a;
-  --diff-add-bg: #1f3a2c;
+  --diff-del-bg: rgb(229 115 115 / 19%);
+  --diff-add-bg: rgb(110 192 138 / 18%);
 
   --diff-hunk-fg: #78aeff;
   --diff-meta-fg: #9a9996;

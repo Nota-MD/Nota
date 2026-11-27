@@ -32,13 +32,14 @@ pub struct PluginInfo {
 
     pub langs: Vec<String>,
 
+    #[serde(rename = "lang")]
     pub language: Option<String>,
 
+    #[serde(rename = "lang_ok")]
     pub language_ok: bool,
 
     pub settings: Vec<PluginSetting>,
 
-    pub setting_locks: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -67,6 +68,22 @@ pub struct PluginSetting {
     pub placeholder: String,
 
     pub multiline: bool,
+
+    pub options: Vec<PluginSettingOption>,
+
+    pub create_command: String,
+
+    pub rename_command: String,
+
+    pub delete_command: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PluginSettingOption {
+    pub value: String,
+    pub label: String,
+    pub editable: bool,
+    pub deletable: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -173,5 +190,43 @@ impl ReviewState {
             .iter()
             .next()
             .map(|(plugin, entry)| (plugin.clone(), entry.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plugin_info_serializes_language_fields_for_the_frontend() {
+        let info = PluginInfo {
+            id: "nota.test".to_owned(),
+            name: "Test".to_owned(),
+            version: "0.1.0".to_owned(),
+            api: "v2.5".to_owned(),
+            host_api: "v2.5".to_owned(),
+            api_supported: true,
+            description: String::new(),
+            authors: Vec::new(),
+            license: "BSD-2-Clause".to_owned(),
+            capabilities: Vec::new(),
+            entry: "main.lua".to_owned(),
+            dir: String::new(),
+            state: "loaded".to_owned(),
+            error: None,
+            origin: "builtin".to_owned(),
+            signature: None,
+            key_id: None,
+            removable: false,
+            langs: vec!["en".to_owned()],
+            language: Some("en".to_owned()),
+            language_ok: true,
+            settings: Vec::new(),
+        };
+        let json = serde_json::to_value(info).unwrap();
+        assert_eq!(json["lang"], "en");
+        assert_eq!(json["lang_ok"], true);
+        assert!(json.get("language").is_none());
+        assert!(json.get("language_ok").is_none());
     }
 }

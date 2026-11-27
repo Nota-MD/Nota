@@ -90,10 +90,6 @@ import {
   resizeCurrentTable,
   moveCurrentTableColumn,
   moveCurrentTableRow,
-  selectCurrentTableRange,
-  setCurrentTableCellText,
-  setCurrentTableCells,
-  fillCurrentTableRange,
 } from "./table-context";
 import type { CommandPayload, EditorCommand } from "./create-types";
 
@@ -485,34 +481,6 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   tableCopy: (e) => duplicateCurrentTable(e),
   tableFormat: (e) => formatCurrentTable(e),
   tableRowHeaders: (e) => toggleTableRowHeaders(e),
-  tableSelectRange: (e, p) =>
-    selectCurrentTableRange(
-      e,
-      p?.tableRow ?? 0,
-      p?.tableColumn ?? 0,
-      p?.tableToRow ?? p?.tableRow ?? 0,
-      p?.tableToColumn ?? p?.tableColumn ?? 0,
-    ),
-  tableSelectRow: (e, p) => selectCurrentTableRange(e, p?.tableRow ?? 0, 0, p?.tableRow ?? 0, 999),
-  tableSelectColumn: (e, p) => selectCurrentTableRange(e, 0, p?.tableColumn ?? 0, 999, p?.tableColumn ?? 0),
-  tableSetCell: (e, p) =>
-    setCurrentTableCellText(
-      e,
-      p?.tableRow ?? 0,
-      p?.tableColumn ?? 0,
-      p?.tableText ?? "",
-    ),
-  tableSetCells: (e, p) => setCurrentTableCells(e, p?.tableCells ?? []),
-  tableFill: (e, p) =>
-    fillCurrentTableRange(
-      e,
-      p?.tableRow ?? 0,
-      p?.tableColumn ?? 0,
-      p?.tableToRow ?? p?.tableRow ?? 0,
-      p?.tableToColumn ?? p?.tableColumn ?? 0,
-      p?.tableFillRow ?? p?.tableToRow ?? p?.tableRow ?? 0,
-      p?.tableFillColumn ?? p?.tableToColumn ?? p?.tableColumn ?? 0,
-    ),
 
 
 
@@ -530,6 +498,106 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
         alt: p?.alt || automaticImageName(p?.src ?? ""),
       }),
     ),
+  imageSourceSet: (e, p) =>
+    e.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const oldSrc = p?.oldSrc ?? "";
+      const src = p?.src ?? "";
+      if (!oldSrc || !src || oldSrc === src) return false;
+      const matches: number[] = [];
+      view.state.doc.descendants((node, position) => {
+        if (node.type.name === "image" && node.attrs.src === oldSrc) {
+          matches.push(position);
+        }
+        return true;
+      });
+      if (!matches.length) return false;
+      const transaction = view.state.tr;
+      for (const position of matches) {
+        const node = transaction.doc.nodeAt(position);
+        if (!node || node.type.name !== "image") continue;
+        transaction.setNodeMarkup(position, undefined, {
+          ...node.attrs,
+          src,
+        });
+      }
+      view.dispatch(transaction);
+      return true;
+    }),
+  imageRemoveSource: (e, p) =>
+    e.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const source = p?.oldSrc ?? "";
+      if (!source) return false;
+      const matches: Array<{ from: number; to: number }> = [];
+      view.state.doc.descendants((node, position) => {
+        if (node.type.name === "image" && node.attrs.src === source) {
+          matches.push({ from: position, to: position + node.nodeSize });
+        }
+        return true;
+      });
+      if (!matches.length) return false;
+      const transaction = view.state.tr;
+      for (const range of matches.reverse()) {
+        transaction.delete(range.from, range.to);
+      }
+      view.dispatch(transaction);
+      return true;
+    }),
+
+  imageSyntaxSet: (e, p) =>
+    e.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const oldSrc = p?.oldSrc ?? "";
+      const syntax = p?.syntax === "html" ? "html" : "markdown";
+      if (!oldSrc) return false;
+      const matches: number[] = [];
+      view.state.doc.descendants((node, position) => {
+        if (node.type.name === "image" && node.attrs.src === oldSrc) {
+          matches.push(position);
+        }
+        return true;
+      });
+      if (!matches.length) return false;
+      const transaction = view.state.tr;
+      for (const position of matches) {
+        const node = transaction.doc.nodeAt(position);
+        if (!node || node.type.name !== "image") continue;
+        transaction.setNodeMarkup(position, undefined, {
+          ...node.attrs,
+          syntax,
+        });
+      }
+      view.dispatch(transaction);
+      return true;
+    }),
+
+  imageZoomSet: (e, p) =>
+    e.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const oldSrc = p?.oldSrc ?? "";
+      const zoom = Number(p?.zoom);
+      if (!oldSrc || !Number.isFinite(zoom) || zoom <= 0) return false;
+      const matches: number[] = [];
+      view.state.doc.descendants((node, position) => {
+        if (node.type.name === "image" && node.attrs.src === oldSrc) {
+          matches.push(position);
+        }
+        return true;
+      });
+      if (!matches.length) return false;
+      const transaction = view.state.tr;
+      for (const position of matches) {
+        const node = transaction.doc.nodeAt(position);
+        if (!node || node.type.name !== "image") continue;
+        transaction.setNodeMarkup(position, undefined, {
+          ...node.attrs,
+          zoom,
+        });
+      }
+      view.dispatch(transaction);
+      return true;
+    }),
 
 
 

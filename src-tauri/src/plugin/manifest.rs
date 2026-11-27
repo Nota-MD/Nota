@@ -13,7 +13,7 @@ use super::settings_decl;
 
 pub use settings_decl::SettingDecl;
 
-pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 4);
+pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PluginApiVersion {
@@ -140,20 +140,6 @@ pub enum Capability {
     #[serde(rename = "data.own")]
     DataOwn,
 
-    #[serde(rename = "table.read")]
-    TableRead,
-
-    #[serde(rename = "table.render")]
-    TableRender,
-
-    #[serde(rename = "table.write")]
-    TableWrite,
-
-    #[serde(rename = "table.context_action")]
-    TableContextAction,
-
-    #[serde(rename = "spreadsheet.require")]
-    SpreadsheetRequire,
 }
 
 impl Capability {
@@ -175,11 +161,6 @@ impl Capability {
             "editor.input" => Self::EditorInput,
             "settings.own" => Self::SettingsOwn,
             "data.own" => Self::DataOwn,
-            "table.read" => Self::TableRead,
-            "table.render" => Self::TableRender,
-            "table.write" => Self::TableWrite,
-            "table.context_action" => Self::TableContextAction,
-            "spreadsheet.require" => Self::SpreadsheetRequire,
             other => {
                 return Err(NotaError::other(format!(
                     "Unknown capability `{other}`; see the capability table in docs/11"
@@ -269,12 +250,6 @@ pub struct UpdateSpec {
     pub manifest: String,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct SettingLock {
-    pub setting: String,
-    pub value: bool,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 struct ManifestFile {
     plugin: PluginMeta,
@@ -285,8 +260,6 @@ struct ManifestFile {
 
     #[serde(default)]
     settings: Vec<SettingDecl>,
-    #[serde(default, rename = "setting_lock")]
-    setting_locks: Vec<SettingLock>,
 }
 
 #[derive(Debug, Clone)]
@@ -302,7 +275,6 @@ pub struct Manifest {
 
     pub settings: Vec<SettingDecl>,
 
-    pub setting_locks: Vec<SettingLock>,
 }
 
 impl Manifest {
@@ -342,7 +314,6 @@ impl Manifest {
             file.devserver,
             file.update,
             file.settings,
-            file.setting_locks,
             dir,
             path,
             check_api,
@@ -354,7 +325,6 @@ impl Manifest {
         devserver: Option<DevServerSpec>,
         update: Option<UpdateSpec>,
         settings: Vec<SettingDecl>,
-        setting_locks: Vec<SettingLock>,
         dir: PathBuf,
         file: &Path,
         check_api: bool,
@@ -430,8 +400,6 @@ impl Manifest {
         }
 
         let settings = settings_decl::check_settings(settings, &capabilities, file)?;
-        let setting_locks = check_setting_locks(setting_locks, &capabilities, file)?;
-
         Ok(Manifest {
             meta,
             dir,
@@ -439,51 +407,12 @@ impl Manifest {
             devserver,
             update,
             settings,
-            setting_locks,
         })
     }
 
     pub fn has(&self, cap: Capability) -> bool {
         self.capabilities.contains(&cap)
     }
-}
-
-fn check_setting_locks(
-    locks: Vec<SettingLock>,
-    capabilities: &[Capability],
-    file: &Path,
-) -> Result<Vec<SettingLock>> {
-    let mut seen = std::collections::HashSet::new();
-    for lock in &locks {
-        if lock.setting != "editor.spreadsheet_tables" {
-            return Err(NotaError::Manifest {
-                file: file.to_path_buf(),
-                reason: format!(
-                    "unsupported setting lock `{}`; v2.4 supports `editor.spreadsheet_tables`",
-                    lock.setting
-                ),
-            });
-        }
-        if !seen.insert(lock.setting.clone()) {
-            return Err(NotaError::Manifest {
-                file: file.to_path_buf(),
-                reason: format!("duplicate setting lock `{}`", lock.setting),
-            });
-        }
-    }
-    let requires_spreadsheet = locks
-        .iter()
-        .any(|lock| lock.setting == "editor.spreadsheet_tables");
-    let has_capability = capabilities.contains(&Capability::SpreadsheetRequire);
-    if requires_spreadsheet != has_capability {
-        return Err(NotaError::Manifest {
-            file: file.to_path_buf(),
-            reason: "`[[setting_lock]]` for editor.spreadsheet_tables and \
-                     `spreadsheet.require` must be declared together"
-                .to_owned(),
-        });
-    }
-    Ok(locks)
 }
 
 fn check_devserver(

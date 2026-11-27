@@ -62,44 +62,6 @@
   border-radius: 0;
   box-shadow: none;
 }
-
-
-
-.dialog-close {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--dialog-close-size);
-  height: var(--dialog-close-size);
-  padding: 0;
-  border: 1px solid var(--dialog-close-border);
-  border-radius: var(--dialog-close-radius);
-  background: var(--dialog-close-bg);
-  color: var(--dialog-close-fg);
-  cursor: pointer;
-  transition:
-    background-color var(--duration-fast) ease,
-    color var(--duration-fast) ease;
-}
-
-.dialog-close:hover {
-  background: var(--btn-bg-hover);
-  color: var(--fg);
-}
-
-.dialog-close:active {
-  background: var(--btn-bg-active);
-}
-
-.dialog-close:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 0;
-}
-
 .confirm-title {
   margin: 0 0 8px;
   font-size: 1.05em;
@@ -407,6 +369,7 @@
   flex: 1;
   min-height: 0;
   max-height: none;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 
@@ -415,6 +378,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.about-dialog[data-window-presentation="full"] .about-home {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 

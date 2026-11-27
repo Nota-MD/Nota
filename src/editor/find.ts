@@ -39,7 +39,7 @@ import { $prose } from "@milkdown/kit/utils";
 
 
 
-import { rollActionToCanSee } from "./scroll-into-view";
+import { scrollRangeIntoView } from "./scroll-into-view";
 
 
 export interface FindOptions {
@@ -285,7 +285,7 @@ function selected(view: EditorView, m: TextMatch): void {
 
 
 
-  rollActionToCanSee(view, m.start, m.end);
+  scrollRangeIntoView(view, m.start, m.end);
 }
 
 function shouldUse(tr: Transaction, prev: pluginState, newValuestate: EditorState): pluginState {

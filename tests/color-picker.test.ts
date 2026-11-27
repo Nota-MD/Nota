@@ -23,51 +23,76 @@ function assertValue(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
 }
 
-console.log("\n【自绘主题色选择器】");
+console.log("\n[Self-drawn accent color picker]");
 
-testCase("色板是 9×5 的合法且不重复颜色", () => {
-  assertValue(accentPalette.length === 45, "色板不是 9×5");
+testCase("the palette is a valid, unique 9x5 color grid", () => {
+  assertValue(accentPalette.length === 45, "the palette is not 9x5");
   assertValue(
     accentPalette.every((color) => /^#[0-9a-f]{6}$/.test(color)),
-    "色板里有无颜色不合法",
+    "the palette contains an invalid color",
   );
-  assertValue(new Set(accentPalette).size === accentPalette.length, "色板有重复颜色");
+  assertValue(new Set(accentPalette).size === accentPalette.length, "the palette contains duplicate colors");
 });
 
-testCase("不再调用原生颜色输入框", () => {
+testCase("the native color input is not used", () => {
   const picker = readFileSync("src/ui/settings/ColorPicker.tsx", "utf8");
   const appearance = readFileSync(
     "src/ui/settings/panes/AppearancePane.tsx",
     "utf8",
   );
-  assertValue(!picker.includes('type="color"'), "ColorPicker 仍调用原生取色器");
-  assertValue(!appearance.includes('type="color"'), "外观页仍保留原生颜色输入框");
-  assertValue(picker.includes("createPortal("), "自绘色板没有使用视口浮层");
+  assertValue(!picker.includes('type="color"'), "ColorPicker still uses the native color input");
+  assertValue(!appearance.includes('type="color"'), "Appearance still contains a native color input");
+  assertValue(picker.includes("createPortal("), "the custom palette is not rendered in a viewport layer");
 });
 
-testCase("自绘色板保留选择、键盘与自定义颜色", () => {
+testCase("the custom palette preserves selection, keyboard input and custom colors", () => {
   const picker = readFileSync("src/ui/settings/ColorPicker.tsx", "utf8");
   for (const key of ['"ArrowLeft"', '"ArrowRight"', '"ArrowUp"', '"ArrowDown"', '"Escape"']) {
-    assertValue(picker.includes(key), `色板缺少 ${key}`);
+    assertValue(picker.includes(key), `the palette is missing ${key}`);
   }
-  assertValue(picker.includes("parseAccent(draft)"), "自定义颜色没有复用统一解析");
-  assertValue(picker.includes("onChange(color)"), "点击色块没有写回主题色");
-  assertValue(picker.includes('role="gridcell"'), "色块缺少 gridcell 语义");
-  assertValue(picker.includes("aria-activedescendant"), "键盘高亮没有报给读屏器");
+  assertValue(picker.includes("parseAccent(draft)"), "custom colors do not use the shared parser");
+  assertValue(picker.includes("onChange(color)"), "clicking a swatch does not write the accent color");
+  assertValue(picker.includes('role="radio"'), "swatches are missing radio semantics");
+  assertValue(picker.includes('aria-checked={index === selected}'), "the selected color is not exposed to assistive technology");
 });
 
-testCase("色板样式和入口已接入", () => {
+testCase("inline dots use the active theme accent list", () => {
+  const picker = readFileSync("src/ui/settings/ColorPicker.tsx", "utf8");
+  const base = readFileSync("src/styles/theme/base.css", "utf8");
+  const macos = readFileSync("src/styles/theme/color.css", "utf8");
+  assertValue(
+    picker.includes("--accent-choice-${index + 1}"),
+    "picker does not read theme-provided accent choices",
+  );
+  assertValue(
+    picker.includes("defaultAccentDots"),
+    "picker has no fallback accent list",
+  );
+  for (let index = 1; index <= 8; index += 1) {
+    assertValue(
+      base.includes(`--accent-choice-${index}:`),
+      `default accent choice ${index} is missing`,
+    );
+    assertValue(
+      macos.includes(`--accent-choice-${index}:`),
+      `macOS accent choice ${index} is missing`,
+    );
+  }
+});
+
+testCase("the palette styles and entry point are connected", () => {
   const css = readFileSync("src/styles/color-picker.css", "utf8");
   const main = readFileSync("src/main.tsx", "utf8");
   const appearance = readFileSync(
     "src/ui/settings/panes/AppearancePane.tsx",
     "utf8",
   );
-  assertValue(css.includes("grid-template-columns: repeat(9, 1fr)"), "色板不是九列");
-  assertValue(css.includes("position: fixed"), "色板没有脱离设置滚动容器");
-  assertValue(main.includes('import "./styles/color-picker.css";'), "色板样式没有加载");
-  assertValue(appearance.includes("<ColorPicker"), "外观页没有使用自绘色板");
+  assertValue(css.includes(".stg-color-dots"), "inline color-dot styles are missing");
+  assertValue(css.includes(".stg-color-add"), "custom-color add-button styles are missing");
+  assertValue(css.includes("position: fixed"), "the palette is still clipped by the settings scroller");
+  assertValue(main.includes('import "./styles/color-picker.css";'), "palette styles are not loaded");
+  assertValue(appearance.includes("<ColorPicker"), "Appearance does not use the custom palette");
 });
 
-console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

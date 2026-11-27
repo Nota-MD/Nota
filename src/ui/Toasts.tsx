@@ -73,7 +73,7 @@ export function Toasts({ items, onDismiss, position, tabbarVisible, statusbarVis
             aria-label={t("Dismiss this notification")}
             onClick={() => onDismiss(item5.id)}
           >
-            <Icon name="folio-close-symbolic" />
+            <Icon name="nota-close-symbolic" />
           </button>
         </div>
       ))}

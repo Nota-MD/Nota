@@ -322,6 +322,31 @@ testCase("光标在闭符之前时也能认出两侧同类的行内公式", () =
   );
 });
 
+testCase("typing the opening dollar before existing source recognizes the formula", () => {
+  equal(
+    JSON.stringify(mathSourceAroundCursor("$\\LaTeX$", 1)),
+    JSON.stringify({
+      source: "\\LaTeX",
+      start: 0,
+      end: 8,
+      dollars: 1,
+      delimiter: "dollar",
+    }),
+    "opening delimiter is immediately before the caret",
+  );
+  equal(
+    JSON.stringify(mathSourceAroundCursor("$\\LaTeX$你好", 1)),
+    JSON.stringify({
+      source: "\\LaTeX",
+      start: 0,
+      end: 8,
+      dollars: 1,
+      delimiter: "dollar",
+    }),
+    "following text stays outside",
+  );
+});
+
 testCase("手动先打两个 `$`、再从中间输入内容也会提交公式节点", () => {
   const source = "$\\LaTeX$";
   const paragraphNode = schema.nodes.paragraph.create(null, schema.text(source));
@@ -428,6 +453,12 @@ testCase("`C$dd$ D`（单美元那条照旧能用）⇒ 文(C) ＋ 公式(dd) �
 
 testCase("带反斜杠的 `$\\LaTeX$` 逐字输入会立即成为公式", () => {
   equalColumns(appearance(typed("$\\LaTeX$")), ['math_inline("\\\\LaTeX")'], "反斜杠不应阻止提交");
+});
+
+testCase("输入闭 `$` 完成公式后，正文光标落在公式右侧", () => {
+  const state = typed("$\\LaTeX$");
+  equal(state.doc.textContent, "\\LaTeX", "公式源码");
+  equal(state.selection.from, 1 + state.doc.firstChild!.content.size, "公式右侧正文光标");
 });
 
 testCase("`1$\\LaTeX$2` 保持同一段，公式前后都能继续输入", () => {

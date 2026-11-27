@@ -33,7 +33,7 @@ testCase("host accepts lower compatible minors and rejects newer or foreign majo
   const source = readFileSync("src-tauri/src/plugin/manifest.rs", "utf8");
   assert(source.includes("requested.minor <= self.minor"), "minor compatibility is not one-way");
   assert(source.includes("self.major == requested.major"), "major compatibility is not enforced");
-  assert(source.includes('PluginApiVersion::new(2, 4)'), "host API is not v2.4");
+  assert(source.includes('PluginApiVersion::new(2, 5)'), "host API is not v2.5");
 });
 
 testCase("existing incompatible directories stay as red list entries", () => {
@@ -49,6 +49,30 @@ testCase("existing incompatible directories stay as red list entries", () => {
   );
   const pane = readFileSync("src/ui/settings/panes/ExtensionsPane.tsx", "utf8");
   assert(pane.includes("{p.error}"), "failed extension error is not rendered");
+});
+
+testCase("utility windows initialize extension runtime state and avoid poison cascades", () => {
+  const app = readFileSync("src-tauri/src/lib.rs", "utf8");
+  const commands = readFileSync("src-tauri/src/commands/plugin.rs", "utf8");
+  const host = readFileSync("src-tauri/src/plugin/mod.rs", "utf8");
+  const standalone = app.indexOf("if standalone_settings_window || standalone_about_window");
+  assert(
+    app.indexOf("app.manage(devserver::DevServerState::new())") < standalone,
+    "standalone windows return before DevServerState is managed",
+  );
+  assert(
+    app.indexOf("app.manage(lua::api::devserver::ProbeCache::new())") < standalone,
+    "standalone windows return before the devserver probe cache is managed",
+  );
+  assert(
+    app.indexOf("app.manage(dev_bridge::DevBridge::default())") < standalone,
+    "standalone Settings windows cannot manage the developer bridge",
+  );
+  assert(
+    !commands.includes("state.plugins.lock().unwrap()"),
+    "plugin commands still propagate a poisoned mutex as a panic",
+  );
+  assert(host.includes("try_state::<crate::devserver::DevServerState>()"), "plugin probe cleanup still assumes devserver state");
 });
 
 testCase("actively importing an incompatible package opens a rejection dialog", () => {

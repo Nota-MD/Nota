@@ -43,8 +43,8 @@ import { katexOptionsCtx, mathBlockSchema, mathInlineSchema } from "@milkdown/pl
 import {
   commonStyleBlockView,
   commonStyleInlineView,
-  computeDecorations,
-} from "../src/editor/math-view";
+} from "../src/editor/math-view-registry";
+import { computeDecorations } from "../src/editor/math-view";
 import { commonStyleCurrentKey } from "../src/editor/math-current";
 import {
   fakeElement,

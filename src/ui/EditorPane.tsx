@@ -39,8 +39,9 @@ import { useEditorSentenceHandle } from "@/ui/useEditorHandle";
 import { useSelectionSnapshot } from "@/ui/useCursorSnapshot";
 import type { WritingMode } from "@/editor/writing-modes";
 import { emptyFindState, type FindOptions, type FindStatus } from "@/editor/find";
-import { restoreRestoreRollActionCompareExample, readElementRollActionCompareExample, readRollActionCompareExample } from "@/editor/scroll-into-view";
+import { readElementScrollRatio, readScrollRatio, restoreScrollRatio } from "@/editor/scroll-into-view";
 import { createDeferredSnapshot } from "@/editor/deferred-snapshot";
+import type { DeferredSnapshot } from "@/editor/deferred-snapshot";
 import { debugError, debugEvent } from "@/ui/debug-log";
 import type { SourceHandle } from "@/editor/source";
 
@@ -57,6 +58,7 @@ import { recallEditorSelection, rememberEditorSelection } from "@/ui/editor-sele
 export interface EditorPaneHandle {
   getMarkdown: () => string | undefined;
   setMarkdown: (markdown: string) => void;
+  setMarkdownFromHost: (markdown: string) => void;
 
 
   runCommand: (name: EditorCommand, payload?: CommandPayload) => boolean;
@@ -117,7 +119,7 @@ interface Props {
   onVimCommand?: (command: "save" | "close") => void;
 
 
-  initialStartRollAction?: number;
+  initialScrollRatio?: number;
 
 
   onScroll?: (compareExample: number) => void;
@@ -182,7 +184,7 @@ export function EditorPane({
   onlyReadMode,
   vimInput = null,
   onVimCommand,
-  initialStartRollAction,
+  initialScrollRatio,
   onScroll,
   contentWidth,
   limitTextWidth,
@@ -205,6 +207,7 @@ export function EditorPane({
   const previewHandleRef = useRef<EditorHandle | null>(null);
   const timerRef = useRef<number | null>(null);
   const previewTimerRef = useRef<number | null>(null);
+  const sourceSnapshotRef = useRef<DeferredSnapshot | null>(null);
 
   const latestRef = useRef(doc.text);
 
@@ -249,13 +252,21 @@ export function EditorPane({
   };
 
 
-  const initialStartRollActionRef = useRef(initialStartRollAction);
-  initialStartRollActionRef.current = initialStartRollAction;
+  const initialScrollRatioRef = useRef(initialScrollRatio);
+  initialScrollRatioRef.current = initialScrollRatio;
+
+  const cancelPendingSync = () => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    sourceSnapshotRef.current?.cancel();
+  };
 
 
-  const splitReplaceRollActionRef = useRef<number | null>(null);
-  const rollActionReturnConfigureRef = useRef(onScroll);
-  rollActionReturnConfigureRef.current = onScroll;
+  const splitReplaceScrollRatioRef = useRef<number | null>(null);
+  const scrollRatioReporterRef = useRef(onScroll);
+  scrollRatioReporterRef.current = onScroll;
 
   const {
     inlineExtensions,
@@ -264,6 +275,7 @@ export function EditorPane({
     defaultIndent: enabledDefaultIndent,
     punctuation,
     selfActionMoreCorrect,
+    markdownSyntaxStyle,
   } = useEditorSettings(markdown, autoPair, defaultIndent);
 
 
@@ -308,6 +320,7 @@ export function EditorPane({
     mainSentenceHandleRef: handleRef,
     previewSentenceHandleRef: previewHandleRef,
     mostNewTextLocalRef: latestRef,
+    cancelPendingSync,
   });
 
   useEffect(() => {
@@ -364,6 +377,7 @@ export function EditorPane({
         void pushGiveAfterEnd(markdown);
       },
     });
+    sourceSnapshotRef.current = sourceSnapshot;
 
 
     const recognizeWysiwygChangeAction = (markdown: string) => {
@@ -404,6 +418,7 @@ export function EditorPane({
             punctuation,
             selfActionMoreCorrect,
             emoji,
+            markdownSyntaxStyle,
             vimInput:
               vimInputRef.current?.enabled === true
                 ? {
@@ -476,8 +491,8 @@ export function EditorPane({
         finishEditorBootstrap(mount, handle, recallEditorSelection(doc.id, mode), !onlyReadMode);
 
 
-        const wantReturnTo = splitReplaceRollActionRef.current ?? initialStartRollActionRef.current;
-        splitReplaceRollActionRef.current = null;
+        const wantReturnTo = splitReplaceScrollRatioRef.current ?? initialScrollRatioRef.current;
+        splitReplaceScrollRatioRef.current = null;
         debugEvent("editor", "editor ready", {
           mode,
           read_only: onlyReadMode,
@@ -488,7 +503,7 @@ export function EditorPane({
         if (wantReturnTo !== undefined) {
           requestAnimationFrame(() => {
             if (disposed) return;
-            restoreRestoreRollActionCompareExample(mount, wantReturnTo);
+            restoreScrollRatio(mount, wantReturnTo);
           });
         }
 
@@ -516,19 +531,22 @@ export function EditorPane({
 
     return () => {
       disposed = true;
-      const splitReplaceBeforePosition = readRollActionCompareExample(mount);
-      if (splitReplaceBeforePosition !== null) splitReplaceRollActionRef.current = splitReplaceBeforePosition;
+      const splitReplaceBeforeRatio = readScrollRatio(mount);
+      if (splitReplaceBeforeRatio !== null) splitReplaceScrollRatioRef.current = splitReplaceBeforeRatio;
       debugEvent("editor", "editor disposed", {
         mode,
         path: doc.path ?? "",
         chars: latestRef.current.length,
-        scroll_ratio: splitReplaceBeforePosition ?? 0,
+        scroll_ratio: splitReplaceBeforeRatio ?? 0,
       });
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
       sourceSnapshot.cancel();
+      if (sourceSnapshotRef.current === sourceSnapshot) {
+        sourceSnapshotRef.current = null;
+      }
       if (previewTimerRef.current !== null) {
         window.clearTimeout(previewTimerRef.current);
         previewTimerRef.current = null;
@@ -556,7 +574,7 @@ export function EditorPane({
 
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.id, mode, strict, physics, plainText, inlineExtensions, autoLinks, enabledAutoPair, keyboardExperience, enabledDefaultIndent, punctuation, selfActionMoreCorrect, emoji, onlyReadMode, vimInput?.enabled]);
+  }, [doc.id, mode, strict, physics, plainText, inlineExtensions, autoLinks, enabledAutoPair, keyboardExperience, enabledDefaultIndent, punctuation, selfActionMoreCorrect, emoji, markdownSyntaxStyle, onlyReadMode, vimInput?.enabled]);
 
   useEffect(() => {
     if (handleRef.current && "setVimInput" in handleRef.current) {
@@ -584,7 +602,7 @@ export function EditorPane({
       frame = requestAnimationFrame(() => {
         frame = 0;
         if (!currentContainer?.isConnected) return;
-        rollActionReturnConfigureRef.current?.(readElementRollActionCompareExample(currentContainer));
+        scrollRatioReporterRef.current?.(readElementScrollRatio(currentContainer));
       });
     };
     mount.addEventListener("scroll", report, { capture: true, passive: true });

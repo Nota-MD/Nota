@@ -23,7 +23,10 @@
 }
 
 .command-palette-input {
+  box-sizing: border-box;
+  align-self: stretch;
   width: 100%;
+  min-width: 0;
   height: 48px;
   padding: 0 16px;
   border: 0;

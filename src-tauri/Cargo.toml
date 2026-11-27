@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.17.0-beta"
+version = "0.18.0-beta"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota - a WYSIWYG Markdown editor with Lua extensions"
@@ -78,7 +78,7 @@ chardetng = "0.1"
 version = "3"
 
 # Unix process checks (`window_registry::process_alive` uses `kill(pid, 0)`).
-# Keep this on all Unix targets — macOS is `unix` but not `linux`, and a
+# Keep this on all Unix targets - macOS is `unix` but not `linux`, and a
 # Linux-only `libc` dep leaves the macOS build without the crate.
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -99,6 +99,7 @@ rfd = { version = "0.16", default-features = false }
 
 # Windows native APIs. `ShellExecuteW` provides the native print verb.
 [target.'cfg(target_os = "windows")'.dependencies]
+webview2-com = "0.39"
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_UI_Shell",

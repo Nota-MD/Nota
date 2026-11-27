@@ -153,8 +153,22 @@ export function Select<T extends string>({
     if (!trigger) return;
     const box = trigger.getBoundingClientRect();
     const viewportGap = 8;
+    const probe = document.createElement("span");
+    const triggerStyle = getComputedStyle(trigger);
+    probe.style.cssText =
+      "position:fixed;left:-10000px;top:-10000px;visibility:hidden;white-space:nowrap;";
+    probe.style.font = triggerStyle.font;
+    probe.style.letterSpacing = triggerStyle.letterSpacing;
+    probe.textContent = options.reduce(
+      (longest, option) =>
+        option.label.length > longest.length ? option.label : longest,
+      "",
+    );
+    document.body.append(probe);
+    const contentWidth = probe.getBoundingClientRect().width + 44;
+    probe.remove();
     const width = Math.min(
-      Math.max(box.width, 180),
+      Math.max(box.width, contentWidth, 180),
       Math.max(0, window.innerWidth - viewportGap * 2),
     );
     const left = Math.min(
@@ -169,7 +183,7 @@ export function Select<T extends string>({
         ? { left, width, bottom: window.innerHeight - box.top + 4 }
         : { left, width, top: box.bottom + 4 },
     );
-  }, []);
+  }, [options]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -722,6 +736,7 @@ export function SettingRow({
   description,
   searchText,
   help,
+  layout = "columns",
   children,
 }: {
 
@@ -740,6 +755,7 @@ export function SettingRow({
 
 
   help?: ReactNode;
+  layout?: "columns" | "stacked";
   children: ReactNode;
 }) {
   const query = useQuery();
@@ -780,7 +796,11 @@ export function SettingRow({
         });
 
   return (
-    <div className="stg-row" data-flat={label === undefined ? "true" : undefined}>
+    <div
+      className="stg-row"
+      data-flat={label === undefined ? "true" : undefined}
+      data-layout={layout}
+    >
       <div className="stg-row-text">
         {label !== undefined &&
           (labelable ? (

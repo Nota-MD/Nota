@@ -1,9 +1,8 @@
 /**
- * 主题图标覆盖链的纯文本回归。
+ * Theme icon override-chain regression tests.
  *
- * 读源码而不是渲染：本仓没有 jsdom，而这条链真正容易断的是**变量名是否拼对**、
- * **行内默认图是否让主题变量失去优先级**、以及后端是否又偷偷写死了
- * `主题id/icons/` 目录。真窗口里“换主题后图标有没有变”另走目检。
+ * These tests inspect source contracts because the repository has no jsdom.
+ * Real-window icon switching still requires visual verification.
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -42,58 +41,58 @@ const mainTsx = read("src", "main.tsx");
 const assetsRs = read("src-tauri", "src", "theme_assets.rs");
 const uiStylesRs = read("src-tauri", "src", "ui_styles.rs");
 
-testCase("Icon 把逻辑名拼成 --icon-<id> 并由默认图兜底", () => {
-  assertValue(Icon.includes("data-icon={name}"), "Icon 没有输出 data-icon");
+testCase("Icon maps logical names to --icon-<id> with a default fallback", () => {
+  assertValue(Icon.includes("data-icon={name}"), "Icon does not render data-icon");
   assertValue(
     Icon.includes("`var(--icon-${name}, var(--icon-base))`"),
-    "逻辑名没有拼成 --icon-<id>，或者默认图没有兜底",
+    "logical names are not mapped to --icon-<id>, or the default fallback is missing",
   );
   assertValue(
     Icon.includes("WebkitMaskImage: override") && Icon.includes("maskImage: override"),
-    "WebView2 仍要经过第二层自定义属性替换才能解析主题图标",
+    "WebView2 still requires a second custom-property replacement layer",
   );
-  assertValue(iconsCss.includes("var(--icon-override, var(--icon-base))"), "遮罩没有消费覆盖变量");
+  assertValue(iconsCss.includes("var(--icon-override, var(--icon-base))"), "the mask does not consume the override variable");
 });
 
-testCase("CDE 只声明图标 ID → 地址，不写 per-icon 组件规则", () => {
+testCase("CDE declares icon IDs to URL mappings without per-icon component rules", () => {
   assertValue(
     cdeCss.includes(
-      '--icon-folio-close-symbolic: url("./assets/icons/close.svg")',
+      '--icon-nota-close-symbolic: url("./assets/icons/close.svg")',
     ),
-    "缺少 CDE 的 close 映射",
+    "the CDE close mapping is missing",
   );
-  assertValue(cdeCss.includes("--icon-folio-format-text-bold-symbolic"), "缺少加粗图标映射");
-  assertValue(cdeCss.includes("--icon-nota-heading-1-symbolic"), "缺少 CDE 一级标题图标映射");
-  assertValue(cdeCss.includes("--nota-source-quote-icon"), "缺少 CDE 引用源码图标映射");
-  assertValue(!cdeCss.includes('.icon[data-icon="folio-close-symbolic"]'), "又退回选择器硬编码了");
+  assertValue(cdeCss.includes("--icon-nota-format-text-bold-symbolic"), "the bold icon mapping is missing");
+  assertValue(cdeCss.includes("--icon-nota-heading-1-symbolic"), "the CDE heading-1 icon mapping is missing");
+  assertValue(cdeCss.includes("--nota-source-quote-icon"), "the CDE quote-source icon mapping is missing");
+  assertValue(!cdeCss.includes('.icon[data-icon="nota-close-symbolic"]'), "the theme regressed to hard-coded selectors");
 });
 
-testCase("编辑器块标记使用自绘 SVG，列表标记保持稳定", () => {
-  assertValue(marksCss.includes('--nota-source-quote-icon'), "缺少引用源码图标变量");
-  assertValue(marksCss.includes('data-srcmark=">"'), "引用块没有接到 SVG");
-  assertValue(!marksCss.includes('data-srcmark="-"]'), "列表仍会在编辑时切换源码标记");
-  assertValue(marksCss.includes('data-srcmark="```"'), "代码围栏没有接到 SVG");
+testCase("editor block marks use custom SVG and list markers remain stable", () => {
+  assertValue(marksCss.includes('--nota-source-quote-icon'), "the quote-source icon variable is missing");
+  assertValue(marksCss.includes('data-srcmark=">"'), "quote blocks are not connected to the SVG");
+  assertValue(!marksCss.includes('data-srcmark="-"]'), "list markers still switch source glyphs while editing");
+  assertValue(marksCss.includes('data-srcmark="```"'), "code fences are not connected to the SVG");
   assertValue(
     editorBlocksCss.includes('ul > li:not([data-item-type="task"])::before'),
-    "无序列表没有稳定绘制圆点",
+    "unordered lists do not draw a stable bullet",
   );
   assertValue(
     editorBlocksCss.includes("--nota-source-bullet-icon"),
-    "无序列表圆点没有使用主题图标",
+    "unordered-list bullets do not use the theme icon",
   );
   assertValue(
     marksCss.includes("top: 50%") && marksCss.includes("transform: translateY(-50%)"),
-    "块标记没有相对块垂直居中",
+    "block marks are not vertically centered within the block",
   );
 });
 
-testCase("CDE 外部主题不进入程序内置风格和静态样式导入", () => {
-  assertValue(!uiStylesRs.includes('"cde"'), "ui_styles.rs 仍把 cde 列为内置风格");
-  assertValue(!mainTsx.includes('"./styles/external-themes/cde/theme.css"'), "main.tsx 静态导入了 CDE");
-  assertValue(!mainTsx.includes('"./styles/cde.css"'), "main.tsx 仍在导入旧 CDE 样式");
+testCase("CDE is not a bundled style or a static stylesheet import", () => {
+  assertValue(!uiStylesRs.includes('"cde"'), "ui_styles.rs still lists cde as bundled");
+  assertValue(!mainTsx.includes('"./styles/external-themes/cde/theme.css"'), "main.tsx imports CDE directly");
+  assertValue(!mainTsx.includes('"./styles/cde.css"'), "main.tsx imports the legacy CDE stylesheet");
 });
 
-testCase("核心 CSS 不再包含 CDE 专用选择器", () => {
+testCase("core CSS contains no CDE-specific selectors", () => {
   const root = join(process.cwd(), "src", "styles");
   const externalPlace = join(root, "external-themes");
   const cssTextItem = (itemRecord: string): string[] =>
@@ -105,12 +104,12 @@ testCase("核心 CSS 不再包含 CDE 专用选择器", () => {
   for (const path of cssTextItem(root)) {
     assertValue(
       !readFileSync(path, "utf8").includes('data-ui-style="cde"'),
-      `${relative(process.cwd(), path)} 仍含 CDE 专用选择器`,
+      `${relative(process.cwd(), path)} still contains a CDE-specific selector`,
     );
   }
 });
 
-testCase("自绘 CDE 图标都存在且是 16 格源", () => {
+testCase("custom CDE icons exist and use a 16px source grid", () => {
   for (const name3 of [
     "document-open",
     "document-new",
@@ -142,21 +141,21 @@ testCase("自绘 CDE 图标都存在且是 16 格源", () => {
     "source-code",
   ]) {
     const path = join("src", "styles", "external-themes", "cde", "assets", "icons", `${name3}.svg`);
-    assertValue(existsSync(path), `缺少 ${path}`);
+    assertValue(existsSync(path), `missing ${path}`);
     const source3 = readFileSync(path, "utf8");
-    assertValue(source3.includes('width="16"') && source3.includes('height="16"'), `${name3} 不是 16×16`);
+    assertValue(source3.includes('width="16"') && source3.includes('height="16"'), `${name3} is not 16x16`);
   }
 });
 
-testCase("用户资源相对 CSS 文件解析且不绑定固定目录", () => {
-  assertValue(assetsRs.includes('find("url(")'), "后端没有解析 CSS 相对 url()");
-  assertValue(assetsRs.includes("font/ttf") && assetsRs.includes("image/svg+xml"), "字体/图标 MIME 缺失");
-  assertValue(!uiStylesRs.includes('join("icons")'), "ui_styles.rs 又写死了 主题id/icons 目录");
+testCase("user assets resolve relative to CSS files without a fixed icon directory", () => {
+  assertValue(assetsRs.includes('find("url(")'), "the backend does not parse relative CSS url() values");
+  assertValue(assetsRs.includes("font/ttf") && assetsRs.includes("image/svg+xml"), "font or icon MIME types are missing");
+  assertValue(!uiStylesRs.includes('join("icons")'), "ui_styles.rs again hard-codes a theme icons directory");
 });
 
 if (fail) {
-  console.error(`\n${fail} 条失败`);
+  console.error(`\n${fail} failed`);
   process.exitCode = 1;
 } else {
-  console.log(`\n${pass} 条全过`);
+  console.log(`\n${pass} passed`);
 }

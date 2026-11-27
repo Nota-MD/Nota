@@ -127,6 +127,7 @@ testCase("shortcut, handler, overlay and translations are wired", () => {
   const app = read("src/App.tsx");
   const dialogs = read("src/ui/AppDialogs.tsx");
   const palette = read("src/ui/CommandPalette.tsx");
+  const paletteCss = read("src/styles/command-palette.css");
   const translations = read("src/i18n/zh-ui.ts");
   equal(
     [...commands.matchAll(/accel:\s*"Ctrl\+Shift\+P"/g)].length,
@@ -140,6 +141,10 @@ testCase("shortcut, handler, overlay and translations are wired", () => {
   assert(dialogs.includes("<CommandPalette"), "overlay missing");
   assert(palette.includes('entry.id !== "file.commandPalette"'), "palette can recursively reopen itself");
   assert(translations.includes('"Command Palette…"'), "Chinese menu translation missing");
+  assert(
+    /\.command-palette-input\s*\{[^}]*box-sizing:\s*border-box/s.test(paletteCss),
+    "command palette input padding is included outside its width",
+  );
 });
 
 console.log(`\nCommand palette: ${passed} passed, ${failed} failed`);

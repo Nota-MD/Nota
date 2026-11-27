@@ -6,6 +6,34 @@
   max-width: 760px;
 }
 
+.confirm-backdrop[data-window-presentation="full"] {
+  top: 0;
+  padding: 0;
+  background: var(--bg);
+}
+
+.settings-export-dialog[data-window-presentation="full"] {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  min-width: 0;
+  max-width: none;
+  height: 100vh;
+  padding: 28px 32px 24px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.settings-export-dialog[data-window-presentation="full"] .settings-export-scroll {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
+.settings-export-dialog[data-window-presentation="full"] .confirm-actions {
+  padding-top: 16px;
+}
+
 .settings-export-lead {
   margin: 4px 0 12px;
   color: var(--fg-muted);
@@ -32,14 +60,23 @@
 
 .settings-export-list {
   display: grid;
-  gap: 4px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
 }
 
 .settings-export-item,
 .settings-export-plugin {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-export-item + .settings-export-item,
+.settings-export-plugin + .settings-export-plugin {
+  border-top: 1px solid var(--border);
 }
 
 .settings-export-item {
@@ -47,8 +84,25 @@
   grid-template-columns: 20px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
-  padding: 7px 8px;
+  padding: 9px 10px;
   cursor: pointer;
+}
+
+.settings-export-item:hover:not(.is-disabled),
+.settings-export-plugin:hover {
+  background: var(--bg-hover);
+}
+
+.settings-export-item input[type="checkbox"],
+.settings-export-plugin input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.settings-export-plugin input[type="checkbox"] {
+  margin-top: 0;
 }
 
 .settings-export-item.is-disabled {
@@ -74,7 +128,7 @@
   grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(145px, auto));
   gap: 10px;
   align-items: center;
-  padding: 7px 8px;
+  padding: 9px 10px;
 }
 
 .settings-export-plugin label {

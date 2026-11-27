@@ -159,6 +159,14 @@ Session recovery must preserve document order, active tab, cursor where safe,
 and unsaved drafts without overwriting source files. Close, discard, and save
 actions must be explicit and mutually exclusive.
 
+## Dual-engine E2E
+
+Chromium and WebKitGTK disagree about contenteditable caret placement, NBSP
+insertion, beforeinput ordering, selection APIs, IME composition, and native
+key delivery. For DOM-facing editor behavior, passing Chromium E2E alone is not
+evidence that the Tauri window works. Run both engines and compare DOM state,
+ProseMirror state, and serialized Markdown.
+
 ## Geometry and overlays
 
 Fixed overlays must be clipped to the editor viewport, not just the document.

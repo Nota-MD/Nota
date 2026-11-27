@@ -477,6 +477,12 @@ export function useMenus(w: MenuWiring): MenuState {
     let unsubscribe: UnlistenFn | null = null;
 
     on<string>(events.formatKey, (name2) => {
+      if (name2 === "devtools") {
+        if (developerMode && webviewDefaultShortcuts) {
+          menuHandlers["view.devtools"]?.();
+        }
+        return;
+      }
       const id = hostFormatKey[name2];
       if (!id) return;
 
@@ -499,7 +505,12 @@ export function useMenus(w: MenuWiring): MenuState {
     };
 
 
-  }, [menuHandlers, disabledCommands]);
+  }, [
+    menuHandlers,
+    disabledCommands,
+    developerMode,
+    webviewDefaultShortcuts,
+  ]);
 
 
 

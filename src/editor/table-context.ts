@@ -8,7 +8,6 @@ import { editorViewCtx, parserCtx, serializerCtx, type Editor } from "@milkdown/
 import { Fragment, type Node as PMNode, type NodeType } from "@milkdown/kit/prose/model";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import {
-  CellSelection,
   findTable,
   moveTableColumn,
   moveTableRow,
@@ -79,7 +78,6 @@ export function resizeCurrentTable(editor: Editor, columnCount: number, rowCount
     view.dispatch(tr.scrollIntoView());
   });
 }
-
 export type tableColumnAlignment = "left" | "center" | "right";
 
 
@@ -204,174 +202,5 @@ export function duplicateCurrentTable(editor: Editor): void {
     } else {
       void navigator.clipboard?.writeText(text);
     }
-  });
-}
-
-function tableCellPosition(rect: ReturnType<typeof selectedRect>, row: number, column: number): number | null {
-  const index = row * rect.map.width + column;
-  const offset = rect.map.map[index];
-  return offset === undefined ? null : rect.tableStart + offset;
-}
-
-export function selectCurrentTableRange(
-  editor: Editor,
-  fromRow: number,
-  fromColumn: number,
-  toRow: number,
-  toColumn: number,
-): void {
-  editor.action((ctx) => {
-    const view = ctx.get(editorViewCtx);
-    const rect = selectedRect(view.state);
-    if (rect.map.width === 0 || rect.map.height === 0) return;
-    const top = Math.max(0, Math.min(rect.map.height - 1, Math.min(fromRow, toRow)));
-    const bottom = Math.max(0, Math.min(rect.map.height - 1, Math.max(fromRow, toRow)));
-    const left = Math.max(0, Math.min(rect.map.width - 1, Math.min(fromColumn, toColumn)));
-    const right = Math.max(0, Math.min(rect.map.width - 1, Math.max(fromColumn, toColumn)));
-    const anchor = tableCellPosition(rect, top, left);
-    const head = tableCellPosition(rect, bottom, right);
-    if (anchor === null || head === null) return;
-    view.dispatch(
-      view.state.tr
-        .setSelection(CellSelection.create(view.state.doc, anchor, head))
-        .scrollIntoView(),
-    );
-  });
-}
-
-export function setCurrentTableCellText(
-  editor: Editor,
-  row: number,
-  column: number,
-  text: string,
-): void {
-  editor.action((ctx) => {
-    const view = ctx.get(editorViewCtx);
-    const rect = selectedRect(view.state);
-    const position = tableCellPosition(rect, row, column);
-    if (position === null) return;
-    const cell = view.state.doc.nodeAt(position);
-    if (!cell) return;
-    const paragraph = view.state.schema.nodes.paragraph?.create(
-      null,
-      text ? view.state.schema.text(text) : undefined,
-    );
-    if (!paragraph) return;
-    view.dispatch(
-      view.state.tr
-        .replaceWith(position + 1, position + cell.nodeSize - 1, paragraph)
-        .scrollIntoView(),
-    );
-  });
-}
-
-export function setCurrentTableCells(
-  editor: Editor,
-  updates: readonly { row: number; column: number; text: string }[],
-): void {
-  if (updates.length === 0) return;
-  editor.action((ctx) => {
-    const view = ctx.get(editorViewCtx);
-    const rect = selectedRect(view.state);
-    const paragraphType = view.state.schema.nodes.paragraph;
-    if (!paragraphType) return;
-    const tr = view.state.tr;
-    for (const update of updates) {
-      const position = tableCellPosition(rect, update.row, update.column);
-      if (position === null) continue;
-      const cell = view.state.doc.nodeAt(position);
-      if (!cell) continue;
-      const paragraph = paragraphType.create(
-        null,
-        update.text ? view.state.schema.text(update.text) : undefined,
-      );
-      const from = tr.mapping.map(position + 1);
-      const to = tr.mapping.map(position + cell.nodeSize - 1);
-      tr.replaceWith(from, to, paragraph);
-    }
-    if (tr.docChanged) view.dispatch(tr.scrollIntoView());
-  });
-}
-
-/**
- * Repeat a selected cell block into a larger destination rectangle. New rows
- * and columns are created only when the fill handle crosses the current table
- * boundary.
- */
-export function fillCurrentTableRange(
-  editor: Editor,
-  sourceFromRow: number,
-  sourceFromColumn: number,
-  sourceToRow: number,
-  sourceToColumn: number,
-  fillRow: number,
-  fillColumn: number,
-): void {
-  editor.action((ctx) => {
-    const view = ctx.get(editorViewCtx);
-    const rect = selectedRect(view.state);
-    const sourceTop = Math.max(0, Math.min(sourceFromRow, sourceToRow));
-    const sourceBottom = Math.min(rect.map.height - 1, Math.max(sourceFromRow, sourceToRow));
-    const sourceLeft = Math.max(0, Math.min(sourceFromColumn, sourceToColumn));
-    const sourceRight = Math.min(rect.map.width - 1, Math.max(sourceFromColumn, sourceToColumn));
-    if (sourceBottom < sourceTop || sourceRight < sourceLeft) return;
-
-    const targetBottom = Math.max(sourceBottom, fillRow);
-    const targetRight = Math.max(sourceRight, fillColumn);
-    const desiredRows = Math.max(rect.map.height, targetBottom + 1);
-    const desiredColumns = Math.max(rect.map.width, targetRight + 1);
-    const rowNodes = rows(rect.table);
-    const matrix: PMNode[][] = [];
-
-    for (let row = 0; row < rowNodes.length; row += 1) {
-      const cells: PMNode[] = [];
-      rowNodes[row]?.forEach((cell) => cells.push(cell));
-      matrix.push(cells);
-    }
-
-    const headerRow = rowNodes[0];
-    const headerCellType = headerRow?.firstChild?.type ?? view.state.schema.nodes.table_header;
-    const bodyRowType = view.state.schema.nodes.table_row;
-    const bodyCellType = rowNodes[1]?.firstChild?.type ?? view.state.schema.nodes.table_cell;
-    if (!bodyRowType || !bodyCellType) return;
-
-    for (let row = 0; row < desiredRows; row += 1) {
-      matrix[row] ??= [];
-      const cellType = row === 0 ? (headerCellType ?? bodyCellType) : bodyCellType;
-      for (let column = 0; column < desiredColumns; column += 1) {
-        matrix[row]![column] ??= cellType.createAndFill({ alignment: null }) ?? cellType.create({ alignment: null });
-      }
-    }
-
-    const sourceHeight = sourceBottom - sourceTop + 1;
-    const sourceWidth = sourceRight - sourceLeft + 1;
-    for (let row = sourceTop; row <= targetBottom; row += 1) {
-      for (let column = sourceLeft; column <= targetRight; column += 1) {
-        if (row <= sourceBottom && column <= sourceRight) continue;
-        const sourceRow = sourceTop + ((row - sourceTop) % sourceHeight);
-        const sourceColumn = sourceLeft + ((column - sourceLeft) % sourceWidth);
-        const sourceCell = matrix[sourceRow]?.[sourceColumn];
-        const targetCell = matrix[row]?.[column];
-        if (!sourceCell || !targetCell) continue;
-        matrix[row]![column] = targetCell.type.create(
-          { ...targetCell.attrs, alignment: sourceCell.attrs.alignment },
-          sourceCell.content,
-        );
-      }
-    }
-
-    const rebuiltRows = matrix.map((cells, row) => {
-      const existing = rowNodes[row];
-      if (existing) return existing.copy(Fragment.from(cells));
-      return bodyRowType.create(null, Fragment.from(cells));
-    });
-    const rebuilt = rect.table.type.create(rect.table.attrs, Fragment.from(rebuiltRows));
-    const tr = view.state.tr.replaceWith(
-      rect.tableStart,
-      rect.tableStart + rect.table.nodeSize,
-      rebuilt,
-    );
-    tr.setSelection(TextSelection.near(tr.doc.resolve(rect.tableStart + 2)));
-    view.dispatch(tr.scrollIntoView());
   });
 }

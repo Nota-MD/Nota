@@ -2,6 +2,7 @@ import type { EditorState } from "@milkdown/kit/prose/state";
 import { Plugin } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 
+import { textCaretOwner } from "@/editor/caret-ownership";
 const cursorClass = "nota-blink-caret";
 const showClass = "nota-blink-caret-on";
 const dimClass = "nota-blink-caret-dim";
@@ -118,7 +119,7 @@ export function usableCaretCoordinate(
 }
 
 
-export function isNoShowCursor(state: EditorState): boolean {
+export function shouldShowBodyCaret(state: EditorState): boolean {
   const selection = state.selection;
   if (!selection.empty) return false;
   const parent = selection.$head.parent;
@@ -144,10 +145,7 @@ export function innerEditorOwnsCaret(
     return true;
   }
   if (!active || active === root || !root.contains(active)) return false;
-  return (
-    active.matches("input, textarea, .cm-content, .nota-keyboard-link-source") ||
-    active.closest("input, textarea, .cm-content, .nota-keyboard-link-source") !== null
-  );
+  return textCaretOwner(active) !== null;
 }
 
 function hideCursor(cursor: HTMLElement): void {
@@ -209,7 +207,7 @@ function arrangeCursor(cursor: HTMLElement, view: EditorView): void {
     view.dom.classList.contains(imeComposingClass) ||
     !view.hasFocus() ||
     innerEditorOwnsCaret(active, view.dom) ||
-    !isNoShowCursor(view.state)
+    !shouldShowBodyCaret(view.state)
   ) {
     hideCursor(cursor);
     return;
@@ -310,7 +308,7 @@ function arrangeCursor(cursor: HTMLElement, view: EditorView): void {
 
 
 
-export function flashSparkCursor(): Plugin {
+export function blinkingCaretPlugin(): Plugin {
   return new Plugin({
     view(view) {
       const cursor = document.createElement("span");
@@ -377,7 +375,7 @@ export function flashSparkCursor(): Plugin {
         settle();
       };
       const rollActionContainer = view.dom.closest(".editor-pane");
-      const rulerInchWatchListen =
+      const resizeObserver =
         typeof ResizeObserver === "undefined" ? null : new ResizeObserver(safeArrange);
 
       view.dom.addEventListener("focusin", safeArrange);
@@ -391,7 +389,7 @@ export function flashSparkCursor(): Plugin {
       window.addEventListener("blur", windowBlur);
       window.addEventListener("focus", safeArrange);
       document.addEventListener("selectionchange", safeArrange);
-      rulerInchWatchListen?.observe(view.dom);
+      resizeObserver?.observe(view.dom);
       safeArrange();
 
       return {
@@ -411,7 +409,7 @@ export function flashSparkCursor(): Plugin {
           window.removeEventListener("blur", windowBlur);
           window.removeEventListener("focus", safeArrange);
           document.removeEventListener("selectionchange", safeArrange);
-          rulerInchWatchListen?.disconnect();
+          resizeObserver?.disconnect();
           cursor.remove();
         },
       };

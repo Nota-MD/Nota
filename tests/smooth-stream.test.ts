@@ -6,6 +6,8 @@ import {
   STREAM_MAX_DELAY_MS,
   nextStreamRelease,
 } from "../src/ui/smooth-stream";
+import { insertLiveStream } from "../src/ui/panel-dock-state";
+import type { PanelNode } from "../src/ui/panel-nodes";
 
 let pass = 0;
 let fail = 0;
@@ -56,7 +58,11 @@ function ok(value: boolean, label: string): void {
   const panel = readFileSync(join("src", "ui", "PanelBody.tsx"), "utf8");
   ok(panel.includes("requestAnimationFrame(tick)"), "PanelBody runs the release loop through rAF");
   ok(panel.includes("prefers-reduced-motion: reduce"), "PanelBody honours reduced motion");
-  ok(panel.includes("scroll.scrollTop = scroll.scrollHeight"), "PanelBody follows the latest text");
+  ok(
+    panel.includes("scrollToMessageBottom()") &&
+      panel.includes("message.getBoundingClientRect().bottom"),
+    "PanelBody follows the streamed message instead of scrolling to the dock bottom",
+  );
   ok(panel.includes("panel-stream-follow"), "PanelBody exposes a resume-following control");
   ok(
     !panel.includes("    update();\n    scroll.addEventListener"),
@@ -64,6 +70,35 @@ function ok(value: boolean, label: string): void {
   );
   ok(!panel.includes("nota.ai"), "the smooth renderer has no AI extension special case");
   ok(!panel.includes('node.from === "ai" &&'), "smooth rendering does not gate on the sender role");
+
+  const live: PanelNode = {
+    kind: "message",
+    from: "ai",
+    text: "answer",
+    copy: false,
+    streaming: true,
+  };
+  const input: PanelNode = {
+    kind: "input",
+    spec: {
+      value: "",
+      arg: "",
+      submit: "",
+      submitLabel: "Send",
+      placeholder: "",
+      hint: "",
+      rows: 3,
+      multiline: true,
+      chips: [],
+    },
+  };
+  const settings: PanelNode = { kind: "text", text: "settings", tone: "muted" };
+  const placed = insertLiveStream([input, settings], live);
+  ok(placed[0] === live && placed[1] === input, "live text appears before panel controls");
+  ok(
+    insertLiveStream([settings], live)[1] === live,
+    "panels without an input keep the live text at the end",
+  );
 
   const dockCss = readFileSync(join("src", "styles", "dock.css"), "utf8");
   ok(dockCss.includes("scrollbar-gutter: stable"), "the dock reserves its scrollbar gutter");

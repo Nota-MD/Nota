@@ -4,7 +4,6 @@ pub mod installed;
 mod install;
 pub mod manifest;
 pub mod package;
-pub mod setting_locks;
 pub mod settings_decl;
 
 pub mod updater;
@@ -19,7 +18,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use mlua::Lua;
+use mlua::{Lua, Value};
 use serde::Serialize;
 
 use tauri::Manager;
@@ -29,7 +28,7 @@ use crate::lua::api::i18n::LanguagePack;
 use crate::lua::{HostContext, LuaPlugin, PluginState};
 use install::at_use_call_directory_inner;
 use installed::{InstallSource, Installed, Signature};
-use manifest::{find_manifests, Capability, Manifest, NOTA_PLUGIN_API_VERSION};
+use manifest::{find_manifests, Manifest, NOTA_PLUGIN_API_VERSION};
 
 pub use types::*;
 
@@ -234,11 +233,6 @@ impl PluginHost {
         if latest != host.extensions_enabled() {
             host.set_extensions_enabled(latest);
         }
-        if let Err(error) = host.apply_setting_locks() {
-            if std::env::var_os("NOTA_DEBUG").is_some() {
-                eprintln!("[nota] could not apply extension setting locks: {error}");
-            }
-        }
         host
     }
 
@@ -296,13 +290,7 @@ impl PluginHost {
                     key_id: record.and_then(|r| r.key_id.clone()),
                     removable: true,
 
-                    settings: settings(&p.manifest, &p.language_2),
-                    setting_locks: p
-                        .manifest
-                        .setting_locks
-                        .iter()
-                        .map(|lock| lock.setting.clone())
-                        .collect(),
+                    settings: settings(p, &p.language_2),
                 }
             })
             .collect()
@@ -374,11 +362,6 @@ impl PluginHost {
             old.unload();
         }
         self.receive_probe(&id);
-        if let Err(error) = self.apply_setting_locks() {
-            if std::env::var_os("NOTA_DEBUG").is_some() {
-                eprintln!("[nota] could not reapply setting locks after reload: {error}");
-            }
-        }
         crate::debug_log!("[nota] plugin hot reloaded: {id}");
         Ok(Some(id))
     }
@@ -423,11 +406,6 @@ impl PluginHost {
             if enabled { "enabled" } else { "disabled" },
             changed
         );
-        if let Err(error) = self.apply_setting_locks() {
-            if std::env::var_os("NOTA_DEBUG").is_some() {
-                eprintln!("[nota] could not apply setting locks: {error}");
-            }
-        }
     }
 
     pub fn set_enabled(&mut self, id: &str, enabled: bool) -> Result<()> {
@@ -460,20 +438,23 @@ impl PluginHost {
             let manifest = self.plugins[i].manifest.clone();
             self.plugins[i] = LuaPlugin::disabled(manifest, &self.base.application_language);
         }
-        self.apply_setting_locks()?;
         Ok(())
     }
 
     fn receive_probe(&self, id: &str) {
-        crate::devserver::stop(
-            &self.base.app.state::<crate::devserver::DevServerState>(),
-            id,
-        );
+        if let Some(devserver) = self
+            .base
+            .app
+            .try_state::<crate::devserver::DevServerState>()
+        {
+            crate::devserver::stop(&devserver, id);
+        }
 
         {
             use tauri::Emitter;
-            let review = self.base.app.state::<ReviewState>();
-            review.set(id, None);
+            if let Some(review) = self.base.app.try_state::<ReviewState>() {
+                review.set(id, None);
+            }
             let _ = self.base.app.emit(EVENT_REVIEW, serde_json::json!({}));
         }
     }
@@ -557,18 +538,6 @@ impl PluginHost {
         self.plugins.len()
     }
 
-    pub fn notify_table_snapshot(&self, snapshot: &crate::table_bridge::TableSnapshot) {
-        for plugin in self.plugins.iter().filter(|plugin| {
-            plugin.is_loaded()
-                && self.is_enabled(&plugin.manifest.meta.id)
-                && plugin.manifest.has(Capability::TableRead)
-        }) {
-            if let Err(error) = crate::lua::api::table::notify_snapshot(&plugin.lua, snapshot) {
-                crate::lua::api::table::report_error(&plugin.manifest.meta.id, &error);
-            }
-        }
-    }
-
     pub fn unload_all(&mut self) {
         for p in &self.plugins {
             p.unload();
@@ -591,7 +560,8 @@ fn extensions_enabled_from(base: &HostContext) -> bool {
         .unwrap_or(true)
 }
 
-fn settings(manifest: &Manifest, language_2: &LanguagePack) -> Vec<PluginSetting> {
+fn settings(plugin: &LuaPlugin, language_2: &LanguagePack) -> Vec<PluginSetting> {
+    let manifest = &plugin.manifest;
     if manifest.settings.is_empty() {
         return Vec::new();
     }
@@ -629,7 +599,45 @@ fn settings(manifest: &Manifest, language_2: &LanguagePack) -> Vec<PluginSetting
                 secret: s.secret,
                 placeholder: value_3(language_2, &s.placeholder),
                 multiline: s.multiline && s.kind == "text",
+                options: if s.kind == "select" {
+                    setting_options(plugin, &s.options_command)
+                } else {
+                    Vec::new()
+                },
+                create_command: s.create_command.clone(),
+                rename_command: s.rename_command.clone(),
+                delete_command: s.delete_command.clone(),
             }
+        })
+        .collect()
+}
+
+fn setting_options(plugin: &LuaPlugin, command: &str) -> Vec<PluginSettingOption> {
+    if command.is_empty() {
+        return Vec::new();
+    }
+    let Ok(Value::Table(items)) = plugin.call_command(command, Value::Nil) else {
+        return Vec::new();
+    };
+    items
+        .sequence_values::<mlua::Table>()
+        .filter_map(|item| {
+            let item = item.ok()?;
+            let value = item.get::<String>("value").ok()?;
+            if value.is_empty() && item.get::<Option<String>>("label").ok().flatten().is_none() {
+                return None;
+            }
+            let label = item
+                .get::<Option<String>>("label")
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| value.clone());
+            Some(PluginSettingOption {
+                value,
+                label,
+                editable: item.get::<Option<bool>>("editable").ok().flatten().unwrap_or(false),
+                deletable: item.get::<Option<bool>>("deletable").ok().flatten().unwrap_or(false),
+            })
         })
         .collect()
 }

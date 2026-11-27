@@ -13,6 +13,18 @@ fn identify_key(key_value: u32) -> Option<&'static str> {
 }
 
 #[cfg(target_os = "linux")]
+fn is_devtools_key(key_value: u32, modifiers: gtk::gdk::ModifierType) -> bool {
+    use gtk::gdk::ModifierType;
+
+    if key_value == 0xffc9 {
+        return true;
+    }
+    let command = modifiers.contains(ModifierType::CONTROL_MASK);
+    let shift = modifiers.contains(ModifierType::SHIFT_MASK);
+    command && shift && matches!(key_value, 0x0069 | 0x0049)
+}
+
+#[cfg(target_os = "linux")]
 pub fn install(webview: &tauri::Webview) -> Result<(), String> {
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -40,6 +52,12 @@ pub fn install(webview: &tauri::Webview) -> Result<(), String> {
     let emitter = webview.clone();
     controller.connect_key_pressed(move |_, key_value, _, modifiers| {
         use gtk::gdk::ModifierType;
+
+        if is_devtools_key(key_value, modifiers) {
+            crate::debug_log!("[nota] DevTools shortcut intercepted");
+            let _ = emitter.emit_to(EventTarget::labeled(WINDOW), EVENT, "devtools");
+            return true;
+        }
 
         if !modifiers.contains(ModifierType::CONTROL_MASK) {
             return false;

@@ -29,6 +29,7 @@ import type { MenuSpec } from "@/ui/commands";
 
 export interface PaneProps {
   settings: Settings;
+  settingsPresentation: "embedded" | "full";
 
   onChange: (patch: Partial<Settings>) => void;
 
@@ -77,8 +78,6 @@ export interface PaneProps {
 
 
   menus: readonly MenuSpec[];
-  /** Setting paths currently owned by an active extension. */
-  settingLocks: ReadonlySet<string>;
 }
 
 

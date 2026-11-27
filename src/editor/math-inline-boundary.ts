@@ -77,7 +77,7 @@ function enterInlineMathSource(
   return true;
 }
 
-function removeInlineMathDelimiter(
+export function removeInlineMathDelimiter(
   view: EditorView,
   position: number,
   side: "opening" | "closing",

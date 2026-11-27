@@ -35,6 +35,10 @@ import { useMemo } from "react";
 import type { MarkdownSettings } from "@/bridge/ipc";
 import { DefaultInlineExtensionFlags } from "@/editor/inline-marks";
 import { DefaultPunctuationSettings, type punctuationSettings } from "@/editor/smart-punctuation";
+import {
+  DefaultMarkdownSyntaxStyle,
+  type MarkdownSyntaxStyle,
+} from "@/editor/markdown-syntax-style";
 
 
 export interface editorSettings {
@@ -44,6 +48,7 @@ export interface editorSettings {
   autoLinks: boolean;
   autoPair: boolean;
   defaultIndent: number;
+  markdownSyntaxStyle: MarkdownSyntaxStyle;
 }
 
 
@@ -97,6 +102,14 @@ export function useEditorSettings(
   const autoLinks = markdown?.autolink ?? true;
   const autoPair = autoPairSetting;
   const defaultIndent = Math.max(1, Math.min(8, defaultIndentSetting));
+  const markdownSyntaxStyle = useMemo<MarkdownSyntaxStyle>(
+    () => ({
+      heading: markdown?.heading_style ?? DefaultMarkdownSyntaxStyle.heading,
+      bullet: markdown?.bullet_mark ?? DefaultMarkdownSyntaxStyle.bullet,
+      ordered: markdown?.ordered_mark ?? DefaultMarkdownSyntaxStyle.ordered,
+    }),
+    [markdown?.bullet_mark, markdown?.heading_style, markdown?.ordered_mark],
+  );
 
   return {
     inlineExtensions,
@@ -105,5 +118,6 @@ export function useEditorSettings(
     autoLinks,
     autoPair,
     defaultIndent,
+    markdownSyntaxStyle,
   };
 }

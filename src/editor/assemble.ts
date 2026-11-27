@@ -36,7 +36,7 @@ import { gfm } from "@milkdown/kit/preset/gfm";
 import { history } from "@milkdown/kit/plugin/history";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { cursor } from "@milkdown/kit/plugin/cursor";
-import { flashSparkCursor } from "./blink-caret";
+import { blinkingCaretPlugin } from "./blink-caret";
 import { clipboard } from "@milkdown/kit/plugin/clipboard";
 import { indent, indentConfig } from "@milkdown/kit/plugin/indent";
 import { trailing } from "@milkdown/kit/plugin/trailing";
@@ -105,18 +105,23 @@ import { encloseBarLanguageFillAll } from "./fence-lang";
 
 
 import { mermaidCodeBlockConvertReplace, imageTableParse, imageTableSpecPlugin, imageTableInputRuleRule } from "./diagram-node";
+import {
+  explicitImageInput,
+  explicitImageTyping,
+} from "./image-markdown-input";
 
 import { diagramView } from "./diagram-view";
 
 
 
 
-import { mathView } from "./math-view";
+import { mathView } from "./math-view-registry";
 
 
 
 
 import { visionFrequencyView } from "./video-view";
+import { imageSourceSyntaxSpec } from "./image-source-schema";
 
 
 
@@ -196,8 +201,7 @@ import {
 
 import {
   autoLinkBoundary,
-  explicitLinkInput,
-  explicitLinkTyping,
+  explicitLinkDraft,
   linkBoundarySpec,
   selfActionLinkInput,
 } from "./url-link";
@@ -233,6 +237,10 @@ import { writingModePlugin } from "./writing-modes";
 
 import { findPlugin } from "./find";
 import type { CreateOptions } from "./create-types";
+import {
+  markdownStringifyOptions,
+  resolveMarkdownSyntaxStyle,
+} from "./markdown-syntax-style";
 
 
 
@@ -262,6 +270,7 @@ export interface InstallConfigureParameter {
   punctuation: punctuationSettings;
   selfActionMoreCorrect: boolean;
   emoji: boolean;
+  markdownSyntaxStyle?: CreateOptions["markdownSyntaxStyle"];
 
   onChange?: (markdown: string) => void;
 
@@ -292,6 +301,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     punctuation,
     selfActionMoreCorrect,
     emoji,
+    markdownSyntaxStyle,
     onChange,
     options,
   } = parameter;
@@ -316,6 +326,10 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
 
+      const stringifyStyle = resolveMarkdownSyntaxStyle(
+        body2,
+        markdownSyntaxStyle,
+      );
       ctx.update(remarkStringifyOptionsCtx, (prev) => ({
         ...prev,
 
@@ -335,8 +349,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
 
-        bullet: "-" as const,
-        rule: "-" as const,
+        ...markdownStringifyOptions(stringifyStyle),
         handlers: {
           ...prev.handlers,
 
@@ -464,7 +477,11 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
 
-    .use(readOnly ? [] : [explicitLinkTyping()])
+    .use(
+      readOnly
+        ? []
+        : [explicitLinkDraft(), explicitImageTyping()],
+    )
     .use(readOnly || !autoPair ? [] : [autoPairPlugin(true, punctuation)])
     .use(
       readOnly || !keyboardExperienceEnabled
@@ -489,7 +506,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     .use(autoLinks ? [...selfActionLinkInput(), autoLinkBoundary()] : [])
 
 
-    .use(explicitLinkInput())
+    .use(explicitImageInput())
 
 
 
@@ -507,6 +524,10 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
 
+    .use(fillAllImageSliceAttribute)
+
+
+
     .use(blockHTMLSpecPlugin)
     .use(blockHTMLParse())
 
@@ -519,13 +540,6 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
     .use(githubDocsCompat)
-
-
-
-
-    .use(fillAllImageSliceAttribute)
-
-
 
 
 
@@ -553,7 +567,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     .use(history)
     .use(listener)
     .use(cursor)
-    .use(readOnly ? [] : [$prose(() => flashSparkCursor())])
+    .use(readOnly ? [] : [$prose(() => blinkingCaretPlugin())])
 
 
     .use(pastePastePlaceManage(autoLinks))
@@ -673,6 +687,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
 
+    .use(imageSourceSyntaxSpec)
     .use(visionFrequencyView(documentPath))
 
 

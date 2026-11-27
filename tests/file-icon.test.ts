@@ -28,13 +28,13 @@ testCase("Markdown uses its dedicated icon", () => {
 });
 testCase("Code, images, and documents are separated", () => {
   equal(fileIconName("main.rs"), "nota-source-code-symbolic", "rust");
-  equal(fileIconName("cover.webp"), "folio-insert-image-symbolic", "image");
-  equal(fileIconName("notes.txt"), "folio-document-open-symbolic", "text");
+  equal(fileIconName("cover.webp"), "nota-insert-image-symbolic", "image");
+  equal(fileIconName("notes.txt"), "nota-document-open-symbolic", "text");
 });
 testCase("Unknown types and dotfiles have a fallback", () => {
-  equal(fileIconName(".env"), "folio-edit-symbolic", "dotfile");
-  equal(fileIconName("README"), "folio-edit-symbolic", "no extension");
-  equal(fileIconName("archive.bin"), "folio-edit-symbolic", "unknown");
+  equal(fileIconName(".env"), "nota-edit-symbolic", "dotfile");
+  equal(fileIconName("README"), "nota-edit-symbolic", "no extension");
+  equal(fileIconName("archive.bin"), "nota-edit-symbolic", "unknown");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

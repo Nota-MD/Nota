@@ -29,7 +29,6 @@ import type { PluginsState } from "@/ui/usePlugins";
 import type { PreviewModeOutputMouth } from "@/ui/useReviewView";
 import type { MeetingSpeechOutputMouth } from "@/ui/useSession";
 import { usePointLink } from "@/ui/useLinkClick";
-import { useTableBridge } from "@/ui/useTableBridge";
 import { useT } from "@/i18n";
 
 
@@ -89,17 +88,6 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
   const { cellStyleConvertBarOpen, commandState, setCommandState, runCommand, runMenuCommand, disabledCommands, menuChecks, insertImageLike, onSelectionSnapshot, refreshDocs, toast } =
     wiring;
   const { documentApi, findBar, previewOutputMouth, changeActionOutputMouth, MeetingSpeechOutputMouth, plugin, dialog } = wiring;
-
-  useTableBridge({
-    enabled:
-      (settings?.editor.spreadsheet_tables ?? false) &&
-      viewMode === "wysiwyg" &&
-      Boolean(activeDoc),
-    documentId: activeDoc?.id ?? null,
-    root: mainArea,
-    editor,
-    toast,
-  });
 
 
   usePointLink({
@@ -203,12 +191,6 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
         visible={viewMode === "wysiwyg" && Boolean(commandState?.inTable)}
         documentKey={activeDoc?.id ?? ""}
         run={runCommand}
-        spreadsheet={settings?.editor.spreadsheet_tables ?? false}
-        spreadsheetPersistent={
-          viewMode === "wysiwyg" &&
-          Boolean(activeDoc) &&
-          (settings?.editor.spreadsheet_tables ?? false)
-        }
       />
       {inlineReview && (
 
@@ -219,9 +201,10 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           onViewMode={setViewMode}
 
 
-          onCall={(command) => {
+          onCall={async (command) => {
             if (activeJumpPreview) {
-              void plugin.configure(activeJumpPreview.plugin, command);
+              const succeeded = await plugin.configure(activeJumpPreview.plugin, command);
+              if (succeeded) await plugin.receivePreview();
             }
           }}
           onClose={() => {
@@ -267,10 +250,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
 
 
           contentWidth={settings?.content_width ?? 760}
-          limitTextWidth={
-            (settings?.limit_text_width ?? false) &&
-            !(settings?.editor.spreadsheet_tables ?? false)
-          }
+          limitTextWidth={settings?.limit_text_width ?? false}
 
 
           combineWriteLanguage={settings?.editor?.spellcheck_langs[0]}
@@ -279,7 +259,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           documentTypography={settings?.document}
 
 
-          initialStartRollAction={rollActionPosition(activeDoc.path)}
+          initialScrollRatio={rollActionPosition(activeDoc.path)}
           onScroll={(compareExample) => {
             if (activeDoc.path) recordRollAction(activeDoc.path, compareExample);
           }}

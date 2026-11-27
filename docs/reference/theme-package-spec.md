@@ -227,7 +227,7 @@ Nota 编辑区里的正文根等价于 Typora 的 `#write`。主题可以写：
 
 ```css
 [data-ui-style="dusk"] {
-  --icon-folio-close-symbolic: url("./icons/close.svg");
+  --icon-nota-close-symbolic: url("./icons/close.svg");
   --icon-nota-spellcheck-symbolic: url("./icons/spellcheck.svg");
 }
 ```
@@ -236,7 +236,7 @@ Nota 编辑区里的正文根等价于 Typora 的 `#write`。主题可以写：
 
 ```css
 [data-ui-style="dusk"] {
-  --icon-folio-document-save-symbolic: url("./shared/actions/save.svg");
+  --icon-nota-document-save-symbolic: url("./shared/actions/save.svg");
 }
 ```
 

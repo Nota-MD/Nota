@@ -168,11 +168,11 @@ mod tests {
         std::fs::create_dir_all(css_path.parent().unwrap()).unwrap();
 
         let css = r#"
-[data-ui-style="my"] { --icon-folio-close-symbolic: url("../shared/assets/close.svg"); }
+[data-ui-style="my"] { --icon-nota-close-symbolic: url("../shared/assets/close.svg"); }
 @font-face { src: url(../shared/assets/theme.ttf); }
 "#;
         let got = inline(css, &css_path, &root);
-        assert!(got.contains("--icon-folio-close-symbolic: url(\"data:image/svg+xml;base64,"));
+        assert!(got.contains("--icon-nota-close-symbolic: url(\"data:image/svg+xml;base64,"));
         assert!(got.contains("url(\"data:font/ttf;base64,"));
         std::fs::remove_dir_all(root).unwrap();
     }

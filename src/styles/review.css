@@ -135,8 +135,9 @@
 .nota-review-diff .nota-review-del {
   padding: 0 1px;
   border-radius: 2px;
-  background: var(--diff-del-bg);
-  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  color: var(--doc-fg);
+  text-decoration-color: var(--danger);
   box-decoration-break: clone;
   text-decoration: line-through;
 }
@@ -171,11 +172,13 @@
   padding: 0 1px;
   margin: 0;
   border-radius: 2px;
+  color: var(--doc-fg);
   box-decoration-break: clone;
 }
 
 .nota-review-diff .nota-review-add {
-  background: var(--diff-add-bg);
+  background: color-mix(in srgb, var(--success) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 55%, transparent);
   text-decoration: underline;
   text-decoration-color: var(--success);
   text-underline-offset: 0.12em;
@@ -185,8 +188,10 @@
   padding: 0 1px;
   margin: 0;
   border-radius: 2px;
-  background: var(--diff-add-bg);
+  background: color-mix(in srgb, var(--success) 24%, transparent);
+  color: var(--doc-fg);
   box-decoration-break: clone;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 55%, transparent);
   text-decoration: underline;
   text-decoration-color: var(--success);
   text-underline-offset: 0.12em;

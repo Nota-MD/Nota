@@ -227,7 +227,7 @@ Linux 三种反过来要 `dpkg-deb` / `rpmbuild` / linuxdeploy。
 
 **第二类是能省的：架构。** Windows 那一格一条 runner 就能出 x64 和 arm64
 （只是换了 `--target`，SDK 是同一套）；而 macOS 那两格**必须分开**，
-因为 `macos-13` 是 Intel 机器、`macos-latest` 是 Apple Silicon，
+因为 `macos-15-intel` 是 Intel 机器、`macos-latest` 是 Apple Silicon，
 dmg 只能在对应的机器上打——**交叉那一步 Tauri 不做**。
 
 所以落点是 `.github/workflows/release.yml`，六格矩阵。

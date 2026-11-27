@@ -270,7 +270,10 @@ impl Inner {
 
 fn runtime_root() -> Result<PathBuf> {
     let base = dirs::runtime_dir().unwrap_or_else(std::env::temp_dir);
-    Ok(base.join("nota-window-registry-v1"))
+    Ok(base.join(format!(
+        "{}-window-registry-v1",
+        crate::distribution_profile::BINARY_NAME
+    )))
 }
 
 fn active_ids(inner: &Inner) -> Vec<u32> {

@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.18.0-beta"
+version = "0.18.1-beta"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota - a WYSIWYG Markdown editor with Lua extensions"
@@ -19,6 +19,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+serde_json = "1"
 
 [dependencies]
 # Host framework.

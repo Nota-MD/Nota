@@ -603,12 +603,13 @@ export interface AppLang {
   available: { tag: string; label: string }[];
 }
 
-
 export interface trustRecord {
   key_id: string;
 
   name: string;
 }
+
+export * from "./types-distribution";
 
 
 

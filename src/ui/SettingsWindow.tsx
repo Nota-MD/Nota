@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   api,
+  on,
   type PluginInfo,
   type PluginUpdateInfo,
   type Settings,
@@ -131,6 +132,20 @@ export function SettingsWindow() {
     setPluginTrust(trusted);
     setPluginUpdate(updates);
   }, [extensionsEnabled]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void on("nota:settings-package-imported", () => {
+      refreshThemes();
+      void refreshStyles();
+      void refreshPlugins();
+    }).then((stop) => {
+      unlisten = stop;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [refreshPlugins, refreshStyles, refreshThemes]);
 
   useEffect(() => {
     if (!settings) return;

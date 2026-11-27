@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "official",
+  "id": "official",
+  "identity": {
+    "name": "Nota",
+    "productName": "Nota",
+    "binaryName": "nota",
+    "identifier": "io.github.nota.Nota",
+    "publisher": "Leo Lee",
+    "website": "https://nota-md.github.io/",
+    "supportUrl": "https://github.com/Nota-MD/Nota/issues",
+    "dataDirectory": "nota"
+  },
+  "branding": {
+    "logo": null,
+    "icon": null,
+    "primaryColor": null,
+    "uiStyle": "adwaita",
+    "documentTheme": ""
+  },
+  "defaults": {
+    "language": "auto",
+    "uiMode": "auto",
+    "documentTheme": "",
+    "checkForUpdates": false
+  },
+  "bootstrap": {
+    "backup": null,
+    "revision": 0,
+    "allowExtensionSettings": false
+  },
+  "extensions": {
+    "enabledByDefault": [],
+    "bundled": []
+  },
+  "legal": {
+    "copyright": "Copyright (c) 2026, Leo Lee",
+    "upstreamLicense": "LICENSE",
+    "distributionLicense": null,
+    "notice": {}
+  },
+  "updates": {
+    "manifestUrl": "https://github.com/Nota-MD/Nota/releases/latest/download/latest.json",
+    "releasePrefix": "https://github.com/Nota-MD/Nota/releases/download/",
+    "releasePage": "https://github.com/Nota-MD/Nota/releases"
+  },
+  "onboarding": {
+    "mode": "default",
+    "guide": {},
+    "fallbackLocale": "en",
+    "title": {}
+  }
+}

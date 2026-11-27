@@ -29,7 +29,7 @@ pub struct General {
 impl Default for General {
     fn default() -> Self {
         Self {
-            language: crate::lang::AUTO.to_owned(),
+            language: crate::distribution_profile::DEFAULT_LANGUAGE.to_owned(),
             onboarding_seen: false,
             debug_mode: false,
             extensions_enabled: true,

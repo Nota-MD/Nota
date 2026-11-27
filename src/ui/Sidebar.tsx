@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api, type TreeNode } from "@/bridge/ipc";
+import { distributionName } from "@/distribution";
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 
@@ -100,7 +101,7 @@ export function Sidebar({
   const [footerMenu, setFooterMenu] = useState(false);
   const footer = useRef<HTMLDivElement>(null);
   const workspaceName = useMemo(() => {
-    if (!workspace) return "Nota";
+    if (!workspace) return distributionName();
     const parts = workspace.replaceAll("\\", "/").replace(/\/+$/, "").split("/");
     return parts[parts.length - 1] || workspace;
   }, [workspace]);

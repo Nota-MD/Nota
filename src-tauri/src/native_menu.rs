@@ -56,7 +56,8 @@ fn build<R: Runtime>(app: &AppHandle<R>, nodes: &[MenuNode]) -> Result<Menu<R>, 
     let mut items: Vec<Box<dyn IsMenuItem<R>>> = Vec::new();
 
     if cfg!(target_os = "macos") {
-        let about = PredefinedMenuItem::about(app, Some("About Nota"), None).map_err(estr)?;
+        let about_label = format!("About {}", crate::distribution_profile::PRODUCT_NAME);
+        let about = PredefinedMenuItem::about(app, Some(&about_label), None).map_err(estr)?;
         let services = PredefinedMenuItem::services(app, None).map_err(estr)?;
         let hide = PredefinedMenuItem::hide(app, None).map_err(estr)?;
         let hide_others = PredefinedMenuItem::hide_others(app, None).map_err(estr)?;
@@ -65,7 +66,7 @@ fn build<R: Runtime>(app: &AppHandle<R>, nodes: &[MenuNode]) -> Result<Menu<R>, 
         let sep1 = PredefinedMenuItem::separator(app).map_err(estr)?;
         let sep2 = PredefinedMenuItem::separator(app).map_err(estr)?;
 
-        let app_menu = SubmenuBuilder::new(app, "Nota")
+        let app_menu = SubmenuBuilder::new(app, crate::distribution_profile::PRODUCT_NAME)
             .item(&about)
             .item(&sep1)
             .item(&services)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { api, type Settings } from "@/bridge/ipc";
+import { distribution } from "@/distribution";
 import { setLanguage, useT } from "@/i18n";
 import { AboutDialog } from "@/ui/AboutDialog";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
@@ -44,7 +45,12 @@ export function AboutWindow() {
   useAppearance(settings, updateSettings);
 
   if (error) {
-    return <div className="settings-window-error"><p>{t("Could not open About Nota.")}</p><code>{error}</code></div>;
+    return (
+      <div className="settings-window-error">
+        <p>{t("Could not open About {0}.", distribution.identity.productName)}</p>
+        <code>{error}</code>
+      </div>
+    );
   }
   if (!settings) return null;
 

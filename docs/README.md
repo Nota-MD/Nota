@@ -75,6 +75,7 @@ and is not bundled with application installers. References to
 | 11 | [`11-writing-a-plugin.md`](11-writing-a-plugin.md) | Plugin layout, manifest, capabilities, lifecycle and build integration |
 | 12 | [`12-plugin-runtime.md`](12-plugin-runtime.md) | Lua runtime, isolated states and sandbox boundaries |
 | 13 | [`13-lua-api.md`](13-lua-api.md) | Lua API reference for `nota.*` |
+| 14 | [`14-distribution-profiles.md`](14-distribution-profiles.md) | Official and organization Distribution Profiles, bootstrap resources, legal metadata and build-time identity |
 | Experience | [`../DEVELOPMENT_EXPERIENCE.md`](../DEVELOPMENT_EXPERIENCE.md) | Durable engineering lessons and rejected approaches |
 | Reference | [`reference/cde-menu-pixel-fidelity.md`](reference/cde-menu-pixel-fidelity.md) | CDE/Motif menu comparison and pixel-fidelity evidence |
 | Reference | [`reference/theme-package-spec.md`](reference/theme-package-spec.md) | Theme package layout, selectors, variables, assets and Typora compatibility |
@@ -93,7 +94,7 @@ contradict an assumption about readiness:
 
 ## Conventions
 
-- Documents use stable numeric IDs (`01` through `13`). Source comments may cite
+- Documents use stable numeric IDs (`01` through `14`). Source comments may cite
   those IDs.
 - Backlog and BUG identifiers are permanent. Do not delete or reuse them.
 - Every document records its last synchronization date near the top. Update the

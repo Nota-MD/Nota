@@ -192,8 +192,9 @@ fn run_rpc(
                 .ok_or_else(|| "Application state is not ready".to_string())?;
             let docs = state.documents.lock().unwrap().list().len();
             Ok(json!({
-                "app": "Nota",
+                "app": crate::distribution_profile::PRODUCT_NAME,
                 "version": env!("CARGO_PKG_VERSION"),
+                "distribution": crate::distribution_profile::ID,
                 "protocol": 1,
                 "documents": docs,
                 "apiVersion": crate::plugin::manifest::NOTA_PLUGIN_API_VERSION.to_string(),
@@ -218,8 +219,9 @@ fn run_rpc(
                 })
                 .cloned();
             Ok(json!({
-                "app": "Nota",
+                "app": crate::distribution_profile::PRODUCT_NAME,
                 "version": env!("CARGO_PKG_VERSION"),
+                "distribution": crate::distribution_profile::ID,
                 "protocol": 1,
                 "apiVersion": crate::plugin::manifest::NOTA_PLUGIN_API_VERSION.to_string(),
                 "active": active,

@@ -38,6 +38,7 @@ import {
   DangerousProtocol,
   NormalizeLink,
   NormalizeUrl,
+  NormalizeBrowserUrl,
   normalizeExplicitLinkDestination,
   validateExplicitLinkDestination,
   isBareURL,
@@ -206,6 +207,20 @@ testCase("显式 Markdown 链接允许无协议域名并安全规范化", () => 
   equal(explicitLinkSyntax.exec("[GFM](github.com)")?.[1], "GFM", "标签");
   equal(explicitLinkSyntax.exec("[GFM](github.com)")?.[2], "github.com", "地址");
   equal(explicitLinkSyntax.exec("[GFM]()")?.[2], "", "空地址");
+});
+
+testCase("browser opening qualifies bare hosts without changing markdown", () => {
+  equal(NormalizeBrowserUrl("github.com"), "https://github.com", "bare host");
+  equal(
+    NormalizeBrowserUrl("github.com/nota-md/Nota?tab=readme"),
+    "https://github.com/nota-md/Nota?tab=readme",
+    "bare host with path",
+  );
+  equal(NormalizeBrowserUrl("//github.com"), "https://github.com", "protocol-relative URL");
+  equal(NormalizeBrowserUrl("mailto:hi@nota.app"), "mailto:hi@nota.app", "mailto");
+  equal(NormalizeBrowserUrl("tel:+8613800000000"), "tel:+8613800000000", "tel");
+  equal(NormalizeBrowserUrl("docs/readme.md"), null, "relative document path");
+  equal(NormalizeBrowserUrl("#section"), null, "internal anchor");
 });
 
 testCase("输入显式链接时原样保留合法目标", () => {

@@ -7,6 +7,8 @@ pub mod dev_bridge;
 pub mod devserver;
 pub mod diagnostics;
 pub mod diff;
+pub mod distribution_bootstrap;
+pub mod distribution_profile;
 pub mod document;
 pub mod draft;
 pub mod error;
@@ -36,6 +38,7 @@ pub mod remote;
 pub mod session;
 pub mod settings;
 pub mod settings_export;
+pub mod settings_import;
 pub mod settings_watch;
 pub mod settings_window_host;
 pub mod single_instance;
@@ -201,6 +204,18 @@ pub fn run() {
 
             if opens_debug_window {
                 return Ok(());
+            }
+
+            if let Some(resource_dir) = app.path().resource_dir().ok() {
+                match settings_import::apply_embedded_bootstrap(&resource_dir) {
+                    Ok(Some(_)) => {
+                        crate::debug_log!("[nota] distribution bootstrap applied");
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        crate::debug_log!("[nota] distribution bootstrap skipped: {error}");
+                    }
+                }
             }
 
 
@@ -391,7 +406,9 @@ pub fn run() {
 
 
 
-            url_scheme::main_side();
+            if distribution_profile::is_official() {
+                url_scheme::main_side();
+            }
 
 
 
@@ -401,6 +418,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::diagnostics::nota_diagnostics,
+            commands::distribution::nota_distribution_onboarding,
+            commands::distribution::nota_distribution_legal,
+            commands::distribution::nota_distribution_branding,
             commands::dev_bridge::nota_dev_bridge_status,
             commands::dev_bridge::nota_dev_bridge_enable,
             commands::dev_bridge::nota_dev_bridge_disable,
@@ -520,6 +540,8 @@ pub fn run() {
             commands::settings::nota_settings_reset,
             commands::settings::nota_settings_export_inventory,
             commands::settings::nota_settings_export,
+            commands::settings::nota_settings_import_inspect,
+            commands::settings::nota_settings_import,
 
 
             commands::focus::nota_focus_get,
@@ -719,7 +741,8 @@ pub fn run() {
                 if loaded {
                     let window = webview.window();
                     let (width, height) = role.size();
-                    let _ = window.set_title(role.title());
+                    let title = role.title();
+                    let _ = window.set_title(&title);
                     let _ = window.set_size(tauri::LogicalSize::new(width, height));
                     let _ = window.set_skip_taskbar(false);
                     let _ = window.remove_menu();

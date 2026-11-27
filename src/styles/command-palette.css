@@ -24,9 +24,11 @@
 
 .command-palette-input {
   box-sizing: border-box;
+  flex: 0 0 48px;
   align-self: stretch;
-  width: 100%;
-  min-width: 0;
+  inline-size: 100%;
+  min-inline-size: 100%;
+  max-inline-size: 100%;
   height: 48px;
   padding: 0 16px;
   border: 0;

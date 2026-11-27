@@ -9,6 +9,7 @@ import type {
   SettingsExportItem,
   SettingsExportReport,
 } from "@/bridge/types-settings-export";
+import { distributionName } from "@/distribution";
 import { useT } from "@/i18n";
 import { DialogClose } from "@/ui/DialogClose";
 import { useModalTrap } from "@/ui/useModalTrap";
@@ -33,7 +34,8 @@ function defaultPackageName(): string {
     String(now.getMonth() + 1).padStart(2, "0"),
     String(now.getDate()).padStart(2, "0"),
   ].join("-");
-  return `Nota-settings-${stamp}.nota-backup`;
+  const name = distributionName().replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "Nota";
+  return `${name}-settings-${stamp}.nota-backup`;
 }
 
 export function SettingsExportDialog({

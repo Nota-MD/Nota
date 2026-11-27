@@ -59,10 +59,10 @@ testCase("应用清单覆盖五种安装包，开发构建走重建命令", () =
 testCase("宿主固定清单地址且不信任前端 URL", () => {
   const source = read("src-tauri", "src", "update.rs");
   assertValue(
-    source.includes("https://github.com/Nota-MD/Nota/releases/latest/download/latest.json"),
-    "固定清单地址缺失",
+    source.includes("UPDATE_MANIFEST_URL") && source.includes("distribution_profile"),
+    "编译期清单地址缺失",
   );
-  assertValue(source.includes("RELEASE_PREFIX"), "官方 Release 前缀围栏缺失");
+  assertValue(source.includes("UPDATE_RELEASE_PREFIX"), "编译期 Release 前缀围栏缺失");
   assertValue(source.includes("Sha256::digest"), "SHA-256 校验缺失");
   const bridge = read("src", "bridge", "ipc.ts");
   assertValue(!bridge.includes('invoke<UpdateStatus>("nota_update_check", { url'), "前端仍可传 URL");

@@ -98,6 +98,40 @@ pub async fn nota_settings_export(
         .map_err(|e| NotaError::other(format!("Settings package export worker failed: {e}")))?
 }
 
+#[tauri::command]
+pub fn nota_settings_import_inspect(
+    package: String,
+) -> Result<crate::settings_import::PackageInventory> {
+    crate::settings_import::inspect(&package)
+}
+
+#[tauri::command]
+pub async fn nota_settings_import(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    request: crate::settings_import::ImportRequest,
+) -> Result<crate::settings_import::ImportReport> {
+    let mut prepared =
+        tauri::async_runtime::spawn_blocking(move || crate::settings_import::prepare(&request))
+            .await
+            .map_err(|e| {
+                NotaError::other(format!("Settings package import worker failed: {e}"))
+            })??;
+
+    prepared.commit()?;
+    if let Some(next) = prepared.imported_settings() {
+        if let Err(error) = save_settings(&app, &state, next) {
+            prepared.rollback();
+            return Err(error);
+        }
+    }
+
+    let report = prepared.finish();
+    app.emit("nota:settings-package-imported", &report)
+        .map_err(|e| NotaError::other(format!("Could not announce settings import: {e}")))?;
+    Ok(report)
+}
+
 pub(crate) fn save_settings(
     app: &tauri::AppHandle,
     state: &AppState,

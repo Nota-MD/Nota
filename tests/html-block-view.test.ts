@@ -276,7 +276,11 @@ testCase("HTML 链接优先打开，不把点击吞成进入源码编辑", () =>
     "链接分流没有识别 HTML 块",
   );
   assertValue(links.includes("openRawHtmlLink(chain.href"), "HTML 链接没有进入打开流程");
-  assertValue(links.includes("openUrl(address)"), "外部链接没有交给系统浏览器");
+  assertValue(
+    links.includes("const browserUrl = NormalizeBrowserUrl(address)") &&
+      links.includes("openUrl(browserUrl)"),
+    "外部链接没有先规范化再交给系统浏览器",
+  );
   assertValue(links.includes("openDocument(localLocal)"), "相对链接没有交给文档打开流程");
 });
 

@@ -97,9 +97,13 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            ui_style: DEFAULT_UI_STYLE.to_owned(),
-            ui_mode: UiMode::default(),
-            document_theme: String::new(),
+            ui_style: crate::distribution_profile::DEFAULT_UI_STYLE.to_owned(),
+            ui_mode: match crate::distribution_profile::DEFAULT_UI_MODE {
+                "light" => UiMode::Light,
+                "dark" => UiMode::Dark,
+                _ => UiMode::Auto,
+            },
+            document_theme: crate::distribution_profile::DEFAULT_DOCUMENT_THEME.to_owned(),
             ui_font_size: 15,
             content_width: 760,
 

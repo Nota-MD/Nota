@@ -26,7 +26,11 @@ function contains(text4: string, slice: string, description: string): void {
 }
 
 const rust = readFileSync("src-tauri/src/settings_export.rs", "utf8");
+const importRust = readFileSync("src-tauri/src/settings_import.rs", "utf8");
+const importClassify = readFileSync("src-tauri/src/settings_import/classify.rs", "utf8");
+const importFiles = readFileSync("src-tauri/src/settings_import/files.rs", "utf8");
 const dialog = readFileSync("src/ui/settings/SettingsExportDialog.tsx", "utf8");
+const importDialog = readFileSync("src/ui/settings/SettingsImportDialog.tsx", "utf8");
 const settingsDialog = readFileSync("src/ui/settings/SettingsDialog.tsx", "utf8");
 const general = readFileSync("src/ui/settings/panes/GeneralPane.tsx", "utf8");
 const dialogCss = readFileSync("src/styles/settings-export.css", "utf8");
@@ -86,6 +90,19 @@ testCase("settings package commands are registered and the suffix is not an inst
   contains(ipc, 'invoke<SettingsExportInventory>("nota_settings_export_inventory")', "inventory IPC bridge");
   contains(dialog, ".nota-backup", "settings package suffix");
   assertValue(!dialog.toLowerCase().includes("installer.exe"), "the frontend still generates an installer name");
+});
+
+testCase("settings packages can be inspected and imported without trusting archive paths", () => {
+  contains(lib, "nota_settings_import_inspect", "import inspection command");
+  contains(lib, "nota_settings_import,", "import command");
+  contains(ipc, 'invoke<SettingsPackageInventory>("nota_settings_import_inspect"', "inspection IPC bridge");
+  contains(ipc, 'invoke<SettingsImportReport>("nota_settings_import"', "import IPC bridge");
+  contains(importClassify, "normalize_archive_path", "archive path validation");
+  contains(importFiles, "symbolic link", "symlink rejection");
+  contains(importRust, "import-backups", "pre-import backup");
+  contains(importRust, "self.rollback()", "rollback integration");
+  contains(importDialog, "item.sensitive", "sensitive item handling");
+  contains(general, "report.restart_required", "restart result");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

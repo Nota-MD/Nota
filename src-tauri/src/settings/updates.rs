@@ -22,7 +22,7 @@ pub struct Updates {
 impl Default for Updates {
     fn default() -> Self {
         Self {
-            check_on_startup: false,
+            check_on_startup: crate::distribution_profile::DEFAULT_CHECK_UPDATES,
             notify_when_available: true,
             notification_position: NotificationPosition::BottomRight,
         }

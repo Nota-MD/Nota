@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 
 import { defineConfig } from "vite";
@@ -65,5 +66,30 @@ export default defineConfig({
         focusAlarm: fileURLToPath(new URL("./focus-alarm.html", import.meta.url)),
       },
     },
+  },
+  define: {
+    __NOTA_DISTRIBUTION__: JSON.stringify(
+      (() => {
+        const path =
+          process.env.NOTA_DISTRIBUTION_PROFILE ??
+          fileURLToPath(
+            new URL("./distributions/official/distribution.json", import.meta.url),
+          );
+        const profile = JSON.parse(readFileSync(path, "utf8"));
+        const resources = profile.resources ?? {};
+        return {
+          schemaVersion: profile.schemaVersion,
+          kind: profile.kind,
+          id: profile.id,
+          identity: profile.identity,
+          branding: profile.branding,
+          defaults: profile.defaults,
+          legal: profile.legal,
+          updates: profile.updates,
+          onboarding: profile.onboarding,
+          resources,
+        };
+      })(),
+    ),
   },
 });

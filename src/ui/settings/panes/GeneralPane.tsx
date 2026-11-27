@@ -46,6 +46,7 @@ import {
   Value,
 } from "../primitives";
 import { SettingsExportDialog } from "../SettingsExportDialog";
+import { SettingsImportDialog } from "../SettingsImportDialog";
 import { SoftwareUpdatePane } from "@/ui/SoftwareUpdatePane";
 import { paneWriter, type PaneProps } from "./props";
 
@@ -66,8 +67,14 @@ export function GeneralPane({
 
   const [languageTable, setLanguageTable] = useState<AppLang | null>(null);
   const [exportPackageOpen, setExportPackageOpen] = useState(false);
+  const [importPackageOpen, setImportPackageOpen] = useState(false);
   const [exportResult, setExportResult] = useState<SettingsExportReport | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<{
+    path: string;
+    restartRequired: boolean;
+  } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   useEffect(() => {
     let returnActiveActive = true;
     void api
@@ -202,14 +209,37 @@ export function GeneralPane({
             {t("Export settings package…")}
           </ActionButton>
         </SettingRow>
+        <SettingRow
+          label={t("Import settings and data")}
+          description={t(
+            "Inspect a Nota settings package before restoring safely selected settings, data, themes, and extension files.",
+          )}
+        >
+          <ActionButton onClick={() => setImportPackageOpen(true)}>
+            {t("Import settings package…")}
+          </ActionButton>
+        </SettingRow>
         {exportResult && (
           <SettingRow label={t("Last export")}>
             <Value>{exportResult.path}</Value>
           </SettingRow>
         )}
+        {importResult && (
+          <SettingRow label={t("Last import")}>
+            <Value>
+              {importResult.path}
+              {importResult.restartRequired ? ` / ${t("Restart required")}` : ""}
+            </Value>
+          </SettingRow>
+        )}
         {exportError && (
           <SettingRow label={t("Export failed")}>
             <Value>{exportError}</Value>
+          </SettingRow>
+        )}
+        {importError && (
+          <SettingRow label={t("Import failed")}>
+            <Value>{importError}</Value>
           </SettingRow>
         )}
       </SettingsGroup>
@@ -224,6 +254,23 @@ export function GeneralPane({
             setExportPackageOpen(false);
           }}
           onError={(message) => setExportError(message)}
+        />
+      )}
+
+      {importPackageOpen && (
+        <SettingsImportDialog
+          presentation={settingsPresentation}
+          onClose={() => setImportPackageOpen(false)}
+          onImported={(report) => {
+            setImportResult({
+              path: report.package,
+              restartRequired: report.restart_required,
+            });
+            setImportError(null);
+            setImportPackageOpen(false);
+            if (report.settings) onChange(report.settings);
+          }}
+          onError={(message) => setImportError(message)}
         />
       )}
 

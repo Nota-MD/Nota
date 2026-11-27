@@ -31,7 +31,7 @@ import { useEffect } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { RefObject } from "react";
 
-import { DangerousProtocol } from "@/editor/url-link";
+import { DangerousProtocol, NormalizeBrowserUrl } from "@/editor/url-link";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
 import type { Dialogs } from "@/ui/useDialogs";
 import type { Toast } from "@/ui/Toasts";
@@ -95,14 +95,9 @@ function openRawHtmlLink(
   const address = href.trim();
   if (!address || DangerousProtocol(address)) return;
   if (address.startsWith("#")) return;
-  if (address.startsWith("//")) {
-    void openUrl(`https:${address}`).catch((err: unknown) =>
-      toast(t("Could not open the browser: {0}", String(err)), "error"),
-    );
-    return;
-  }
-  if (/^(?:https?:|mailto:|tel:)/i.test(address)) {
-    void openUrl(address).catch((err: unknown) =>
+  const browserUrl = NormalizeBrowserUrl(address);
+  if (browserUrl) {
+    void openUrl(browserUrl).catch((err: unknown) =>
       toast(t("Could not open the browser: {0}", String(err)), "error"),
     );
     return;
@@ -195,16 +190,9 @@ export function usePointLink({
       e.preventDefault();
 
       if (e.ctrlKey || e.metaKey) {
-
-
-
-        if (!chain.href.trim() || DangerousProtocol(chain.href)) return;
-
-
-
-
-
-        void openUrl(chain.href).catch((err: unknown) =>
+        const browserUrl = NormalizeBrowserUrl(chain.href);
+        if (!browserUrl) return;
+        void openUrl(browserUrl).catch((err: unknown) =>
           toast(t("Could not open the browser: {0}", String(err)), "error"),
         );
         return;

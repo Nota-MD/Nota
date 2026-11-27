@@ -39,8 +39,9 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+import { distributionName } from "@/distribution";
 
-export const shouldUseName = "Nota";
+export const shouldUseName = distributionName();
 
 
 

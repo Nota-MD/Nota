@@ -5,6 +5,7 @@
 pub mod dev_bridge;
 pub mod diagnostics;
 pub mod diff;
+pub mod distribution;
 pub mod document;
 pub mod draft;
 pub mod export;

@@ -146,6 +146,37 @@
   color: var(--fg-muted);
 }
 
+.settings-import-empty {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+}
+
+.settings-import-source {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0 2px 10px;
+}
+
+.settings-import-source strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-import-source small,
+.settings-import-message {
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+}
+
+.settings-import-message {
+  margin: 8px 2px 0;
+}
+
 @media (max-width: 680px) {
   .settings-export-dialog {
     min-width: 0;

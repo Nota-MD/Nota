@@ -1,0 +1,6 @@
+Example University distribution terms
+
+This distribution is maintained by Example University. It contains Nota and
+remains subject to the upstream Nota license and all applicable third-party
+licenses. Example University may add support, branding, and institution-specific
+defaults without changing the license of the underlying software.

@@ -145,6 +145,12 @@ testCase("shortcut, handler, overlay and translations are wired", () => {
     /\.command-palette-input\s*\{[^}]*box-sizing:\s*border-box/s.test(paletteCss),
     "command palette input padding is included outside its width",
   );
+  assert(
+    /\.command-palette-input\s*\{[^}]*flex:\s*0\s+0\s+48px[^}]*min-inline-size:\s*100%/s.test(
+      paletteCss,
+    ),
+    "command palette input must span the full panel in WebKit",
+  );
 });
 
 console.log(`\nCommand palette: ${passed} passed, ${failed} failed`);

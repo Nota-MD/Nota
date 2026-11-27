@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{NotaError, Result};
 
-pub const APP_DIR: &str = "nota";
+pub const APP_DIR: &str = crate::distribution_profile::DATA_DIRECTORY;
 
 pub fn config_dir() -> Result<PathBuf> {
     let base = dirs::config_dir().ok_or(NotaError::NoHomeDir)?;

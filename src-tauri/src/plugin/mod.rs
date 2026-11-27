@@ -64,6 +64,21 @@ impl DeferredDiscovery {
         let plugin_thread_success = app.clone();
         tauri::async_runtime::spawn_blocking(move || {
             std::thread::sleep(std::time::Duration::from_millis(350));
+            if let Some(resource_dir_ref) = resource_dir.as_deref() {
+                let mut bootstrap = PluginHost::empty(&base);
+                if let Err(error) = crate::distribution_bootstrap::apply_extension_defaults(
+                    &mut bootstrap,
+                    resource_dir_ref,
+                ) {
+                    crate::debug_log!("[nota] extension defaults skipped: {error}");
+                }
+                if let Err(error) = crate::distribution_bootstrap::install_bundled_extensions(
+                    &mut bootstrap,
+                    resource_dir_ref,
+                ) {
+                    crate::debug_log!("[nota] bundled extension setup skipped: {error}");
+                }
+            }
             let loaded = PluginHost::discover(resource_dir, &base);
             crate::debug_log!("[nota] loaded {} plugins", loaded.count());
             let state = plugin_thread_success.state::<crate::state::AppState>();
@@ -635,8 +650,16 @@ fn setting_options(plugin: &LuaPlugin, command: &str) -> Vec<PluginSettingOption
             Some(PluginSettingOption {
                 value,
                 label,
-                editable: item.get::<Option<bool>>("editable").ok().flatten().unwrap_or(false),
-                deletable: item.get::<Option<bool>>("deletable").ok().flatten().unwrap_or(false),
+                editable: item
+                    .get::<Option<bool>>("editable")
+                    .ok()
+                    .flatten()
+                    .unwrap_or(false),
+                deletable: item
+                    .get::<Option<bool>>("deletable")
+                    .ok()
+                    .flatten()
+                    .unwrap_or(false),
             })
         })
         .collect()

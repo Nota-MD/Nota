@@ -67,6 +67,18 @@ export function NormalizeUrl(candidate: string): string | null {
   return address;
 }
 
+export function NormalizeBrowserUrl(candidate: string): string | null {
+  const source = candidate.trim();
+  if (source === "" || /\s/.test(source) || DangerousProtocol(source)) return null;
+  if (source.startsWith("//")) return NormalizeUrl(`https:${source}`);
+  if (/^https?:\/\//i.test(source)) return NormalizeUrl(source);
+  if (/^(?:mailto:|tel:)/i.test(source)) return source;
+  const email = NormalizeLink(source);
+  if (email) return email.href;
+  const host = source.split(/[/?#]/, 1)[0] ?? "";
+  return isLikeMainMachineName(host) ? NormalizeUrl(`https://${source}`) : null;
+}
+
 
 export interface NormalizedLink {
   text: string;

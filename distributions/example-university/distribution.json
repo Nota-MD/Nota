@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "kind": "organization",
+  "id": "example-university",
+  "identity": {
+    "name": "Example University",
+    "productName": "Nota for Example University",
+    "binaryName": "nota-example-university",
+    "identifier": "edu.example.university.nota",
+    "publisher": "Example University",
+    "website": "https://example.edu/",
+    "supportUrl": "https://example.edu/support",
+    "dataDirectory": "nota-example-university"
+  },
+  "branding": {
+    "logo": "assets/logo.svg",
+    "icon": "assets/icon.svg",
+    "primaryColor": "#315a8a",
+    "uiStyle": "adwaita",
+    "documentTheme": ""
+  },
+  "defaults": {
+    "language": "en",
+    "uiMode": "auto",
+    "documentTheme": "",
+    "checkForUpdates": false
+  },
+  "bootstrap": {
+    "backup": null,
+    "revision": 0,
+    "allowExtensionSettings": false
+  },
+  "extensions": {
+    "enabledByDefault": [],
+    "bundled": []
+  },
+  "legal": {
+    "copyright": "Copyright 2026 Example University",
+    "upstreamLicense": "LICENSE",
+    "distributionLicense": "assets/LICENSE-EXAMPLE.txt",
+    "notice": {
+      "en": "assets/notice-en.html",
+      "zh-CN": "assets/notice-zh-CN.html"
+    }
+  },
+  "updates": {
+    "manifestUrl": null,
+    "releasePrefix": null,
+    "releasePage": null
+  },
+  "onboarding": {
+    "mode": "before-default",
+    "guide": {
+      "en": "assets/onboarding-en.html",
+      "zh-CN": "assets/onboarding-zh-CN.html"
+    },
+    "fallbackLocale": "en",
+    "title": {
+      "en": "Welcome to Nota for Example University",
+      "zh-CN": "欢迎使用 Example University 版 Nota"
+    }
+  }
+}

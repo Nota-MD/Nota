@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify";
 import { useEffect, useRef, useState } from "react";
 
 
@@ -6,7 +7,8 @@ import { getVersion } from "@tauri-apps/api/app";
 
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-import { api } from "@/bridge/ipc";
+import { api, type DistributionLegal } from "@/bridge/ipc";
+import { distribution } from "@/distribution";
 import { sendThanksNameSingle } from "@/ui/credits";
 import type { Diagnostics } from "@/bridge/types";
 import { useT } from "@/i18n";
@@ -28,8 +30,8 @@ type AboutPage =
   | "license";
 
 
-const netStation = "";
-const feedback = "";
+const netStation = distribution.identity.website;
+const feedback = distribution.identity.supportUrl;
 
 
 interface ExternalChainLine {
@@ -85,6 +87,11 @@ export function AboutDialog({
 
 
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [distributionLegal, setDistributionLegal] = useState<DistributionLegal | null>(null);
+  const [distributionBranding, setDistributionBranding] = useState<{
+    logo_svg: string | null;
+    primary_color: string | null;
+  } | null>(null);
   const versionClicks = useRef<number[]>([]);
   const [configureTryNotice, setConfigureTryNotice] = useState<string | null>(null);
 
@@ -99,6 +106,36 @@ export function AboutDialog({
       });
     return () => {
       returnAt = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    void api.distribution
+      .branding()
+      .then((value) => {
+        if (alive) setDistributionBranding(value);
+      })
+      .catch(() => {
+        if (alive) setDistributionBranding(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    void api.distribution
+      .legal()
+      .then((value) => {
+        if (alive) setDistributionLegal(value);
+      })
+      .catch(() => {
+        if (alive) setDistributionLegal(null);
+      });
+    return () => {
+      alive = false;
     };
   }, []);
 
@@ -139,6 +176,17 @@ export function AboutDialog({
 
 
   const sendThanks = sendThanksNameSingle(t);
+  const distributionNotice = distributionLegal?.notice
+    ? DOMPurify.sanitize(distributionLegal.notice, {
+        FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "link", "meta"],
+        FORBID_ATTR: ["srcdoc"],
+      })
+    : "";
+  const distributionLogo = distributionBranding?.logo_svg
+    ? DOMPurify.sanitize(distributionBranding.logo_svg, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+      })
+    : "";
 
 
   const rightLimit: readonly { name3: string; description: string }[] = [
@@ -317,7 +365,7 @@ export function AboutDialog({
           data-window-standalone={standalone || undefined}
           role="dialog"
           aria-modal="true"
-          aria-label={t("About Nota")}
+          aria-label={t("About {0}", distribution.identity.productName)}
         >
 
           {!standalone && (
@@ -331,23 +379,35 @@ export function AboutDialog({
 
 
 
-              <svg
-                className="about-icon"
-                width={128}
-                height={128}
-                viewBox={markRecognizeView}
-                aria-hidden="true"
-                dangerouslySetInnerHTML={{ __html: markRecognize(0, 0, 1254, "about") }}
+              {distributionLogo ? (
+                <div
+                  className="about-icon about-custom-icon"
+                  aria-hidden="true"
+                  dangerouslySetInnerHTML={{ __html: distributionLogo }}
+                />
+              ) : (
+                <svg
+                  className="about-icon"
+                  width={128}
+                  height={128}
+                  viewBox={markRecognizeView}
+                  aria-hidden="true"
+                  dangerouslySetInnerHTML={{ __html: markRecognize(0, 0, 1254, "about") }}
+                />
+              )}
+
+
+              <div
+                className="about-name"
+                role="img"
+                aria-label={distribution.identity.productName}
               />
 
 
-            <div className="about-name" role="img" aria-label="Nota" />
 
 
 
-
-
-              <div className="about-developer">Leo Lee</div>
+              <div className="about-developer">{distribution.identity.publisher}</div>
               <button
                 type="button"
                 className="about-version"
@@ -483,20 +543,37 @@ export function AboutDialog({
                 )}
 
                 {page === "legal" && (
-                  <div className="about-item">
-                    <div className="about-item-name">
-
-
-                      <button
-                        type="button"
-                        className="about-link"
-                        onClick={() => setPage("license")}
-                      >
-                        {t("{0} License", licenseShortName)}
-                      </button>
+                  <>
+                    <div className="about-item">
+                      <div className="about-item-name">
+                        <button
+                          type="button"
+                          className="about-link"
+                          onClick={() => setPage("license")}
+                        >
+                          {t("{0} License", licenseShortName)}
+                        </button>
+                      </div>
+                      <div className="about-item-text">
+                        {distributionLegal?.copyright ?? "Copyright (c) 2026, Leo Lee"}
+                      </div>
                     </div>
-                    <div className="about-item-text">Copyright (c) 2026, Leo Lee</div>
-                  </div>
+                    {distributionLegal?.distribution_license && (
+                      <section className="about-item about-distribution-legal">
+                        <h3>{t("Distribution terms")}</h3>
+                        <pre className="lic-text">{distributionLegal.distribution_license}</pre>
+                      </section>
+                    )}
+                    {distributionNotice && (
+                      <section className="about-item about-distribution-legal">
+                        <h3>{t("Distribution notice")}</h3>
+                        <div
+                          className="about-item-text"
+                          dangerouslySetInnerHTML={{ __html: distributionNotice }}
+                        />
+                      </section>
+                    )}
+                  </>
                 )}
 
 

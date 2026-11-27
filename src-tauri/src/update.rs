@@ -10,8 +10,6 @@ use sha2::{Digest, Sha256};
 use crate::error::{NotaError, Result};
 use crate::remote;
 
-const MANIFEST_URL: &str = "https://github.com/Nota-MD/Nota/releases/latest/download/latest.json";
-const RELEASE_PREFIX: &str = "https://github.com/Nota-MD/Nota/releases/download/";
 const MANIFEST_LIMIT: u64 = 1024 * 1024;
 const PACKAGE_LIMIT: u64 = 256 * 1024 * 1024;
 const MANIFEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -119,10 +117,14 @@ fn platform_install_kind() -> InstallKind {
     #[cfg(target_os = "windows")]
     {
         if let Ok(exe) = std::env::current_exe() {
-            if exe
-                .parent()
-                .is_some_and(|directory_2| directory_2.join("nota-portable.marker").is_file())
-            {
+            if exe.parent().is_some_and(|directory_2| {
+                directory_2
+                    .join(format!(
+                        "{}-portable.marker",
+                        crate::distribution_profile::BINARY_NAME
+                    ))
+                    .is_file()
+            }) {
                 return InstallKind::Exe;
             }
             if exe
@@ -144,11 +146,16 @@ fn platform_install_kind() -> InstallKind {
                 return InstallKind::Dev;
             }
         }
-        if name_zero_success_work("dpkg-query", &["-W", "nota"]) {
-            return InstallKind::Deb;
-        }
-        if name_zero_success_work("rpm", &["-q", "nota"]) {
-            return InstallKind::Rpm;
+        for package in [
+            crate::distribution_profile::PACKAGE_NAME,
+            crate::distribution_profile::BINARY_NAME,
+        ] {
+            if name_zero_success_work("dpkg-query", &["-W", package]) {
+                return InstallKind::Deb;
+            }
+            if name_zero_success_work("rpm", &["-q", package]) {
+                return InstallKind::Rpm;
+            }
         }
         let emit_line_half = fs::read_to_string("/etc/os-release")
             .unwrap_or_default()
@@ -264,7 +271,10 @@ fn half_current_is_and_method(half_current: &str) -> bool {
 }
 
 fn get_manifest(replacements: &str) -> Result<UpdateManifest> {
-    let bytes = get_network(MANIFEST_URL, replacements, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
+    let manifest_url = crate::distribution_profile::UPDATE_MANIFEST_URL.ok_or_else(|| {
+        NotaError::other("This Nota distribution does not provide an update manifest")
+    })?;
+    let bytes = get_network(manifest_url, replacements, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
     serde_json::from_slice(&bytes)
         .map_err(|e| NotaError::other(format!("Could not parse the update manifest: {e}")))
 }
@@ -626,14 +636,19 @@ fn by_install_name_zero_say_name(kind_line: InstallKind) -> String {
 }
 
 fn and_method_download_address(address_2: &str) -> bool {
-    address_2.starts_with(RELEASE_PREFIX)
+    crate::distribution_profile::UPDATE_RELEASE_PREFIX
+        .is_some_and(|prefix| address_2.starts_with(prefix))
 }
 
 fn and_method_page_surface(address_2: &str) -> String {
-    if address_2.starts_with("https://github.com/Nota-MD/Nota/") {
+    if crate::distribution_profile::UPDATE_RELEASE_PAGE
+        .is_some_and(|page| address_2.starts_with(page))
+    {
         address_2.to_string()
     } else {
-        "https://github.com/Nota-MD/Nota/releases".to_string()
+        crate::distribution_profile::UPDATE_RELEASE_PAGE
+            .unwrap_or("https://github.com/Nota-MD/Nota/releases")
+            .to_string()
     }
 }
 

@@ -11,9 +11,6 @@ use std::io::{Read, Write};
 #[cfg(unix)]
 const MAX_FRAME: u64 = 64 * 1024;
 
-#[cfg(unix)]
-const SOCKET_FILE: &str = "nota.sock";
-
 pub enum Claim {
     First(Listener),
 
@@ -50,7 +47,7 @@ pub fn socket_path() -> Result<PathBuf> {
         Some(d) => d,
         None => crate::paths::data_dir()?,
     };
-    Ok(base.join(SOCKET_FILE))
+    Ok(base.join(format!("{}.sock", crate::distribution_profile::BINARY_NAME)))
 }
 
 #[cfg(unix)]

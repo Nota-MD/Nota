@@ -244,6 +244,7 @@ summary cannot replace the submitter's verification in a real window.
 | [`docs/11-writing-a-plugin.md`](docs/11-writing-a-plugin.md) | Plugin authoring guide |
 | [`docs/12-plugin-runtime.md`](docs/12-plugin-runtime.md) | Plugin runtime and sandbox |
 | [`docs/13-lua-api.md`](docs/13-lua-api.md) | Lua API reference |
+| [`docs/14-distribution-profiles.md`](docs/14-distribution-profiles.md) | Distribution Profile schema, official identity, bootstrap and build workflow |
 
 ## 8. Source registry
 
@@ -252,8 +253,10 @@ is not obvious from a top-level directory name:
 
 ```text
 bridge/types-app-settings.ts
+bridge/types-distribution.ts
 bridge/types-settings-export.ts
 bridge/types-settings.ts
+commands/distribution.rs
 tests/browser-shortcuts.test.ts
 commands/diff.rs
 commands/path_kind.rs
@@ -262,6 +265,7 @@ commands/table_width.rs
 commands/watch.rs
 commands/window_registry.rs
 debug-log.tsx
+distribution.ts
 editor/block-keys.ts
 editor/caret-commander.ts
 editor/create-types.ts
@@ -297,6 +301,12 @@ settings/markdown.rs
 settings/mod.rs
 settings/updates.rs
 settings_export.rs
+settings_import.rs
+settings_import/files.rs
+settings_import/classify.rs
+settings_import/tests.rs
+distribution_bootstrap.rs
+distribution_profile.rs
 table_width.rs
 window_registry.rs
 styles/code-block.css
@@ -326,6 +336,7 @@ ui/document-save-text.ts
 ui/browser-shortcuts.ts
 ui/recentMenu.ts
 ui/settings/SettingsExportDialog.tsx
+ui/settings/SettingsImportDialog.tsx
 ui/settings/panes/AppearancePane.tsx
 ui/settings/panes/DocThemePane.tsx
 ui/settings/panes/EditorPane.tsx

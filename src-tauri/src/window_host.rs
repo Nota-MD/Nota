@@ -57,12 +57,13 @@ impl WindowRole {
         }
     }
 
-    pub fn title(self) -> &'static str {
+    pub fn title(self) -> String {
+        let product = crate::distribution_profile::PRODUCT_NAME;
         match self {
-            Self::Settings => "Nota Settings",
-            Self::About => "About Nota",
-            Self::DebugLog => "Nota Debug Log",
-            Self::Editor => "Nota",
+            Self::Settings => format!("{product} Settings"),
+            Self::About => format!("About {product}"),
+            Self::DebugLog => format!("{product} Debug Log"),
+            Self::Editor => product.to_owned(),
         }
     }
 

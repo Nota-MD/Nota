@@ -128,7 +128,9 @@ impl Default for Appearance {
             dark_theme_separate: false,
             dark_document_theme: String::new(),
 
-            accent: String::new(),
+            accent: crate::distribution_profile::DEFAULT_ACCENT
+                .unwrap_or_default()
+                .to_owned(),
 
             sidebar_width: 240,
 

@@ -26,11 +26,17 @@ import type {
   PickerEntry, PickerPlace, PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
   MeetingSpeech, PathKindClass, CombineWriteWordDictionary, PrintBackend, PrintEnvironment, PrintPreview,
   WindowRegistrySnapshot, WindowTransferRequest,
+  DistributionOnboarding,
+  DistributionLegal,
+  DistributionBranding,
 } from "./types";
 import type {
+  SettingsImportReport,
+  SettingsImportRequest,
   SettingsExportInventory,
   SettingsExportReport,
   SettingsExportRequest,
+  SettingsPackageInventory,
 } from "./types-settings-export";
 
 
@@ -297,6 +303,12 @@ export const api = {
 
   appLang: () => invoke<AppLang>("nota_app_lang"),
 
+  distribution: {
+    onboarding: () => invoke<DistributionOnboarding>("nota_distribution_onboarding"),
+    legal: () => invoke<DistributionLegal>("nota_distribution_legal"),
+    branding: () => invoke<DistributionBranding>("nota_distribution_branding"),
+  },
+
   settings: {
     get: () => invoke<Settings>("nota_settings_get"),
     set: (settings: Settings) => invoke<void>("nota_settings_set", { settings }),
@@ -304,6 +316,12 @@ export const api = {
       invoke<SettingsExportInventory>("nota_settings_export_inventory"),
     exportPackage: (request: SettingsExportRequest) =>
       invoke<SettingsExportReport>("nota_settings_export", { request }),
+    importInspect: (packagePath: string) =>
+      invoke<SettingsPackageInventory>("nota_settings_import_inspect", {
+        package: packagePath,
+      }),
+    importPackage: (request: SettingsImportRequest) =>
+      invoke<SettingsImportReport>("nota_settings_import", { request }),
 
 
 

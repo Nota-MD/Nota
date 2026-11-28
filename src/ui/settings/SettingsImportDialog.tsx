@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { api } from "@/bridge/ipc";
@@ -12,6 +12,7 @@ import { open } from "@/ui/file-picker";
 import { useModalTrap } from "@/ui/useModalTrap";
 
 interface Props {
+  initialPackagePath: string;
   onClose: () => void;
   onImported: (report: SettingsImportReport) => void;
   onError: (message: string) => void;
@@ -25,6 +26,7 @@ function prettyBytes(bytes: number): string {
 }
 
 export function SettingsImportDialog({
+  initialPackagePath,
   onClose,
   onImported,
   onError,
@@ -32,13 +34,46 @@ export function SettingsImportDialog({
 }: Props) {
   const t = useT();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const [packagePath, setPackagePath] = useState<string | null>(null);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const [packagePath, setPackagePath] = useState<string | null>(initialPackagePath);
   const [inventory, setInventory] = useState<SettingsPackageInventory | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useModalTrap(dialogRef, { onEscape: () => !busy && onClose() });
+
+  useEffect(() => {
+    let alive = true;
+    setBusy(true);
+    setMessage(null);
+    void api.settings
+      .importInspect(initialPackagePath)
+      .then((next) => {
+        if (!alive) return;
+        setInventory(next);
+        setSelected(
+          new Set(next.items.filter((item) => !item.sensitive).map((item) => item.id)),
+        );
+      })
+      .catch((error) => {
+        if (alive) {
+          const text = t(
+            "Could not inspect the settings package: {0}",
+            String(error),
+          );
+          setMessage(text);
+          onErrorRef.current(text);
+        }
+      })
+      .finally(() => {
+        if (alive) setBusy(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [initialPackagePath]);
 
   const label = (id: string): string => {
     const names: Record<string, string> = {
@@ -58,6 +93,9 @@ export function SettingsImportDialog({
     }
     if (id.startsWith("plugin-data:")) {
       return t("Extension data: {0}", id.slice("plugin-data:".length));
+    }
+    if (id.startsWith("plugin-package:")) {
+      return t("Extension package: {0}", id.slice("plugin-package:".length));
     }
     return id;
   };
@@ -82,7 +120,9 @@ export function SettingsImportDialog({
         new Set(next.items.filter((item) => !item.sensitive).map((item) => item.id)),
       );
     } catch (error) {
-      onError(t("Could not inspect the settings package: {0}", String(error)));
+      const text = t("Could not inspect the settings package: {0}", String(error));
+      setMessage(text);
+      onError(text);
     } finally {
       setBusy(false);
     }
@@ -100,7 +140,7 @@ export function SettingsImportDialog({
   const importPackage = async () => {
     if (busy || !packagePath || selected.size === 0) {
       if (selected.size === 0) {
-        setMessage(t("Select at least one settings or data item to import."));
+        setMessage(t("Select at least one settings, data, or extension package to import."));
       }
       return;
     }
@@ -150,9 +190,17 @@ export function SettingsImportDialog({
 
         {!inventory ? (
           <div className="settings-import-empty">
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void choosePackage()}>
-              {busy ? t("Reading…") : t("Choose settings package…")}
-            </button>
+            {busy ? (
+              <p className="settings-export-empty">{t("Reading…")}</p>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void choosePackage()}
+              >
+                {t("Choose settings package…")}
+              </button>
+            )}
           </div>
         ) : (
           <>

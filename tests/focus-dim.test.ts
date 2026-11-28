@@ -235,15 +235,15 @@ testCase("`data-focus-dim` 的三条规则都用**同一个**属性名（拼错�
   }
 });
 
-testCase("两条压暗选择器都读 `var(--focus-dim)`（不能一条写死数值）", () => {
-  // ⚠️ 这是本组最要紧的一条：`.nota-dim`（所见即所得）与
+testCase("两条压暗路径都读 `var(--focus-dim)`（不能一条写死数值）", () => {
+  // ⚠️ 这是本组最要紧的一条：`.nota-focus-container`（所见即所得）与
   // `.cm-editor.nota-focus .cm-line:not(.nota-focus-on)`（源码模式）**各写一个
   // 数**的话，症状是"拨了开关只有一半跟着变"——用户得把同一条路走两遍才发现。
   //
   // ⚠️ **不按"从哪儿到哪儿"切片**（第一版就是那么写的，切错了）：`--focus-dim`
   // 那一节与两条选择器之间还隔着注释，而 `.nota-focus-on` 这个名字**先**出现在
   // 第二条选择器的 `:not(…)` 里——按名字找尾，切出来只有一条，测试自己会误报。
-  // 改成全文件数数：这个文件里 `var(--focus-dim)` 只该有那两处。
+  // 改成全文件数数：这个文件里 `opacity: var(--focus-dim)` 只该有那两处。
   const useChangeMeasure = [...css.matchAll(/opacity: var\(--focus-dim\);/g)].length;
   equal(useChangeMeasure, 2, "两条选择器都该读变量");
   // 原来那两个写死的 `0.32` 一个都不该剩（只剩 `:root` 那一处声明，
@@ -252,6 +252,26 @@ testCase("两条压暗选择器都读 `var(--focus-dim)`（不能一条写死数
   // 标准那一档的数值只该出现**一次**（`:root` 那行）。多出来的那一次就是
   // 有人把它又抄进了某条选择器里。
   equal([...css.matchAll(/0\.32/g)].length, 1, "`0.32` 只该在 `:root` 那一行出现");
+});
+
+testCase("专注模式只标记光标路径，不逐块生成压暗装饰", () => {
+  const modes = read("src/editor/writing-modes.ts");
+  assertValue(
+    modes.includes("focusPathClass") && modes.includes("focusContainerClass"),
+    "缺少光标路径与容器装饰类",
+  );
+  assertValue(
+    !modes.includes("parent.forEach((child3"),
+    "选区变化仍在遍历父节点的全部兄弟块",
+  );
+  assertValue(
+    modes.includes("$from.before(depth)"),
+    "路径装饰没有直接使用解析后的节点位置",
+  );
+  assertValue(
+    css.includes(".ProseMirror .nota-focus-container > :not(.nota-focus-path)"),
+    "CSS 没有按路径容器压暗兄弟块",
+  );
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────── */

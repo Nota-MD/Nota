@@ -325,6 +325,7 @@ type LatexMathDelimiterWorkFactory = Parameters<
 export const latexMathDelimiterPlugin: ReturnType<LatexMathDelimiterWorkFactory> = () => (tree, textItem) => {
   const source3 = typeof textItem?.value === "string" ? textItem.value : "";
   if (!source3) return;
+  if (!source3.includes("\\(") && !source3.includes("\\[")) return;
   const walk = (node: MdastMathNode): void => {
     if (node.type === "text") return;
     if (!node.children) return;

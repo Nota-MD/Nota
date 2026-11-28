@@ -48,6 +48,7 @@ import {
 import { SettingsExportDialog } from "../SettingsExportDialog";
 import { SettingsImportDialog } from "../SettingsImportDialog";
 import { SoftwareUpdatePane } from "@/ui/SoftwareUpdatePane";
+import { open } from "@/ui/file-picker";
 import { paneWriter, type PaneProps } from "./props";
 
 export function GeneralPane({
@@ -67,7 +68,7 @@ export function GeneralPane({
 
   const [languageTable, setLanguageTable] = useState<AppLang | null>(null);
   const [exportPackageOpen, setExportPackageOpen] = useState(false);
-  const [importPackageOpen, setImportPackageOpen] = useState(false);
+  const [importPackagePath, setImportPackagePath] = useState<string | null>(null);
   const [exportResult, setExportResult] = useState<SettingsExportReport | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<{
@@ -94,6 +95,17 @@ export function GeneralPane({
     { value: "bottom-right", label: t("Bottom right") },
     { value: "top-center", label: t("Top center") },
   ];
+
+  const chooseImportPackage = async () => {
+    const path = await open({
+      title: t("Choose settings package"),
+      multiple: false,
+      filters: [
+        { name: t("Nota settings package"), extensions: ["nota-backup", "zip"] },
+      ],
+    }).catch(() => null);
+    if (path) setImportPackagePath(path);
+  };
 
   return (
     <>
@@ -202,7 +214,7 @@ export function GeneralPane({
         <SettingRow
           label={t("Export settings and data")}
           description={t(
-            "Choose program settings, user data, and each extension's settings or data independently. The result is a ZIP-based settings package, not an application installer.",
+            "Choose program settings, user data, and each extension's settings, data, or installation package independently. The result is a ZIP-based settings package, not an application installer.",
           )}
         >
           <ActionButton onClick={() => setExportPackageOpen(true)}>
@@ -215,7 +227,7 @@ export function GeneralPane({
             "Inspect a Nota settings package before restoring safely selected settings, data, themes, and extension files.",
           )}
         >
-          <ActionButton onClick={() => setImportPackageOpen(true)}>
+          <ActionButton onClick={() => void chooseImportPackage()}>
             {t("Import settings package…")}
           </ActionButton>
         </SettingRow>
@@ -257,17 +269,18 @@ export function GeneralPane({
         />
       )}
 
-      {importPackageOpen && (
+      {importPackagePath && (
         <SettingsImportDialog
+          initialPackagePath={importPackagePath}
           presentation={settingsPresentation}
-          onClose={() => setImportPackageOpen(false)}
+          onClose={() => setImportPackagePath(null)}
           onImported={(report) => {
             setImportResult({
               path: report.package,
               restartRequired: report.restart_required,
             });
             setImportError(null);
-            setImportPackageOpen(false);
+            setImportPackagePath(null);
             if (report.settings) onChange(report.settings);
           }}
           onError={(message) => setImportError(message)}

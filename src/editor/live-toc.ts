@@ -4,6 +4,7 @@ import {
   PluginKey,
   TextSelection,
   type EditorState,
+  type Transaction,
 } from "@milkdown/kit/prose/state";
 import {
   Decoration,
@@ -105,14 +106,18 @@ function renderToc(view: EditorView, headings: readonly HeadingEntry[]): HTMLEle
 
 export function createLiveTocDecorations(state: EditorState): DecorationSet {
   const { doc } = state;
+  const slots: Array<{ from: number; to: number }> = [];
+  doc.forEach((node, offset) => {
+    if (!tocParagraph(node)) return;
+    slots.push({ from: offset, to: offset + node.nodeSize });
+  });
+  if (!slots.length) return DecorationSet.empty;
+
   const headings = collectHeadings(doc);
   if (!headings.length) return DecorationSet.empty;
 
   const decorations: Decoration[] = [];
-  doc.forEach((node, offset) => {
-    if (!tocParagraph(node)) return;
-    const from = offset;
-    const to = offset + node.nodeSize;
+  for (const { from, to } of slots) {
     decorations.push(
       Decoration.node(from, to, {
         class: "nota-live-toc-slot",
@@ -130,18 +135,52 @@ export function createLiveTocDecorations(state: EditorState): DecorationSet {
         ignoreSelection: true,
       }),
     );
-  });
+  }
   return DecorationSet.create(doc, decorations);
 }
 
-const liveTocKey = new PluginKey("nota-live-toc");
+const liveTocKey = new PluginKey<boolean>("nota-live-toc");
+
+function hasTocSlot(doc: PMNode): boolean {
+  let found = false;
+  doc.forEach((node) => {
+    if (tocParagraph(node)) found = true;
+  });
+  return found;
+}
+
+function changedRangeHasToc(state: EditorState, transaction: Transaction): boolean {
+  let found = false;
+  for (const map of transaction.mapping.maps) {
+    (map as { forEach: (callback: (from: number, to: number, newFrom: number, newTo: number) => void) => void }).forEach(
+      (_from, _to, newFrom, newTo) => {
+        if (found) return;
+        state.doc.nodesBetween(newFrom, newTo, (node) => {
+          if (tocParagraph(node)) found = true;
+          return !found && !node.isTextblock;
+        });
+      },
+    );
+  }
+  return found;
+}
 
 export const liveToc = $prose(
   () =>
     new Plugin({
       key: liveTocKey,
+      state: {
+        init: (_config, state) => hasTocSlot(state.doc),
+        apply: (transaction, previous, _oldState, state) => {
+          if (!transaction.docChanged || previous) return previous;
+          return changedRangeHasToc(state, transaction);
+        },
+      },
       props: {
-        decorations: createLiveTocDecorations,
+        decorations: (state) =>
+          liveTocKey.getState(state)
+            ? createLiveTocDecorations(state)
+            : DecorationSet.empty,
       },
     }),
 );

@@ -12,6 +12,7 @@ import {
   type EditorState,
   type Transaction,
 } from "@milkdown/kit/prose/state";
+import type { DecorationSet } from "@milkdown/kit/prose/view";
 import {
   Fragment,
   type MarkType,
@@ -34,6 +35,7 @@ import {
 
 export interface MarkHintState {
   suppressedAt: number | null;
+  decorations?: DecorationSet;
 }
 
 export const markHintKey = new PluginKey<MarkHintState>("nota-mark-hint");

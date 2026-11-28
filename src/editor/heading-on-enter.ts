@@ -161,6 +161,15 @@ export const pendingBecomeBlockClassName = "nota-heading-pending";
 
 export const pendingBecomeBlockPrefixClassName = "nota-heading-prefix";
 
+interface PendingHeadingState {
+  doc: PMNode;
+  items: PendingDecoration[];
+}
+
+const pendingHeadingKey = new PluginKey<PendingHeadingState>(
+  "nota-heading-on-enter",
+);
+
 
 
 
@@ -269,10 +278,17 @@ export type PendingDecoration = {
 
 
 
-export function computeDecorationsItem(doc: PMNode, strict: boolean): PendingDecoration[] {
+export function computeDecorationsItem(
+  doc: PMNode,
+  strict: boolean,
+  from = 0,
+  to = doc.content.size,
+): PendingDecoration[] {
   const item: PendingDecoration[] = [];
+  const start = Math.max(0, Math.min(doc.content.size, from));
+  const end = Math.max(start, Math.min(doc.content.size, to));
 
-  doc.descendants((node, pos) => {
+  doc.nodesBetween(start, end, (node, pos, parent) => {
 
 
 
@@ -280,17 +296,16 @@ export function computeDecorationsItem(doc: PMNode, strict: boolean): PendingDec
 
 
 
-    if (node.type.name !== "paragraph") return true;
-    const resolved = doc.resolve(pos + 1);
-    for (let depth = 1; depth <= resolved.depth; depth++) {
-      const name = resolved.node(depth).type.name;
-      if (name === "table_cell" || name === "table_header") return true;
+    if (node.type.name !== "paragraph") return false;
+    const parentName = parent?.type.name;
+    if (parentName === "table_cell" || parentName === "table_header") {
+      return false;
     }
     const first = node.firstChild;
-    if (!first || !first.isText || !first.text) return true;
+    if (!first || !first.isText || !first.text) return false;
 
     const head2 = atxPrefix(first.text, strict);
-    if (head2 === null) return true;
+    if (head2 === null) return false;
 
     const bodyStart2 = pos + 1 + head2.lengthDegree;
     const bodyEnd = pos + 1 + node.content.size;
@@ -306,7 +321,7 @@ export function computeDecorationsItem(doc: PMNode, strict: boolean): PendingDec
       start5: bodyStart2,
       end2: bodyEnd,
     });
-    return true;
+    return false;
   });
 
   return item;
@@ -443,8 +458,6 @@ export const markTitleLineFirstBackCell = (strict: boolean) => $shortcut(() => (
 
 
 export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
-  let bufferSave: { doc: PMNode; item: PendingDecoration[] } | null = null;
-
   const normalizeInheritedHeadingMark = (
     transactions: readonly Transaction[],
     oldState: EditorState,
@@ -662,7 +675,56 @@ export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
   };
 
   return new Plugin({
-    key: new PluginKey("nota-heading-on-enter"),
+    key: pendingHeadingKey,
+    state: {
+      init: (_config, state) => ({
+        doc: state.doc,
+        items: computeDecorationsItem(state.doc, strict),
+      }),
+      apply: (transaction, previous) => {
+        if (!transaction.docChanged) return previous;
+        if (transaction.steps.length !== 1) {
+          return {
+            doc: transaction.doc,
+            items: computeDecorationsItem(transaction.doc, strict),
+          };
+        }
+        const ranges: Array<{ oldStart: number; oldEnd: number; newStart: number; newEnd: number }> = [];
+        transaction.steps[0]?.getMap().forEach((oldStart, oldEnd, newStart, newEnd) => {
+          ranges.push({ oldStart, oldEnd, newStart, newEnd });
+        });
+        if (ranges.length === 0) {
+          return {
+            doc: transaction.doc,
+            items: computeDecorationsItem(transaction.doc, strict),
+          };
+        }
+        const retained = previous.items.filter(
+          (item) =>
+            !ranges.some(
+              (range) =>
+                item.blockEnd > range.oldStart &&
+                item.blockStart2 < range.oldEnd,
+            ),
+        );
+        const rescanned = ranges.flatMap((range) =>
+          computeDecorationsItem(
+            transaction.doc,
+            strict,
+            Math.max(0, range.newStart - 1),
+            Math.min(transaction.doc.content.size, range.newEnd + 1),
+          ),
+        );
+        const unique = new Map<number, PendingDecoration>();
+        for (const item of [...retained, ...rescanned]) {
+          unique.set(item.blockStart2, item);
+        }
+        return {
+          doc: transaction.doc,
+          items: [...unique.values()].sort((a, b) => a.blockStart2 - b.blockStart2),
+        };
+      },
+    },
     view: (editorView) => {
       const commitBeforeDefaultEnter = (event: KeyboardEvent) => {
         if (
@@ -880,12 +942,11 @@ export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
       },
 
       decorations: (state) => {
-        if (!bufferSave || bufferSave.doc !== state.doc) {
-          bufferSave = { doc: state.doc, item: computeDecorationsItem(state.doc, strict) };
-        }
+        const pending = pendingHeadingKey.getState(state);
+        if (!pending) return DecorationSet.empty;
         return createDecorationCollection(
           state.doc,
-          bufferSave.item,
+          pending.items,
           state.selection.from,
         );
       },

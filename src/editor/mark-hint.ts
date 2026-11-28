@@ -79,7 +79,7 @@ import {
   type Node as PMNode,
   type NodeType,
 } from "@milkdown/kit/prose/model";
-import type { EditorView } from "@milkdown/kit/prose/view";
+import { DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import {
   findActiveMarkRange,
   inlineSyntaxAndEscapeDecorations,
@@ -561,12 +561,8 @@ export function createMarkHintPlugin(
       },
       props: {
         decorations: (state) =>
-          inlineSyntaxAndEscapeDecorations(
-            state,
-            syntaxType,
-            escapeType,
-            markHintKey.getState(state)?.suppressedAt ?? null,
-          ),
+          markHintKey.getState(state)?.decorations ??
+          DecorationSet.empty,
         handleKeyDown: (view, event) => {
           if (event.isComposing || view.composing) return false;
           if (
@@ -721,20 +717,44 @@ export function createMarkHintPlugin(
         },
       },
       state: {
-        init: (): MarkHintState => ({ suppressedAt: null }),
-        apply: (tr, value): MarkHintState => {
+        init: (_config, state): MarkHintState => ({
+          suppressedAt: null,
+          decorations: inlineSyntaxAndEscapeDecorations(
+            state,
+            syntaxType,
+            escapeType,
+          ),
+        }),
+        apply: (tr, value, _oldState, state): MarkHintState => {
           const own = tr.getMeta(markHintKey) as number | null | undefined;
-          if (own !== undefined) return { suppressedAt: own };
-          if (tr.docChanged) return { suppressedAt: null };
-
-
-
-          if (tr.selectionSet) {
+          let suppressedAt = value.suppressedAt;
+          let refresh = false;
+          if (own !== undefined) {
+            suppressedAt = own;
+            refresh = true;
+          } else if (tr.docChanged) {
+            suppressedAt = null;
+            refresh = true;
+          } else if (tr.selectionSet) {
             const samePoint =
-              value.suppressedAt !== null && tr.selection.from === value.suppressedAt;
-            return samePoint ? value : { suppressedAt: null };
+              value.suppressedAt !== null &&
+              tr.selection.from === value.suppressedAt;
+            if (!samePoint) suppressedAt = null;
+            refresh = !samePoint;
           }
-          return value;
+          if (tr.getMeta(markHintRefresh) === true) refresh = true;
+
+          return refresh
+            ? {
+                suppressedAt,
+                decorations: inlineSyntaxAndEscapeDecorations(
+                  state,
+                  syntaxType,
+                  escapeType,
+                  suppressedAt,
+                ),
+              }
+            : value;
         },
       },
       appendTransaction: (transactions, _oldState, newState) => {

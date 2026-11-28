@@ -1,5 +1,6 @@
 import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
+import { readFileSync } from "node:fs";
 
 import { createLiveTocDecorations } from "../src/editor/live-toc";
 
@@ -82,6 +83,13 @@ testCase("does not decorate [TOC] when the document has no headings", () => {
   const doc = schema.node("doc", null, [paragraph("[TOC]"), paragraph("Body")]);
   const state = EditorState.create({ doc, selection: TextSelection.create(doc, 1) });
   assert(createLiveTocDecorations(state).find().length === 0, "TOC rendered without headings");
+});
+
+testCase("does not collect document headings when no [TOC] paragraph exists", () => {
+  const source = readFileSync("src/editor/live-toc.ts", "utf8");
+  const slotScan = source.indexOf("doc.forEach");
+  const headingScan = source.indexOf("collectHeadings(doc)");
+  assert(slotScan >= 0 && headingScan > slotScan, "heading scan runs before the TOC slot check");
 });
 
 console.log(`\nPassed ${pass}; failed ${fail}`);

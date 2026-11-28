@@ -160,7 +160,21 @@ podman exec -u 1000 -w "$PWD" tauri-dev npx vite build
 
 # ④ 跑起来（自己带 vite dev server）
 podman exec -u 1000 -w "$PWD" tauri-dev npm run app      # = tauri dev
+
+# ⑤ real-editor large-document benchmark (headless Chromium)
+PERF_SIZES=50000,200000,1000000 npm run bench:large-doc
 ```
+
+The benchmark builds the E2E editor bundle, opens the production `createEditor`
+path, types in the middle of each generated document, scrolls through it, and
+prints open/typing/scroll timings plus DOM, heap and plugin-decoration costs.
+`PERF_FOCUS=0` disables focus mode for comparison. `PERF_OUT` selects the JSON
+report path; the default stays under the temporary directory. `PERF_OPEN_ONLY=1`
+measures startup without typing or scrolling. `PERF_PROFILE=rich` adds dense
+math, tables and Mermaid. `PERF_MARKDOWN_FILE` runs an external Markdown fixture,
+and `PERF_DIAGNOSTICS=1` reports mutation/intersection counts and DOM node
+breakdowns. The report contains both long jumps and a point-to-point scroll
+sweep. This command never installs or replaces a desktop package.
 
 `$PWD` 就是仓库根——`podman exec -w` 收的是**容器内**路径，而仓库在容器里
 就是同一个绝对路径（toolbox 容器把 `$HOME` 挂进去了）。
@@ -3799,7 +3813,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 `chart-ticks` **12** · `video-view` **12** · `sidebar-resize` **12** ·
 `doc-typography` **11** · `status-metric` **10** · `tree-options` **9** ·
 `empty-doc-save` **8** · `window-title` **8** · `modal-trap` **9** · `tablist-keys` **6** · `key-conflicts` **19** ·
-`table-align` **3** · `mode-scroll` **4** · `doc-theme-mode` **4** · `debug-log-window` **6** ·
+`table-align` **3** · `mode-scroll` **6** · `doc-theme-mode` **4** · `debug-log-window` **6** ·
 `list-indent` **16** · `syntax-escape` **13** · `math-currency` **23** ·
 `table-tab` **58** · `bar-close` **13** · `caret-snapshot` **10** · `panel-cards` **37** ·
 `code-block-editing` **41** · `select` **25** · `move-block` **20** ·

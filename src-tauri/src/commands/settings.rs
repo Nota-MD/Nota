@@ -3,7 +3,14 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{NotaError, Result};
 use crate::settings::Settings;
+use crate::settings_import::PreparedImport;
 use crate::state::AppState;
+
+struct PluginInstallRollback {
+    id: String,
+    previous: Option<std::path::PathBuf>,
+    enabled: bool,
+}
 
 #[tauri::command]
 pub fn nota_settings_get(state: State<'_, AppState>) -> Result<Settings> {
@@ -91,11 +98,48 @@ pub fn nota_settings_export_inventory(
 
 #[tauri::command]
 pub async fn nota_settings_export(
+    app: tauri::AppHandle,
     request: crate::settings_export::ExportRequest,
 ) -> Result<crate::settings_export::ExportReport> {
-    tauri::async_runtime::spawn_blocking(move || crate::settings_export::export(&request))
-        .await
-        .map_err(|e| NotaError::other(format!("Settings package export worker failed: {e}")))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let temp_root = std::env::temp_dir().join(format!(
+            "nota-settings-export-{}-{stamp}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&temp_root).map_err(|error| {
+            NotaError::other(format!(
+                "Could not create the settings export workspace: {error}"
+            ))
+        })?;
+
+        let result = (|| {
+            let state = app.state::<AppState>();
+            let host = state.plugins.lock().map_err(|_| {
+                NotaError::other(
+                    "The extension host is unavailable; restart Nota before exporting packages",
+                )
+            })?;
+            let mut plugin_packages = std::collections::BTreeMap::new();
+            for choice in request.plugins.iter().filter(|plugin| plugin.package) {
+                let file_name = host.default_export_name(&choice.id)?;
+                let target = temp_root
+                    .join(crate::paths::safe_filename(&choice.id))
+                    .join(file_name);
+                host.export_2(&choice.id, &target)?;
+                plugin_packages.insert(choice.id.clone(), target);
+            }
+            drop(host);
+            crate::settings_export::export(&request, &plugin_packages)
+        })();
+        let _ = std::fs::remove_dir_all(&temp_root);
+        result
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("Settings package export worker failed: {e}")))?
 }
 
 #[tauri::command]
@@ -118,18 +162,181 @@ pub async fn nota_settings_import(
                 NotaError::other(format!("Settings package import worker failed: {e}"))
             })??;
 
-    prepared.commit()?;
+    let rollback_root = plugin_rollback_root();
+    if !prepared.plugin_packages().is_empty() {
+        std::fs::create_dir_all(&rollback_root).map_err(|error| {
+            NotaError::other(format!(
+                "Could not create the extension import rollback directory: {error}"
+            ))
+        })?;
+    }
+    let installed_plugins = match install_plugin_packages(&app, &prepared, &rollback_root) {
+        Ok(records) => records,
+        Err(error) => {
+            let _ = std::fs::remove_dir_all(&rollback_root);
+            return Err(error);
+        }
+    };
+
+    if let Err(error) = prepared.commit() {
+        restore_plugin_packages(&app, &installed_plugins);
+        let _ = std::fs::remove_dir_all(&rollback_root);
+        return Err(error);
+    }
     if let Some(next) = prepared.imported_settings() {
         if let Err(error) = save_settings(&app, &state, next) {
             prepared.rollback();
+            restore_plugin_packages(&app, &installed_plugins);
+            let _ = std::fs::remove_dir_all(&rollback_root);
             return Err(error);
         }
     }
 
     let report = prepared.finish();
+    let _ = std::fs::remove_dir_all(&rollback_root);
     app.emit("nota:settings-package-imported", &report)
         .map_err(|e| NotaError::other(format!("Could not announce settings import: {e}")))?;
     Ok(report)
+}
+
+fn plugin_rollback_root() -> std::path::PathBuf {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "nota-settings-plugin-rollback-{}-{stamp}",
+        std::process::id()
+    ))
+}
+
+fn package_plugin_id(path: &std::path::Path) -> Result<String> {
+    let package = crate::plugin::package::read_one_package(path)?;
+    let manifest = package
+        .find(crate::plugin::package::MANIFEST_FILE)
+        .ok_or_else(|| {
+            NotaError::other(format!(
+                "The extension package {} does not contain plugin.toml",
+                path.display()
+            ))
+        })?;
+    let value: toml::Value = toml::from_str(
+        std::str::from_utf8(manifest)
+            .map_err(|_| NotaError::other("The packaged plugin.toml is not UTF-8 text"))?,
+    )
+    .map_err(|error| NotaError::other(format!("The packaged plugin.toml is invalid: {error}")))?;
+    value
+        .get("plugin")
+        .and_then(toml::Value::as_table)
+        .and_then(|plugin| plugin.get("id"))
+        .and_then(toml::Value::as_str)
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| NotaError::other("The packaged plugin.toml has no extension id"))
+}
+
+fn install_plugin_packages(
+    app: &tauri::AppHandle,
+    prepared: &PreparedImport,
+    rollback_root: &std::path::Path,
+) -> Result<Vec<PluginInstallRollback>> {
+    if prepared.plugin_packages().is_empty() {
+        return Ok(Vec::new());
+    }
+    let state = app.state::<AppState>();
+    let mut host = state.plugins.lock().map_err(|_| {
+        NotaError::other("The extension host is unavailable; restart Nota and try again")
+    })?;
+    let mut records = Vec::new();
+
+    for (index, staged) in prepared.plugin_packages().iter().enumerate() {
+        let incoming_id = package_plugin_id(&staged.path)?;
+        if incoming_id != staged.id {
+            rollback_plugin_records(&mut host, &records);
+            return Err(NotaError::other(format!(
+                "The extension package path names `{}` but its manifest names `{incoming_id}`",
+                staged.id
+            )));
+        }
+
+        let previous_info = host
+            .list_info()
+            .into_iter()
+            .find(|plugin| plugin.id == staged.id);
+        let enabled = previous_info
+            .as_ref()
+            .map(|plugin| plugin.state == "loaded")
+            .unwrap_or(false);
+        let previous = previous_info.map(|_| {
+            let path = rollback_root.join(format!(
+                "{}-{index}.nota-plugin",
+                crate::paths::safe_filename(&staged.id)
+            ));
+            host.export_2(&staged.id, &path).map(|_| path)
+        });
+        let previous = match previous {
+            Some(result) => Some(result?),
+            None => None,
+        };
+
+        match host.install_2(&staged.path) {
+            Ok(id) if id == staged.id => {
+                let has_previous = previous.is_some();
+                records.push(PluginInstallRollback {
+                    id: staged.id.clone(),
+                    previous,
+                    enabled,
+                });
+                if has_previous {
+                    if let Err(error) = host.set_enabled(&staged.id, enabled) {
+                        rollback_plugin_records(&mut host, &records);
+                        return Err(error);
+                    }
+                }
+            }
+            Ok(id) => {
+                rollback_plugin_records(&mut host, &records);
+                return Err(NotaError::other(format!(
+                    "The extension package installed `{id}` but the backup names `{}`",
+                    staged.id
+                )));
+            }
+            Err(error) => {
+                rollback_plugin_records(&mut host, &records);
+                return Err(NotaError::other(format!(
+                    "Could not restore extension package `{}`: {error}",
+                    staged.id
+                )));
+            }
+        }
+    }
+    Ok(records)
+}
+
+fn restore_plugin_packages(app: &tauri::AppHandle, records: &[PluginInstallRollback]) {
+    if records.is_empty() {
+        return;
+    }
+    let state = app.state::<AppState>();
+    let Ok(mut host) = state.plugins.lock() else {
+        return;
+    };
+    rollback_plugin_records(&mut host, records);
+}
+
+fn rollback_plugin_records(
+    host: &mut crate::plugin::PluginHost,
+    records: &[PluginInstallRollback],
+) {
+    for record in records.iter().rev() {
+        if let Some(previous) = &record.previous {
+            if host.install_2(previous).is_ok() {
+                let _ = host.set_enabled(&record.id, record.enabled);
+            }
+        } else {
+            let _ = host.uninstall(&record.id);
+        }
+    }
 }
 
 pub(crate) fn save_settings(

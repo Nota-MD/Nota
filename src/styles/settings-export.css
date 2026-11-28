@@ -125,7 +125,7 @@
 
 .settings-export-plugin {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(145px, auto));
+  grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(130px, auto));
   gap: 10px;
   align-items: center;
   padding: 9px 10px;

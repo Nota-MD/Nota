@@ -213,6 +213,34 @@
   cursor: default;
 }
 
+.editor-mount .ProseMirror .nota-math-virtual {
+  display: inline-block;
+  min-width: 1ch;
+  min-height: 1.75em;
+  pointer-events: none;
+}
+
+.editor-mount .ProseMirror .nota-math-block .nota-math-virtual {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+}
+
+.editor-mount .ProseMirror .nota-math-deferred {
+  min-width: 1ch;
+}
+
+.editor-mount .ProseMirror .nota-math-inline.nota-math-deferred {
+  display: inline-block;
+  min-height: 1.75em;
+  vertical-align: baseline;
+}
+
+.editor-mount .ProseMirror .nota-math-block.nota-math-deferred {
+  display: block;
+  min-height: 46px;
+}
+
 
 .editor-mount .ProseMirror .nota-math-delim {
   display: inline;

@@ -64,6 +64,9 @@ import {
   languageTableReady,
 } from "./refractor-runtime";
 import { vimInputConfig, vimInputHooks } from "./plugin-vim-input";
+import { shouldHydrateNearViewport } from "./large-doc";
+import { requestCodeBlockHighlight } from "./lazy-prism";
+import { observeNearViewport } from "./viewport-visibility";
 
 
 const NO_LANGUAGE = "";
@@ -402,18 +405,22 @@ export const codeBlockView = $view(
       let waitingSelection: [number, number] | null = null;
       let waitingFocus = false;
 
-      const languagePicker = createLanguagePicker({
-        allLanguages: allLanguages,
-        searchSearchLanguage: searchLanguages,
-        prepare: awaitLanguageTable,
-
-
-        distinguishName: relatedLanguages,
-        currentLanguage: () => languageOf(currentNode),
-        selectLanguage: applyLanguage,
-        restoreFocus: () => codeEditor?.clusterFocus(),
-      });
-      langWrap.appendChild(languagePicker.dom);
+      type LanguagePicker = ReturnType<typeof createLanguagePicker>;
+      let languagePicker: LanguagePicker | null = null;
+      const ensureLanguagePicker = (): LanguagePicker => {
+        if (languagePicker) return languagePicker;
+        languagePicker = createLanguagePicker({
+          allLanguages: allLanguages,
+          searchSearchLanguage: searchLanguages,
+          prepare: awaitLanguageTable,
+          distinguishName: relatedLanguages,
+          currentLanguage: () => languageOf(currentNode),
+          selectLanguage: applyLanguage,
+          restoreFocus: () => codeEditor?.clusterFocus(),
+        });
+        langWrap.appendChild(languagePicker.dom);
+        return languagePicker;
+      };
 
 
       const numberLearn = createNumberLearnCodeOutput(numberLearnOption);
@@ -555,12 +562,12 @@ export const codeBlockView = $view(
 
       let editorStarted = false;
       let heavyPreviewStarted = false;
-      let visibilityObserver: IntersectionObserver | null = null;
+      let stopVisibilityObserver: (() => void) | null = null;
       const ensureCodeBlockEditor = () => {
         if (editorStarted || editorDisposed) return;
         editorStarted = true;
-        visibilityObserver?.disconnect();
-        visibilityObserver = null;
+        stopVisibilityObserver?.();
+        stopVisibilityObserver = null;
         void import("./code-block-cm")
           .then(({ createCodeBlockEditor }) => {
             if (editorDisposed) return;
@@ -656,6 +663,7 @@ export const codeBlockView = $view(
 
       let languageLayoutFrame = 0;
       let languageLayoutObserver: ResizeObserver | null = null;
+      let languageLayoutStarted = false;
       const placeLanguagePicker = () => {
         languageLayoutFrame = 0;
         const parent =
@@ -674,24 +682,35 @@ export const codeBlockView = $view(
         langWrap.style.top = `${(preBox.bottom - parentPaddingTop) / zoom}px`;
       };
       const scheduleLanguageLayout = () => {
+        if (!languageLayoutStarted) return;
         cancelAnimationFrame(languageLayoutFrame);
         languageLayoutFrame = requestAnimationFrame(placeLanguagePicker);
       };
-      if (typeof ResizeObserver !== "undefined") {
-        languageLayoutObserver = new ResizeObserver(scheduleLanguageLayout);
-        languageLayoutObserver.observe(pre);
-      }
-      window.addEventListener("resize", scheduleLanguageLayout);
-      document.addEventListener("scroll", scheduleLanguageLayout, true);
+      const startLanguageLayout = () => {
+        if (languageLayoutStarted) return;
+        languageLayoutStarted = true;
+        if (typeof ResizeObserver !== "undefined") {
+          languageLayoutObserver = new ResizeObserver(scheduleLanguageLayout);
+          languageLayoutObserver.observe(pre);
+        }
+        window.addEventListener("resize", scheduleLanguageLayout);
+        document.addEventListener("scroll", scheduleLanguageLayout, true);
+        scheduleLanguageLayout();
+      };
 
 
 
       const startHeavyContent = () => {
         if (heavyPreviewStarted) return;
         heavyPreviewStarted = true;
+        const position = getPos();
+        if (typeof position === "number") {
+          requestCodeBlockHighlight(view, position);
+        }
+        ensureLanguagePicker();
+        startLanguageLayout();
         syncChrome(currentNode);
         preview.sameStep(currentNode, true);
-        ensureCodeBlockEditor();
       };
 
       const requestFocus = () => {
@@ -704,15 +723,18 @@ export const codeBlockView = $view(
       wrap.addEventListener(codeBlockFocusEvent, requestFocus);
 
       if (!view.editable) queueMicrotask(startHeavyContent);
-      else if (typeof IntersectionObserver === "undefined") queueMicrotask(startHeavyContent);
-      else {
-        visibilityObserver = new IntersectionObserver(
-          (entries) => {
-            if (entries.some((entry) => entry.isIntersecting)) startHeavyContent();
-          },
-          { rootMargin: "600px 0px" },
-        );
-        visibilityObserver.observe(wrap);
+      else if (!shouldHydrateNearViewport(view.state.doc.content.size)) {
+        queueMicrotask(() => {
+          startHeavyContent();
+          ensureCodeBlockEditor();
+        });
+      } else {
+        stopVisibilityObserver = observeNearViewport(wrap, view, (near) => {
+          if (!near) return;
+          stopVisibilityObserver?.();
+          stopVisibilityObserver = null;
+          startHeavyContent();
+        });
       }
 
 
@@ -757,7 +779,7 @@ export const codeBlockView = $view(
 
 
 
-        languagePicker.setLanguage2(lang);
+        languagePicker?.setLanguage2(lang);
 
 
 
@@ -848,6 +870,7 @@ export const codeBlockView = $view(
 
         setSelection: (anchor2, head2) => {
           startHeavyContent();
+          ensureCodeBlockEditor();
           setNumberLearnEditEdit(true);
           const length = codeEditor?.getText().length ?? currentNode.textContent.length;
           const clamp = (n: number) => Math.max(0, Math.min(length, n - 1));
@@ -868,13 +891,16 @@ export const codeBlockView = $view(
 
         destroy: () => {
           editorDisposed = true;
-          visibilityObserver?.disconnect();
+          stopVisibilityObserver?.();
+          stopVisibilityObserver = null;
           languageLayoutObserver?.disconnect();
           cancelAnimationFrame(languageLayoutFrame);
           wrap.removeEventListener(codeBlockFocusEvent, requestFocus);
-          window.removeEventListener("resize", scheduleLanguageLayout);
-          document.removeEventListener("scroll", scheduleLanguageLayout, true);
-          languagePicker.cancelDestroy();
+          if (languageLayoutStarted) {
+            window.removeEventListener("resize", scheduleLanguageLayout);
+            document.removeEventListener("scroll", scheduleLanguageLayout, true);
+          }
+          languagePicker?.cancelDestroy();
           codeEditor?.cancelDestroy();
 
           preview.cancelDestroy();

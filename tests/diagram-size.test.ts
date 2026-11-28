@@ -1,4 +1,5 @@
 import { fitDiagramSize } from "../src/editor/diagram-size";
+import { mermaidConfigurationKey } from "../src/editor/diagram-render";
 
 let passed = 0;
 let failed = 0;
@@ -50,6 +51,24 @@ testCase("invalid measurement falls back without collapsing the graph", () => {
   const size = fitDiagramSize(0, 0, 0, 0);
   assert(size.width >= 1 && size.height >= 1, "invalid dimensions collapsed the SVG");
   close(size.scale, 1, "scale");
+});
+
+testCase("Mermaid initialization is keyed by theme and diagram family", () => {
+  const theme = {
+    mode: "dark" as const,
+    accent: "#78aeed",
+    fontFamily: "sans-serif",
+    fontSize: 16,
+    key: "dark|#78aeed|sans-serif|16",
+  };
+  assert(
+    mermaidConfigurationKey(theme, false) === mermaidConfigurationKey(theme, false),
+    "the same Mermaid configuration produced different cache keys",
+  );
+  assert(
+    mermaidConfigurationKey(theme, false) !== mermaidConfigurationKey(theme, true),
+    "mind maps and flow diagrams shared one Mermaid cache key",
+  );
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

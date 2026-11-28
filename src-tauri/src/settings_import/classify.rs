@@ -149,6 +149,28 @@ pub(super) fn classify_path(
                 restart_required: true,
             });
         }
+        if section == "package" {
+            let file_name = parts.next().unwrap_or_default();
+            if file_name.is_empty()
+                || file_name.contains('/')
+                || file_name.contains('\\')
+                || !file_name.ends_with(".nota-plugin")
+            {
+                return Err(NotaError::other(format!(
+                    "The settings package contains an invalid extension package path: {archive}"
+                )));
+            }
+            return Ok(ClassifiedFile {
+                category: format!("plugin-package:{id}"),
+                target: paths::user_plugins_dir()?.join(id),
+                kind: DestinationKind::Package,
+                relative: None,
+                archive: archive.to_owned(),
+                bytes,
+                sensitive: false,
+                restart_required: true,
+            });
+        }
     }
 
     Err(NotaError::other(format!(

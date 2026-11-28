@@ -51,10 +51,13 @@ public organization build.
 Embedded extension packages are installed through the normal package validation
 path. They do not gain capabilities beyond their `plugin.toml` declaration.
 
-Settings packages can also be imported manually from Settings -> General.
-Inspection happens before writing: sensitive categories are unselected by
-default, selected files are staged, and existing files are copied to a timestamped
-import backup before replacement.
+Settings packages can also be imported manually from Settings -> General. The
+file picker opens immediately, and inspection happens before writing.
+Extension settings, plugin data and optional `.nota-plugin` packages are
+selected independently during export. Imported installable packages still pass
+through the normal manifest, API, signature and capability validation path.
+Sensitive categories are unselected by default, selected files are staged, and
+existing files are copied to a timestamped import backup before replacement.
 
 ## Onboarding and legal HTML
 

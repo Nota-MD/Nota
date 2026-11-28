@@ -257,9 +257,9 @@ testCase("点击无 alt 图片会生成名称并选中源码里的名称", () =>
 
 testCase("图片源码实时刷新；清空源码时删除整张图片", () => {
   const view = read("src/editor/video-view.ts");
-  if (!view.includes('addEventListener("input"'))
+  if (!view.includes('source.addEventListener("input"'))
     throw new Error("图片源码没有 input 实时监听");
-  if (!view.includes("parseImageMarkdownSource(initial.sourceBody.value)"))
+  if (!view.includes("parseImageMarkdownSource(source.value)"))
     throw new Error("图片源码没有在输入时实时解析");
   if (!view.includes("removeImageFromEmptySource();"))
     throw new Error("清空源码时没有删除图片");
@@ -292,7 +292,7 @@ testCase("images expose a delete control and load-failure warning", () => {
 testCase("switching image sources does not scroll the editor back to selection", () => {
   const view = read("src/editor/video-view.ts");
   equal(
-    view.includes('addEventListener("blur", () => commitSource(false))'),
+    view.includes('source.addEventListener("blur", () => commitSource(false))'),
     true,
     "blur still forces focus back into the editor",
   );

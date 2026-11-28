@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-ui-style="adwaita" data-ui-mode="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nota large-document benchmark</title>
+    <style>
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg, #fff);
+      }
+
+      .perf-shell {
+        box-sizing: border-box;
+        height: 100vh;
+        padding: 24px;
+      }
+
+      .editor-pane,
+      .editor-mount,
+      #editor {
+        height: 100%;
+      }
+
+      #nota-perf-result {
+        position: fixed;
+        right: 8px;
+        bottom: 8px;
+        max-width: 42vw;
+        margin: 0;
+        padding: 8px;
+        overflow: hidden;
+        color: #222;
+        background: #f3f3f5;
+        border: 1px solid #aaa;
+        font: 11px/1.35 monospace;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="perf-shell">
+      <section class="editor-pane">
+        <div class="editor-mount">
+          <div id="editor"></div>
+        </div>
+      </section>
+    </main>
+    <pre id="nota-perf-result" data-status="running">running</pre>
+    <script type="module" src="./perf.ts"></script>
+  </body>
+</html>

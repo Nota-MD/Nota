@@ -16,6 +16,7 @@ export interface PluginSettingsExportItem {
   settings_bytes: number;
   data_files: number;
   data_bytes: number;
+  package_available: boolean;
 }
 
 export interface SettingsExportInventory {
@@ -27,6 +28,7 @@ export interface PluginSettingsExportChoice {
   id: string;
   settings: boolean;
   data: boolean;
+  package: boolean;
 }
 
 export interface SettingsExportRequest {

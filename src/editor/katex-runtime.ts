@@ -54,3 +54,11 @@ export async function renderCommonStyle(
   target.replaceChildren();
   katex.render(source2, target, option);
 }
+
+export async function renderCommonStyleHtml(
+  source2: string,
+  option: KatexOptions = {},
+): Promise<string> {
+  const katex = await getKatex(false);
+  return katex.renderToString(source2, option);
+}

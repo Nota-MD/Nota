@@ -224,6 +224,25 @@ testCase("多段：只有那段标题写法有条目，位置按整篇算", () =
   equal(items(combine2(paragraphGroup("#你好"), paragraphGroup("正文")), false).join(" "), "2-4", "条目");
 });
 
+testCase("局部扫描只返回改动附近的待成块段落", () => {
+  const doc = combine2(
+    paragraphGroup("# 第一段"),
+    paragraphGroup("正文"),
+    paragraphGroup("## 第三段"),
+  );
+  const all = computeDecorationsItem(doc, false);
+  equal(all.length, 2, "全篇应有两段待成块标题");
+  const third = all[1]!;
+  const local = computeDecorationsItem(
+    doc,
+    false,
+    Math.max(0, third.blockStart2 - 1),
+    third.blockEnd + 1,
+  );
+  equal(local.length, 1, "局部扫描不该重新检查前后文");
+  equal(local[0]?.blockStart2, third.blockStart2, "局部扫描定位到了错误的段落");
+});
+
 testCase("table cells never become pending headings", () => {
   const table = schema.nodes.table.create(null, [
     schema.nodes.table_row.create(null, [

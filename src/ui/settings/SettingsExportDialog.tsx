@@ -50,7 +50,9 @@ export function SettingsExportDialog({
   onErrorRef.current = onError;
   const [inventory, setInventory] = useState<SettingsExportInventory | null>(null);
   const [program, setProgram] = useState<Set<string>>(new Set());
-  const [plugins, setPlugins] = useState<Record<string, { settings: boolean; data: boolean }>>({});
+  const [plugins, setPlugins] = useState<
+    Record<string, { settings: boolean; data: boolean; package: boolean }>
+  >({});
   const [busy, setBusy] = useState(false);
   const programCopy: Record<string, { label: string; help: string }> = {
     settings: { label: t("Program settings"), help: "settings.toml" },
@@ -93,7 +95,11 @@ export function SettingsExportDialog({
           Object.fromEntries(
             next.plugins.map((plugin) => [
               plugin.id,
-              { settings: plugin.settings_bytes > 0, data: plugin.data_files > 0 },
+              {
+                settings: plugin.settings_bytes > 0,
+                data: plugin.data_files > 0,
+                package: false,
+              },
             ]),
           ),
         );
@@ -120,11 +126,19 @@ export function SettingsExportDialog({
     });
   };
 
-  const togglePlugin = (plugin: PluginSettingsExportItem, part: "settings" | "data") => {
+  const togglePlugin = (
+    plugin: PluginSettingsExportItem,
+    part: "settings" | "data" | "package",
+  ) => {
     if (part === "settings" && plugin.settings_bytes === 0) return;
     if (part === "data" && plugin.data_files === 0) return;
+    if (part === "package" && !plugin.package_available) return;
     setPlugins((current) => {
-      const selected = current[plugin.id] ?? { settings: false, data: false };
+      const selected = current[plugin.id] ?? {
+        settings: false,
+        data: false,
+        package: false,
+      };
       return { ...current, [plugin.id]: { ...selected, [part]: !selected[part] } };
     });
   };
@@ -136,7 +150,11 @@ export function SettingsExportDialog({
       Object.fromEntries(
         inventory.plugins.map((plugin) => [
           plugin.id,
-          { settings: plugin.settings_bytes > 0, data: plugin.data_files > 0 },
+          {
+            settings: plugin.settings_bytes > 0,
+            data: plugin.data_files > 0,
+            package: plugin.package_available,
+          },
         ]),
       ),
     );
@@ -154,10 +172,11 @@ export function SettingsExportDialog({
         id: plugin.id,
         settings: plugins[plugin.id]?.settings ?? false,
         data: plugins[plugin.id]?.data ?? false,
+        package: plugins[plugin.id]?.package ?? false,
       }))
-      .filter((plugin) => plugin.settings || plugin.data);
+      .filter((plugin) => plugin.settings || plugin.data || plugin.package);
     if (program.size === 0 && chosenPlugins.length === 0) {
-      onError(t("Select at least one settings or data item to export."));
+      onError(t("Select at least one settings, data, or extension package to export."));
       return;
     }
 
@@ -207,7 +226,7 @@ export function SettingsExportDialog({
         <h2 className="confirm-title">{t("Export settings package")}</h2>
         <p className="settings-export-lead">
           {t(
-            "Select what to include. The result is a ZIP-based settings package, not an application installer.",
+            "Select what to include. Extension packages are optional and can be restored during import. The result is a ZIP-based settings package, not an application installer.",
           )}
         </p>
 
@@ -255,10 +274,10 @@ export function SettingsExportDialog({
                 })}
               </div>
 
-              <h3>{t("Extension settings and data")}</h3>
+              <h3>{t("Extension settings, data, and packages")}</h3>
               {inventory.plugins.length === 0 ? (
                 <p className="settings-export-empty">
-                  {t("No extension settings or data were found.")}
+                  {t("No extension settings, data, or packages were found.")}
                 </p>
               ) : (
                 <div className="settings-export-list">
@@ -268,6 +287,20 @@ export function SettingsExportDialog({
                         <strong>{plugin.name}</strong>
                         <small>{plugin.id}</small>
                       </div>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={plugins[plugin.id]?.package ?? false}
+                          disabled={busy || !plugin.package_available}
+                          onChange={() => togglePlugin(plugin, "package")}
+                        />
+                        {t("Installation package")}
+                        <small>
+                          {plugin.package_available
+                            ? t("Installable extension")
+                            : t("Not available")}
+                        </small>
+                      </label>
                       <label>
                         <input
                           type="checkbox"

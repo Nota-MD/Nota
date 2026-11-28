@@ -3,7 +3,11 @@
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { redo, undo } from "@milkdown/kit/prose/history";
-import type { EditorView, NodeView, NodeViewConstructor } from "@milkdown/kit/prose/view";
+import type {
+  EditorView,
+  NodeView,
+  NodeViewConstructor,
+} from "@milkdown/kit/prose/view";
 import { Decoration } from "@milkdown/kit/prose/view";
 import type { KatexOptions } from "katex";
 
@@ -21,7 +25,11 @@ import {
   dispatchCaretCommand,
   type CaretCommand,
 } from "./caret-commander";
-import { createEmptyMathPosition, drawLatestMath } from "./math-render-target";
+import {
+  clearLatestMath,
+  createEmptyMathPosition,
+  drawLatestMath,
+} from "./math-render-target";
 import {
   inlineMathHitCaret,
   removeInlineMathDelimiter,
@@ -44,11 +52,21 @@ import {
 } from "./math-inline-events";
 import { vimInputConfig, vimInputHooks } from "./plugin-vim-input";
 import { createMathViewElements } from "./math-view-dom";
+import { createDeferredMathView } from "./math-view-deferred";
+import { shouldHydrateNearViewport } from "./large-doc";
+import { findScrollContainer } from "./scroll-into-view";
+import {
+  observeNearViewport,
+  preserveElementAnchor,
+} from "./viewport-visibility";
 
 export { commonStyleCurrent, computeDecorations, recognizeNode, returnPositionSelection } from "./math-current";
 export { readSource, writeEnterSource } from "./math-view-source";
 
-export function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptions): NodeViewConstructor {
+function createFullCommonStyleView(
+  kindClass: "inline" | "block",
+  option: KatexOptions,
+): NodeViewConstructor {
   const inline = kindClass === "inline";
 
   const table2 = createCommandTable(Object.keys(option.macros ?? {}).length > 0);
@@ -164,6 +182,8 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
     let mostAfterDispatch = readSource(initialStart); let decorationCurrent = readDecoration(decorations);
 
     let nodeSelected = view.state.selection instanceof NodeSelection; let boxInsideHasFocusPoint = false;
+    let virtualized = false;
+    let stopViewportObserver: (() => void) | null = null;
 
     function panelShouldOpen(): boolean {
       return view.editable && (decorationCurrent || boxInsideHasFocusPoint);
@@ -173,6 +193,41 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
       createEmptyMathPosition(inline, inline ? t("Empty inline math") : t("Empty math block — click to write LaTeX"));
 
     const drawEnter = (target: HTMLElement, source2: string) => drawLatestMath(target, source2, option);
+
+    function drawVirtualPlaceholder(width = 0, height = 0): void {
+      clearLatestMath(render);
+      const placeholder = document.createElement(inline ? "span" : "div");
+      placeholder.className = "nota-math-virtual";
+      if (inline && width > 0) placeholder.style.width = `${Math.ceil(width)}px`;
+      if (height > 0) placeholder.style.height = `${Math.ceil(height)}px`;
+      render.dataset.state = "virtual";
+      render.append(placeholder);
+      virtualized = true;
+      dom.dataset.notaVirtual = "true";
+    }
+
+    function virtualize(): void {
+      if (
+        virtualized ||
+        !view.editable ||
+        panelShouldOpen() ||
+        readSource(current).trim() === ""
+      ) {
+        return;
+      }
+      const rect = render.getBoundingClientRect();
+      const scroller = findScrollContainer(view.dom);
+      preserveElementAnchor(scroller, dom, () => {
+        drawVirtualPlaceholder(rect.width, rect.height);
+      });
+    }
+
+    function hydrate(): void {
+      if (!virtualized) return;
+      virtualized = false;
+      dom.dataset.notaVirtual = "false";
+      heavyDraw();
+    }
 
     function heavyDraw(): void {
       if (!view.editable) {
@@ -219,7 +274,7 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
         return;
       }
 
-      drawEnter(render, source2);
+      void drawEnter(render, source2);
     }
 
     function followSourceChangeRulerInch(): void {
@@ -326,7 +381,7 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
       sameStepPanel(false);
     }
 
-    function sameStepPanel(wantToFocusPoint: boolean): void {
+    function sameStepPanel(wantToFocusPoint: boolean, renderNow = true): void {
       refreshInlineEdge();
       if (inline) {
         dom.dataset.notaMathMarkdown = `${mathDelimiterText(current)}${editingSource()}${mathDelimiterText(current, true)}`;
@@ -351,7 +406,10 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
           replaceEditingSource(readSource(current));
         }
       }
-      heavyDraw();
+      if (open2) virtualized = false;
+      if ((renderNow || open2) && (!virtualized || open2)) {
+        heavyDraw();
+      }
     }
 
     function dispatch(newValueSource: string): void {
@@ -634,7 +692,19 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
     input.value = readSource(initialStart);
     refreshInlineEdge();
 
-    sameStepPanel(decorationCurrent);
+    const viewportManaged = shouldHydrateNearViewport(view.state.doc.content.size);
+    sameStepPanel(decorationCurrent, !viewportManaged);
+    if (viewportManaged && !panelShouldOpen()) {
+      drawVirtualPlaceholder();
+      stopViewportObserver = observeNearViewport(dom, view, (near) => {
+        dom.dataset.notaViewport = near ? "near" : "far";
+        if (near) {
+          hydrate();
+          return;
+        }
+        virtualize();
+      });
+    }
     const focusRequest = pendingInlineMathFocus(view.state);
     const focusPosition = getPos();
     if (inline && focusPosition !== undefined && focusRequest === focusPosition) {
@@ -666,6 +736,7 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
         if (externalSurfaceChangeOf) {
           mostAfterDispatch = newValueSource;
           if (editingSource() !== newValueSource) replaceEditingSource(newValueSource);
+            if (virtualized) drawVirtualPlaceholder();
         }
 
         const newValueDecorationCurrent = readDecoration(newDecorations); const nextNodeSelected = view.state.selection instanceof NodeSelection;
@@ -675,6 +746,13 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
         nodeSelected = nextNodeSelected;
         decorationCurrent = newValueDecorationCurrent;
 
+        if (
+          virtualized &&
+          !newValueDecorationCurrent &&
+          !(inline && nextNodeSelected)
+        ) {
+          return true;
+        }
         sameStepPanel(justChangeCurrent);
         return true;
       },
@@ -693,6 +771,8 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
         if (inline) setInlineMathEditing(view.dom, false);
         unbindInlineMathSource();
         stopWatchingFonts();
+        stopViewportObserver?.();
+        stopViewportObserver = null;
         inlinePreview?.destroy();
         blockCodeEditor?.cancelDestroy();
         blockCodeEditor = null;
@@ -701,5 +781,28 @@ export function createCommonStyleView(kindClass: "inline" | "block", option: Kat
         if (inline) createProposal.element.remove();
       },
     };
+  };
+}
+
+export function createCommonStyleView(
+  kindClass: "inline" | "block",
+  option: KatexOptions,
+): NodeViewConstructor {
+  const full = createFullCommonStyleView(kindClass, option);
+  const inline = kindClass === "inline";
+  return (initialNode, view, getPos, decorations, innerDecorations) => {
+    if (!shouldHydrateNearViewport(view.state.doc.content.size)) {
+      return full(initialNode, view, getPos, decorations, innerDecorations);
+    }
+    return createDeferredMathView(
+      full,
+      inline,
+      initialNode,
+      view,
+      getPos,
+      option,
+      decorations,
+      innerDecorations,
+    );
   };
 }

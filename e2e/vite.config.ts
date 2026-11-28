@@ -13,5 +13,11 @@ export default defineConfig({
     outDir: fileURLToPath(new URL("./dist", import.meta.url)),
     emptyOutDir: true,
     target: "es2021",
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        perf: fileURLToPath(new URL("./perf.html", import.meta.url)),
+      },
+    },
   },
 });

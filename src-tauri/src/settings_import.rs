@@ -96,6 +96,7 @@ pub struct ImportReport {
 enum DestinationKind {
     File,
     Directory,
+    Package,
 }
 
 #[derive(Clone, Debug)]
@@ -124,6 +125,12 @@ struct PlannedOperation {
     installed: bool,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct StagedPluginPackage {
+    pub id: String,
+    pub path: PathBuf,
+}
+
 #[derive(Debug)]
 pub(crate) struct PreparedImport {
     package: PathBuf,
@@ -135,6 +142,7 @@ pub(crate) struct PreparedImport {
     bytes: u64,
     restart_required: bool,
     settings: Option<Settings>,
+    plugin_packages: Vec<StagedPluginPackage>,
     committed: bool,
 }
 
@@ -193,6 +201,8 @@ pub(crate) fn apply_embedded_bootstrap(resource_dir: &Path) -> Result<Option<Imp
                     .pointer("/bootstrap/allowExtensionSettings")
                     .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false)
+            } else if item.id.starts_with("plugin-package:") {
+                false
             } else {
                 !item.sensitive
             }
@@ -311,10 +321,32 @@ fn prepare_with_paths(request: &ImportRequest, paths: &PackagePaths) -> Result<P
     }
 
     let mut operations = Vec::new();
+    let mut plugin_packages = Vec::new();
     for (category, files) in grouped {
         let first = files
             .first()
             .ok_or_else(|| NotaError::other("Internal settings import group was empty"))?;
+        if first.kind == DestinationKind::Package {
+            if files.len() != 1 {
+                return Err(NotaError::other(
+                    "An extension package category unexpectedly contained multiple files",
+                ));
+            }
+            let id = category
+                .strip_prefix("plugin-package:")
+                .ok_or_else(|| NotaError::other("Invalid extension package category"))?;
+            let path = staging_root.join(&first.archive);
+            if !path.is_file() {
+                return Err(NotaError::other(
+                    "The selected extension package was not extracted",
+                ));
+            }
+            plugin_packages.push(StagedPluginPackage {
+                id: id.to_owned(),
+                path,
+            });
+            continue;
+        }
         let new_path = temporary_sibling(&first.target, "new")?;
         if let Err(error) = stage_category(&staging_root, &new_path, &files) {
             cleanup_directory(&staging_root);
@@ -348,6 +380,7 @@ fn prepare_with_paths(request: &ImportRequest, paths: &PackagePaths) -> Result<P
         bytes: total_bytes,
         restart_required,
         settings,
+        plugin_packages,
         committed: false,
     })
 }
@@ -569,6 +602,9 @@ fn stage_category(staging_root: &Path, new_path: &Path, files: &[ClassifiedFile]
             }
             Ok(())
         }
+        DestinationKind::Package => Err(NotaError::other(
+            "Extension packages use the extension installer path",
+        )),
     }
 }
 
@@ -630,6 +666,10 @@ impl PreparedImport {
 
     pub(crate) fn imported_settings(&self) -> Option<Settings> {
         self.settings.clone()
+    }
+
+    pub(crate) fn plugin_packages(&self) -> &[StagedPluginPackage] {
+        &self.plugin_packages
     }
 
     pub(crate) fn report(&self, restart_required: bool) -> ImportReport {

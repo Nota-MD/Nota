@@ -62,7 +62,9 @@ export const writingModeDollar = "nota-writing-modes";
 export const writingModeKey = new PluginKey<WritingMode>("nota-writing-modes");
 
 
-export const pressDarkClass = "nota-dim";
+export const focusPathClass = "nota-focus-path";
+
+export const focusContainerClass = "nota-focus-container";
 
 
 
@@ -72,6 +74,18 @@ export const pressDarkClass = "nota-dim";
 
 export const dedicatedNoteClass = "nota-focus";
 export const brightLineClass = "nota-focus-on";
+
+export const typewriterClass = "nota-typewriter";
+
+export const typewriterPaddingCssProperty = "--nota-typewriter-padding";
+
+const centerFrames = new WeakMap<EditorView, number>();
+
+
+export function typewriterPaddingForViewport(clientHeight: number): number {
+  if (!Number.isFinite(clientHeight) || clientHeight <= 0) return 0;
+  return Math.ceil(clientHeight / 2);
+}
 
 
 
@@ -103,25 +117,35 @@ export function rollToCorrectMiddle(container: HTMLElement | null, above: number
 
 
 
-function computePressDark(state: EditorState): DecorationSet {
+function computeFocusPath(state: EditorState): DecorationSet {
   const $from = state.selection.$from;
-  const decoration: Decoration[] = [];
+  const classes = new Map<number, Set<string>>();
+  const addClass = (position: number, className: string) => {
+    const current = classes.get(position) ?? new Set<string>();
+    current.add(className);
+    classes.set(position, current);
+  };
 
-  for (let d = $from.depth; d >= 1; d--) {
-    const parent = $from.node(d - 1);
-    const currentChildBelowMark = $from.index(d - 1);
+  for (let depth = 1; depth <= $from.depth; depth++) {
+    const node = $from.node(depth);
+    if (node.isText || node.isInline) continue;
+    addClass($from.before(depth), focusPathClass);
 
-
-    const start4 = $from.start(d - 1);
-    parent.forEach((child3, offset, belowMark) => {
-
-      if (belowMark === currentChildBelowMark || child3.isText || child3.isInline) return;
-      decoration.push(
-        Decoration.node(start4 + offset, start4 + offset + child3.nodeSize, { class: pressDarkClass }),
-      );
-    });
+    const parent = $from.node(depth - 1);
+    if (depth > 1 && !parent.isTextblock && !parent.isInline && !parent.isLeaf) {
+      addClass($from.before(depth - 1), focusContainerClass);
+    }
   }
 
+  const decoration = [...classes].flatMap(([position, names]) => {
+    const node = state.doc.nodeAt(position);
+    if (!node) return [];
+    return [
+      Decoration.node(position, position + node.nodeSize, {
+        class: [...names].join(" "),
+      }),
+    ];
+  });
   return DecorationSet.create(state.doc, decoration);
 }
 
@@ -143,7 +167,7 @@ export function writingModePlugin(initialStart: WritingMode = defaultWritingMode
         props: {
           decorations(state) {
             const m = writingModeKey.getState(state);
-            return m?.focus ? computePressDark(state) : null;
+            return m?.focus ? computeFocusPath(state) : null;
           },
         },
         view: () => ({
@@ -158,7 +182,7 @@ export function writingModePlugin(initialStart: WritingMode = defaultWritingMode
               (!before2?.typewriter ||
                 view.state.selection.head !== prevState.selection.head ||
                 view.state.doc !== prevState.doc);
-            if (wantRoll) rollToCurrentLine(view);
+            if (wantRoll) scheduleCurrentLineCenter(view);
 
 
             return false;
@@ -170,11 +194,23 @@ export function writingModePlugin(initialStart: WritingMode = defaultWritingMode
 
 
 export function rollToCurrentLine(view: EditorView): void {
+  if (!view.dom.isConnected) return;
   const position3 = view.coordsAtPos(view.state.selection.head);
   rollToCorrectMiddle(findScrollContainer(view.dom), position3.top, position3.bottom);
+}
+
+export function scheduleCurrentLineCenter(view: EditorView): void {
+  const pending = centerFrames.get(view);
+  if (pending !== undefined) cancelAnimationFrame(pending);
+  const frame = requestAnimationFrame(() => {
+    centerFrames.delete(view);
+    rollToCurrentLine(view);
+  });
+  centerFrames.set(view, frame);
 }
 
 
 export function setWritingMode(view: EditorView, mode2: WritingMode): void {
   view.dispatch(view.state.tr.setMeta(writingModeDollar, mode2));
+  if (mode2.typewriter) scheduleCurrentLineCenter(view);
 }

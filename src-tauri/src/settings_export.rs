@@ -45,6 +45,7 @@ pub struct PluginExportItem {
     pub settings_bytes: u64,
     pub data_files: usize,
     pub data_bytes: u64,
+    pub package_available: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -60,6 +61,8 @@ pub struct PluginSelection {
     pub settings: bool,
     #[serde(default)]
     pub data: bool,
+    #[serde(default)]
+    pub package: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -123,18 +126,18 @@ pub fn inventory(state: &AppState) -> ExportInventory {
         })
         .collect();
 
-    let names = state
+    let plugins_by_id = state
         .plugins
         .lock()
         .ok()
         .map(|host| {
             host.list_info()
                 .into_iter()
-                .map(|p| (p.id, p.name))
+                .map(|plugin| (plugin.id.clone(), plugin))
                 .collect::<BTreeMap<_, _>>()
         })
         .unwrap_or_default();
-    let mut ids: BTreeSet<String> = names.keys().cloned().collect();
+    let mut ids: BTreeSet<String> = plugins_by_id.keys().cloned().collect();
     if let Ok(dir) = paths::plugin_settings_dir() {
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
@@ -173,15 +176,22 @@ pub fn inventory(state: &AppState) -> ExportInventory {
                 .as_deref()
                 .map(|p| same_record(p, SourceKind::Directory))
                 .unwrap_or((0, 0));
-            if settings_bytes == 0 && data_files == 0 {
+            let plugin_info = plugins_by_id.get(&id);
+            let package_available = plugin_info
+                .map(|info| Path::new(&info.dir).is_dir())
+                .unwrap_or(false);
+            if settings_bytes == 0 && data_files == 0 && !package_available {
                 return None;
             }
             Some(PluginExportItem {
-                name: names.get(&id).cloned().unwrap_or_else(|| id.clone()),
+                name: plugin_info
+                    .map(|info| info.name.clone())
+                    .unwrap_or_else(|| id.clone()),
                 id,
                 settings_bytes,
                 data_files,
                 data_bytes,
+                package_available,
             })
         })
         .collect();
@@ -189,7 +199,10 @@ pub fn inventory(state: &AppState) -> ExportInventory {
     ExportInventory { program, plugins }
 }
 
-pub fn export(request: &ExportRequest) -> Result<ExportReport> {
+pub fn export(
+    request: &ExportRequest,
+    plugin_packages: &BTreeMap<String, PathBuf>,
+) -> Result<ExportReport> {
     let destination = PathBuf::from(request.destination.trim());
     if request.destination.trim().is_empty() || destination.file_name().is_none() {
         return Err(NotaError::other(
@@ -209,12 +222,12 @@ pub fn export(request: &ExportRequest) -> Result<ExportReport> {
     let plugin_selection: BTreeMap<&str, &PluginSelection> = request
         .plugins
         .iter()
-        .filter(|p| p.settings || p.data)
+        .filter(|plugin| plugin.settings || plugin.data || plugin.package)
         .map(|p| (p.id.as_str(), p))
         .collect();
     if selected.is_empty() && plugin_selection.is_empty() {
         return Err(NotaError::other(
-            "Select at least one settings or data category to export",
+            "Select at least one settings, data, or extension package to export",
         ));
     }
 
@@ -257,6 +270,17 @@ pub fn export(request: &ExportRequest) -> Result<ExportReport> {
                     &mut skipped_symlinks,
                 )?;
             }
+        }
+        if choice.package {
+            let source = plugin_packages.get(id).ok_or_else(|| {
+                NotaError::other(format!("The extension package for `{id}` is not available"))
+            })?;
+            push_file(
+                source,
+                &plugin_package_archive(id, source)?,
+                &mut files,
+                &mut skipped_symlinks,
+            )?;
         }
     }
 
@@ -307,6 +331,25 @@ pub fn export(request: &ExportRequest) -> Result<ExportReport> {
         bytes: total_bytes,
         skipped_symlinks,
     })
+}
+
+fn plugin_package_archive(id: &str, source: &Path) -> Result<String> {
+    if paths::safe_filename(id) != id {
+        return Err(NotaError::other(format!(
+            "The extension id is unsafe for export: {id}"
+        )));
+    }
+    let file_name = source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| name.ends_with(".nota-plugin"))
+        .ok_or_else(|| {
+            NotaError::other(format!(
+                "The generated extension package has an invalid name: {}",
+                source.display()
+            ))
+        })?;
+    Ok(format!("plugins/{id}/package/{file_name}"))
 }
 
 fn write_package(
@@ -545,13 +588,13 @@ mod tests {
             include: vec!["not-real".into()],
             plugins: Vec::new(),
         };
-        assert!(export(&request).is_err());
+        assert!(export(&request, &BTreeMap::new()).is_err());
         let empty = ExportRequest {
             destination: "/tmp/x.nota-backup".into(),
             include: Vec::new(),
             plugins: Vec::new(),
         };
-        assert!(export(&empty).is_err());
+        assert!(export(&empty, &BTreeMap::new()).is_err());
     }
 
     #[test]
@@ -560,8 +603,9 @@ mod tests {
             id: "nota.ai".into(),
             settings: true,
             data: true,
+            package: true,
         };
-        assert!(both.settings && both.data);
+        assert!(both.settings && both.data && both.package);
         assert_eq!(paths::safe_filename(&both.id), "nota.ai");
     }
 
@@ -609,6 +653,40 @@ mod tests {
             .unwrap();
         assert!(manifest.contains(FORMAT));
         assert!(!manifest.to_ascii_lowercase().contains("installer"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn extension_package_can_be_included_in_a_settings_export() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "nota-settings-package-export-test-{}-{stamp}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("nota.demo-1.0.0.nota-plugin");
+        fs::write(&source, b"package-bytes").unwrap();
+        let package = root.join("settings.nota-backup");
+        let request = ExportRequest {
+            destination: package.display().to_string(),
+            include: Vec::new(),
+            plugins: vec![PluginSelection {
+                id: "nota.demo".into(),
+                settings: false,
+                data: false,
+                package: true,
+            }],
+        };
+        let packages = BTreeMap::from([("nota.demo".into(), source)]);
+        export(&request, &packages).unwrap();
+
+        let mut zip = zip::ZipArchive::new(File::open(&package).unwrap()).unwrap();
+        assert!(zip
+            .by_name("plugins/nota.demo/package/nota.demo-1.0.0.nota-plugin")
+            .is_ok());
         fs::remove_dir_all(root).unwrap();
     }
 }

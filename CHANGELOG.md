@@ -4,6 +4,27 @@ Nota keeps short release-line notes. Full evidence, defect identifiers and
 historical details are in
 [`docs/07-feature-status.md`](docs/07-feature-status.md).
 
+## 0.19.0-beta
+
+- Settings packages can include installable `.nota-plugin` packages alongside
+  extension settings and data. Import validates, stages and rolls back extension
+  installation with the rest of the settings transaction.
+- Settings-package import opens the file picker immediately, then shows the
+  preflight inventory before applying changes.
+- Long documents now reach Textus-class startup, typing and scrolling
+  performance. Heading ids are written during parsing, syntax highlighting is
+  viewport-driven, and math, Mermaid, images, HTML and code editors hydrate near
+  the viewport.
+- Viewport work is coalesced after scrolling settles and runs with a small
+  frame budget. Formulas and diagrams render once instead of repeatedly
+  rebuilding their DOM.
+- Typewriter mode reserves half a viewport above and below the document and
+  centers after native scrolling finishes.
+- Added a reproducible production-editor benchmark with external fixtures,
+  point-to-point scrolling, frame latency, heap and optional mutation/observer
+  diagnostics.
+- macOS release jobs produce unsigned Intel and Apple Silicon DMG previews.
+
 ## 0.17.0-beta
 
 - Declare `libc` under Unix target dependencies so macOS builds can compile

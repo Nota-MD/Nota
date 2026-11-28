@@ -37,7 +37,12 @@ import { useEditorSettings } from "@/ui/useEditorSettings";
 import { useEditorSentenceHandle } from "@/ui/useEditorHandle";
 
 import { useSelectionSnapshot } from "@/ui/useCursorSnapshot";
-import type { WritingMode } from "@/editor/writing-modes";
+import {
+  typewriterClass,
+  typewriterPaddingCssProperty,
+  typewriterPaddingForViewport,
+  type WritingMode,
+} from "@/editor/writing-modes";
 import { emptyFindState, type FindOptions, type FindStatus } from "@/editor/find";
 import { readElementScrollRatio, readScrollRatio, restoreScrollRatio } from "@/editor/scroll-into-view";
 import { createDeferredSnapshot } from "@/editor/deferred-snapshot";
@@ -284,7 +289,32 @@ export function EditorPane({
 
 
   useEffect(() => {
-    handleRef.current?.setWritingModes({ focus: focusMode, typewriter });
+    const pane = paneRef.current;
+    if (!pane) return;
+    const applyMode = () => {
+      if (typewriter) {
+        const padding = typewriterPaddingForViewport(pane.clientHeight);
+        pane.style.setProperty(typewriterPaddingCssProperty, `${padding}px`);
+      } else {
+        pane.style.removeProperty(typewriterPaddingCssProperty);
+      }
+      handleRef.current?.setWritingModes({ focus: focusMode, typewriter });
+    };
+    applyMode();
+    if (!typewriter) return;
+
+    let observer: ResizeObserver | null = null;
+    const resize = () => applyMode();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", resize);
+    } else {
+      observer = new ResizeObserver(resize);
+      observer.observe(pane);
+    }
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", resize);
+    };
   }, [focusMode, typewriter]);
 
 
@@ -624,7 +654,7 @@ export function EditorPane({
 
     <div
       ref={paneRef}
-      className={`editor-pane editor-pane-${mode}`}
+      className={`editor-pane editor-pane-${mode}${typewriter ? ` ${typewriterClass}` : ""}`}
       data-doc-font-size={documentTypography?.custom_font_size ? "custom" : undefined}
       style={DocumentTypographyVars(documentTypography) as CSSProperties}
     >

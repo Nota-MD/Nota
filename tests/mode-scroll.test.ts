@@ -2,8 +2,12 @@
 
 import { readFileSync } from "node:fs";
 import { readElementScrollRatio } from "../src/editor/scroll-into-view";
+import { typewriterPaddingForViewport } from "../src/editor/writing-modes";
 
 const source = readFileSync("src/ui/EditorPane.tsx", "utf8");
+const writingModes = readFileSync("src/editor/writing-modes.ts", "utf8");
+const sourceEditor = readFileSync("src/editor/source.ts", "utf8");
+const editorCss = readFileSync("src/styles/editor.css", "utf8");
 let passed = 0;
 let failure = 0;
 
@@ -57,6 +61,48 @@ testCase("scroll ratios read the event target and coalesce per animation frame",
   assertValue(
     source.includes("readElementScrollRatio(currentContainer)"),
     "scroll accounting still repeatedly resolves its container",
+  );
+});
+
+testCase("typewriter mode reserves enough space to center the first and last lines", () => {
+  assertValue(
+    typewriterPaddingForViewport(0) === 0,
+    "an unmeasured viewport should not add padding",
+  );
+  assertValue(
+    typewriterPaddingForViewport(621) === 311,
+    "typewriter padding should be half of the measured editor viewport",
+  );
+  assertValue(
+    source.includes('typewriterPaddingCssProperty, `${padding}px`'),
+    "the pane does not publish its measured typewriter padding",
+  );
+  assertValue(
+    editorCss.includes(".editor-pane.nota-typewriter .editor-mount:not(.editor-preview) .ProseMirror"),
+    "WYSIWYG content is missing typewriter scroll padding",
+  );
+  assertValue(
+    editorCss.includes(".editor-pane-source.nota-typewriter .editor-mount .cm-content"),
+    "source mode is missing typewriter scroll padding",
+  );
+});
+
+testCase("typewriter centering runs after native scroll handling", () => {
+  assertValue(
+    writingModes.includes("scheduleCurrentLineCenter"),
+    "WYSIWYG centering has no deferred scheduler",
+  );
+  assertValue(
+    writingModes.includes("requestAnimationFrame"),
+    "WYSIWYG centering still runs before the browser settles scrolling",
+  );
+  assertValue(
+    sourceEditor.includes("scheduleTypewriterCenter"),
+    "source mode centering has no deferred scheduler",
+  );
+  assertValue(
+    sourceEditor.includes("cancelAnimationFrame(typewriterFrame)"),
+    "source mode centering schedules overlapping frames",
   );
 });
 

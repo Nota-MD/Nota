@@ -277,6 +277,17 @@
   overflow-x: hidden !important;
 }
 
+.editor-pane.nota-typewriter .editor-mount:not(.editor-preview) .ProseMirror {
+  box-sizing: border-box;
+  padding-top: var(--nota-typewriter-padding, 50vh) !important;
+  padding-bottom: var(--nota-typewriter-padding, 50vh) !important;
+}
+
+.editor-pane-source.nota-typewriter .editor-mount .cm-content {
+  padding-top: var(--nota-typewriter-padding, 50vh) !important;
+  padding-bottom: var(--nota-typewriter-padding, 50vh) !important;
+}
+
 .editor-mount .milkdown {
 
 
@@ -635,9 +646,8 @@ html[data-focus-dim="stronger"] {
   --focus-dim: 0.1;
 }
 
-.nota-dim {
-
-
+.editor-mount .ProseMirror > :not(.nota-focus-path),
+.editor-mount .ProseMirror .nota-focus-container > :not(.nota-focus-path) {
   opacity: var(--focus-dim);
   transition: opacity var(--duration-fast) var(--ease-out);
 }

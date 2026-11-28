@@ -25,6 +25,7 @@ import type { WritingMode } from "./writing-modes";
 import type { VimInputConfig, VimInputHooks } from "./plugin-vim-types";
 import type { EditorSelectionRange } from "./selection-range";
 import type { MarkdownSyntaxStyle } from "./markdown-syntax-style";
+import type { EditorView } from "@milkdown/kit/prose/view";
 
 
 
@@ -368,6 +369,9 @@ export interface EditorHandle {
 export interface CreateOptions {
 
   root: HTMLElement;
+
+  /** Internal integration hook for focused browser and performance probes. */
+  onViewReady?: (view: EditorView) => void;
 
   initialMarkdown: string;
 

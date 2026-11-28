@@ -474,7 +474,9 @@ function draftContainsSelection(
   return selection.from <= draft.to && selection.to >= draft.from;
 }
 
-const explicitLinkDraftKey = new PluginKey("nota-explicit-link-draft");
+const explicitLinkDraftKey = new PluginKey<DecorationSet>(
+  "nota-explicit-link-draft",
+);
 
 export function commitExplicitLinkDrafts(
   state: EditorState,
@@ -551,8 +553,16 @@ export function explicitLinkDraft() {
     () =>
       new Plugin({
         key: explicitLinkDraftKey,
+        state: {
+          init: (_config, state) => explicitLinkDraftDecorations(state),
+          apply: (transaction, previous, oldState, state) =>
+            transaction.docChanged || !transaction.selection.eq(oldState.selection)
+              ? explicitLinkDraftDecorations(state)
+              : previous,
+        },
         props: {
-          decorations: explicitLinkDraftDecorations,
+          decorations: (state) =>
+            explicitLinkDraftKey.getState(state) ?? DecorationSet.empty,
         },
         appendTransaction(transactions, _oldState, newState) {
           if (

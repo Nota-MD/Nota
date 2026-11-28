@@ -34,7 +34,6 @@ import {
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { history } from "@milkdown/kit/plugin/history";
-import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { cursor } from "@milkdown/kit/plugin/cursor";
 import { blinkingCaretPlugin } from "./blink-caret";
 import { clipboard } from "@milkdown/kit/plugin/clipboard";
@@ -43,7 +42,7 @@ import { trailing } from "@milkdown/kit/plugin/trailing";
 
 
 
-import { prism } from "@milkdown/plugin-prism";
+import { lazyPrism } from "./lazy-prism";
 
 
 import { katexOptionsCtx, math } from "./math-schema";
@@ -58,11 +57,16 @@ import {
   inlineCodeInputRule,
   strongInputRule,
   strongKeymap,
+  syncHeadingIdPlugin,
   wrapInHeadingInputRule,
 } from "@milkdown/kit/preset/commonmark";
 import { inlineMarkKeymap } from "./command-table";
 
-const removedCommonmarkPlugins = new Set<unknown>([strongKeymap, emphasisKeymap]);
+const removedCommonmarkPlugins = new Set<unknown>([
+  strongKeymap,
+  emphasisKeymap,
+  syncHeadingIdPlugin,
+]);
 
 
 
@@ -176,7 +180,7 @@ import {
 
 
 import { blockHTMLParse, blockHTMLSpecPlugin } from "./html-block";
-import { blockHTMLDiagnostics, blockHTMLView } from "./html-block-view";
+import { blockHTMLView } from "./html-block-view";
 import { liveToc } from "./live-toc";
 import { footnoteNavigation } from "./footnote";
 import { githubDocsCompat } from "./github-docs";
@@ -234,6 +238,12 @@ import { katexOptionsFor } from "./math-macros";
 import { selectionSnapshotPlugin } from "./caret-snapshot";
 import { cursorStatePlugin } from "./command-state";
 import { writingModePlugin } from "./writing-modes";
+import {
+  headingIdPlugin,
+  headingIdsOnParse,
+  headingSchemaWithIds,
+} from "./heading-id";
+import { markdownChangeListener } from "./markdown-change";
 
 import { findPlugin } from "./find";
 import type { CreateOptions } from "./create-types";
@@ -305,10 +315,20 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     onChange,
     options,
   } = parameter;
+  const markdownChanges =
+    onChange && !readOnly
+      ? markdownChangeListener((markdown, previous) => {
+          if (markdown === previous) return;
+          onChange(joinFrontMatter(parameter.getFrontMatter(), markdown));
+        })
+      : [];
+  const mount = document.createElement("div");
+  mount.className = "nota-editor-root";
+  mount.style.display = "contents";
 
-  return Editor.make()
+  const editor = await Editor.make()
     .config((ctx) => {
-      ctx.set(rootCtx, root);
+      ctx.set(rootCtx, mount);
       ctx.set(defaultValueCtx, body2);
       ctx.set(indentConfig.key, { type: "space" as const, size: defaultIndent });
 
@@ -420,17 +440,6 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
 
-      ctx.get(listenerCtx).markdownUpdated((_ctx, markdown, prev) => {
-
-
-
-        if (readOnly) return;
-
-
-
-
-        if (markdown !== prev) onChange?.(joinFrontMatter(parameter.getFrontMatter(), markdown));
-      });
     })
 
 
@@ -456,6 +465,9 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
           plugin !== strongInputRule,
       ),
     )
+    .use(headingSchemaWithIds)
+    .use(headingIdsOnParse)
+    .use(headingIdPlugin)
 
 
 
@@ -533,19 +545,10 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
     .use(blockHTMLView(documentPath))
-    .use(blockHTMLDiagnostics)
-
-
-    .use(footnoteNavigation)
-
-
     .use(githubDocsCompat)
 
 
-
-
-
-
+    .use(footnoteNavigation)
 
 
 
@@ -565,7 +568,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
         : [vimInputPlugin(parameter.vimInput.config, parameter.vimInput.hooks)],
     )
     .use(history)
-    .use(listener)
+    .use(markdownChanges)
     .use(cursor)
     .use(readOnly ? [] : [$prose(() => blinkingCaretPlugin())])
 
@@ -613,7 +616,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
     .use(documentMustNotExportEmptyRoot)
     .use(codeBlockView)
-    .use(prism)
+    .use(lazyPrism())
 
 
 
@@ -720,4 +723,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
 
     .use(readOnly ? [] : [previewPlugin(options.review ?? null, options.onReviewEscape ?? (() => {}))])
-    .create();}
+    .create();
+  root.replaceChildren(mount);
+  return editor;
+}

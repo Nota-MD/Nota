@@ -27,7 +27,9 @@ import { t } from "@/i18n";
 import { debugEvent } from "@/ui/debug-log";
 import type { codeBlockEditor } from "./code-block-cm";
 import { blockHTMLSpec, isNoteRelease } from "./html-block";
+import { shouldHydrateNearViewport } from "./large-doc";
 import { localLocalImageSliceAbsoluteCorrectPath } from "./video-view";
+import { observeNearViewport } from "./viewport-visibility";
 
 export {
   allowedHtmlAttributes,
@@ -221,6 +223,9 @@ export function blockHTMLView(documentPath: string | null = null) {
         let current = initialNode;
         let represent = 0;
         let sourceMode = false;
+        const viewportManaged = shouldHydrateNearViewport(view.state.doc.content.size);
+        let near = !viewportManaged;
+        let stopViewportObserver: (() => void) | null = null;
         let sanitizeRuntime: Promise<typeof import("./html-sanitize")> | null = null;
 
         const root = document.createElement("div");
@@ -301,6 +306,7 @@ export function blockHTMLView(documentPath: string | null = null) {
 
         const draw = (): void => {
           if (sourceMode) return;
+          near = true;
           const value2 = (current.attrs as BlockAttribute).value;
           const localCount = ++represent;
           const activeActive = (): boolean => localCount === represent && root.isConnected;
@@ -414,7 +420,17 @@ export function blockHTMLView(documentPath: string | null = null) {
 
         root.append(show, source2, splitReplace);
         writeAttribute(current);
-        draw();
+        if (viewportManaged) {
+          show.dataset.state = "deferred";
+          stopViewportObserver = observeNearViewport(root, view, (isNear) => {
+            if (!isNear || near) return;
+            stopViewportObserver?.();
+            stopViewportObserver = null;
+            draw();
+          });
+        } else {
+          draw();
+        }
 
         return {
           dom: root,
@@ -428,7 +444,7 @@ export function blockHTMLView(documentPath: string | null = null) {
               if (sourceEditing && sourceEditing.getText() !== newValueValue) {
                 sourceEditing.setText(newValueValue);
               }
-            } else if (valueChangeDone) {
+            } else if (valueChangeDone && near) {
               draw();
             }
             return true;
@@ -445,6 +461,8 @@ export function blockHTMLView(documentPath: string | null = null) {
           ignoreMutation: () => true,
           destroy: () => {
             represent++;
+            stopViewportObserver?.();
+            stopViewportObserver = null;
             rememberRemoteHtmlImages(show);
             sourceEditing?.cancelDestroy();
           },

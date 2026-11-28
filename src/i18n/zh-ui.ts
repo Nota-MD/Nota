@@ -814,8 +814,8 @@ export const uiMessages: Record<string, string> = {
   // 设置与数据包（`ui/settings/SettingsExportDialog.tsx`）。
   "Settings package": "设置包",
   "Export settings and data": "导出设置与数据",
-  "Choose program settings, user data, and each extension's settings or data independently. The result is a ZIP-based settings package, not an application installer.":
-    "可分别选择程序设置、用户数据，以及每个拓展自己的设置或数据。生成的是 ZIP 格式的设置包，不是软件安装包。",
+  "Choose program settings, user data, and each extension's settings, data, or installation package independently. The result is a ZIP-based settings package, not an application installer.":
+    "可分别选择程序设置、用户数据，以及每个拓展自己的设置、数据或安装包。生成的是 ZIP 格式的设置包，不是软件安装包。",
   "Export settings package…": "导出设置包…",
   "Export settings package": "导出设置包",
   "Import settings package…": "导入设置包…",
@@ -832,18 +832,20 @@ export const uiMessages: Record<string, string> = {
   "Settings and data in this package": "此包中的设置与数据",
   "Extension settings: {0}": "拓展设置：{0}",
   "Extension data: {0}": "拓展数据：{0}",
+  "Extension package: {0}": "拓展安装包：{0}",
   "May contain credentials or private data": "可能包含凭据或私有数据",
   "Restart required": "需要重启",
   "Choose Another…": "重新选择…",
   "Importing…": "正在导入…",
   "Could not import the settings package: {0}": "无法导入设置包：{0}",
-  "Select at least one settings or data item to import.": "请至少选择一项要导入的设置或数据。",
+  "Select at least one settings, data, or extension package to import.":
+    "请至少选择一项要导入的设置、数据或拓展安装包。",
   "Last import": "上次导入",
   "Import failed": "导入失败",
   "Last export": "上次导出",
   "Export failed": "导出失败",
-  "Select what to include. The result is a ZIP-based settings package, not an application installer.":
-    "选择要包含的内容。生成的是 ZIP 格式的设置包，不是软件安装包。",
+  "Select what to include. Extension packages are optional and can be restored during import. The result is a ZIP-based settings package, not an application installer.":
+    "选择要包含的内容。拓展安装包为可选项，并可在导入时恢复。生成的是 ZIP 格式的设置包，不是软件安装包。",
   "Select all": "全选",
   "Select none": "全不选",
   "Reading settings and data…": "正在读取设置与数据…",
@@ -864,12 +866,15 @@ export const uiMessages: Record<string, string> = {
   "files": "个文件",
   "Not available": "不可用",
   "Contains credentials": "含凭据",
-  "Extension settings and data": "拓展设置与数据",
-  "No extension settings or data were found.": "没有找到拓展设置或数据。",
+  "Extension settings, data, and packages": "拓展设置、数据与安装包",
+  "No extension settings, data, or packages were found.": "没有找到拓展设置、数据或安装包。",
+  "Installation package": "安装包",
+  "Installable extension": "可安装拓展",
   "Settings": "设置",
   "Data": "数据",
   "Exporting…": "正在导出…",
-  "Select at least one settings or data item to export.": "请至少选择一项设置或数据。",
+  "Select at least one settings, data, or extension package to export.":
+    "请至少选择一项设置、数据或拓展安装包。",
   "Could not read exportable settings and data: {0}": "无法读取可导出的设置与数据：{0}",
   "Could not export the settings package: {0}": "无法导出设置包：{0}",
   "Nota settings package": "Nota 设置包",

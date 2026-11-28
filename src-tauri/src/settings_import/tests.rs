@@ -126,3 +126,36 @@ fn sensitive_plugin_data_is_not_selected_by_default() {
     assert!(inventory.items.iter().all(|item| item.sensitive));
     cleanup_directory(&root);
 }
+
+#[test]
+fn extension_package_is_inspected_and_staged_separately() {
+    let root = test_root("extension-package");
+    let paths = test_paths(&root);
+    let package = package_with(
+        &root,
+        &[(
+            "plugins/nota.demo/package/nota.demo-1.0.0.nota-plugin",
+            b"package-bytes",
+        )],
+    );
+    let inventory = validate(&package.display().to_string(), &paths)
+        .unwrap()
+        .inventory;
+    assert_eq!(inventory.items.len(), 1);
+    assert_eq!(inventory.items[0].id, "plugin-package:nota.demo");
+
+    let prepared = prepare_with_paths(
+        &ImportRequest {
+            package: package.display().to_string(),
+            include: vec!["plugin-package:nota.demo".into()],
+        },
+        &paths,
+    )
+    .unwrap();
+    let staged = prepared.plugin_packages();
+    assert_eq!(staged.len(), 1);
+    assert_eq!(staged[0].id, "nota.demo");
+    assert_eq!(fs::read(&staged[0].path).unwrap(), b"package-bytes");
+    drop(prepared);
+    cleanup_directory(&root);
+}

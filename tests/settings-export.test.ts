@@ -29,6 +29,7 @@ const rust = readFileSync("src-tauri/src/settings_export.rs", "utf8");
 const importRust = readFileSync("src-tauri/src/settings_import.rs", "utf8");
 const importClassify = readFileSync("src-tauri/src/settings_import/classify.rs", "utf8");
 const importFiles = readFileSync("src-tauri/src/settings_import/files.rs", "utf8");
+const settingsCommand = readFileSync("src-tauri/src/commands/settings.rs", "utf8");
 const dialog = readFileSync("src/ui/settings/SettingsExportDialog.tsx", "utf8");
 const importDialog = readFileSync("src/ui/settings/SettingsImportDialog.tsx", "utf8");
 const settingsDialog = readFileSync("src/ui/settings/SettingsDialog.tsx", "utf8");
@@ -46,14 +47,22 @@ testCase("the package is a standard ZIP with a format manifest", () => {
   contains(rust, 'CompressionMethod::Deflated', "deflate compression");
 });
 
-testCase("program settings and extension settings or data are independently selectable", () => {
+testCase("program settings, extension settings, data, and packages are independently selectable", () => {
   contains(rust, '"settings"', "program settings");
   contains(rust, '"session"', "session");
   contains(rust, '"themes"', "theme assets");
   contains(rust, '"dictionaries"', "dictionaries");
   contains(rust, "pub settings: bool", "extension settings toggle");
   contains(rust, "pub data: bool", "extension data toggle");
-  contains(dialog, 'part: "settings" | "data"', "frontend toggles settings and data separately");
+  contains(rust, "pub package: bool", "extension package toggle");
+  contains(rust, "package_available", "extension package availability");
+  contains(
+    dialog,
+    'part: "settings" | "data" | "package"',
+    "frontend toggles settings, data, and packages separately",
+  );
+  contains(dialog, 't("Installation package")', "package option");
+  contains(dialogCss, "repeat(3, minmax(130px, auto))", "package column layout");
 });
 
 testCase("sensitive items start unselected but remain manually selectable", () => {
@@ -101,8 +110,23 @@ testCase("settings packages can be inspected and imported without trusting archi
   contains(importFiles, "symbolic link", "symlink rejection");
   contains(importRust, "import-backups", "pre-import backup");
   contains(importRust, "self.rollback()", "rollback integration");
+  contains(importClassify, "plugin-package:", "extension package import category");
+  contains(settingsCommand, "install_plugin_packages", "extension package installation");
   contains(importDialog, "item.sensitive", "sensitive item handling");
   contains(general, "report.restart_required", "restart result");
+});
+
+testCase("import opens the native file picker before showing the inspection dialog", () => {
+  contains(general, 'import { open } from "@/ui/file-picker"', "direct file picker");
+  contains(general, "const chooseImportPackage = async () =>", "direct picker handler");
+  contains(general, "if (path) setImportPackagePath(path)", "selected path state");
+  contains(general, "initialPackagePath={importPackagePath}", "prefetched path handoff");
+  assertValue(
+    !general.includes("onClick={() => setImportPackageOpen(true)}"),
+    "import button still opens an empty dialog",
+  );
+  contains(importDialog, "initialPackagePath: string", "initial path prop");
+  contains(importDialog, ".importInspect(initialPackagePath)", "automatic inspection");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

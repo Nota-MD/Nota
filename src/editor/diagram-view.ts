@@ -92,6 +92,10 @@ import {
 } from "./diagram-render";
 import { fitDiagramSize } from "./diagram-size";
 import { vimInputConfig, vimInputHooks } from "./plugin-vim-input";
+import { findScrollContainer } from "./scroll-into-view";
+import {
+  observeNearViewport,
+} from "./viewport-visibility";
 
 
 const nodeName = "diagram";
@@ -116,14 +120,11 @@ function getBodyPart(node: PMNode): string {
   return typeof value2 === "string" ? value2 : "";
 }
 
-export const diagramView = $view(
-
-
-
-
-  imageTableSpec.node,
-  () =>
-    (initialNode: PMNode, view: EditorView, getPos: () => number | undefined): NodeView => {
+function createFullDiagramView(
+  initialNode: PMNode,
+  view: EditorView,
+  getPos: () => number | undefined,
+): NodeView {
 
       // <div class="nota-diagram">
       //   <div class="nota-diagram-body">
@@ -205,7 +206,8 @@ export const diagramView = $view(
       let editorDisposed = false;
       let editorStarted = false;
       let previewStarted = false;
-      let visibilityObserver: IntersectionObserver | null = null;
+      let virtualized = false;
+      let stopViewportObserver: (() => void) | null = null;
       let diagramImage: SVGSVGElement | null = null;
 
       function fitDiagramToPreview(): void {
@@ -327,6 +329,7 @@ export const diagramView = $view(
       function draw(result2: RenderResult | null): void {
         rendered = true;
         diagramImage = null;
+        preview.style.removeProperty("min-height");
         preview.replaceChildren();
 
         if (result2 === null) {
@@ -521,8 +524,6 @@ export const diagramView = $view(
       function ensureDiagramEditor(): void {
         if (editorStarted || editorDisposed) return;
         editorStarted = true;
-        visibilityObserver?.disconnect();
-        visibilityObserver = null;
         void import("@/editor/code-block-cm")
           .then(({ createCodeBlockEditor }) => {
             if (editorDisposed || !dom.isConnected) return;
@@ -564,19 +565,36 @@ export const diagramView = $view(
       }
 
       const revealDiagram = () => {
+        virtualized = false;
         previewStarted = true;
         void sameStep();
       };
+
+      function hydrateAroundViewport(): void {
+        if (!virtualized) {
+          revealDiagram();
+          return;
+        }
+        virtualized = false;
+        const scroller = findScrollContainer(view.dom);
+        const beforeTop = dom.getBoundingClientRect().top;
+        void sameStep().finally(() => {
+          requestAnimationFrame(() => {
+            if (!dom.isConnected || !scroller) return;
+            const difference = dom.getBoundingClientRect().top - beforeTop;
+            if (Math.abs(difference) >= 1) scroller.scrollTop += difference;
+          });
+        });
+      }
+
       if (!view.editable) queueMicrotask(revealDiagram);
-      else if (typeof IntersectionObserver === "undefined") queueMicrotask(revealDiagram);
       else {
-        visibilityObserver = new IntersectionObserver(
-          (entries) => {
-            if (entries.some((entry) => entry.isIntersecting)) revealDiagram();
-          },
-          { rootMargin: "600px 0px" },
-        );
-        visibilityObserver.observe(dom);
+        stopViewportObserver = observeNearViewport(dom, view, (near) => {
+          if (!near) return;
+          stopViewportObserver?.();
+          stopViewportObserver = null;
+          hydrateAroundViewport();
+        });
       }
 
 
@@ -631,7 +649,13 @@ export const diagramView = $view(
 
 
       const followTheme = (): void => {
-        if (previewStarted && readDiagramTheme(dom, view.dom).key !== renderedTheme) void sameStep();
+        if (
+          !virtualized &&
+          previewStarted &&
+          readDiagramTheme(dom, view.dom).key !== renderedTheme
+        ) {
+          void sameStep();
+        }
       };
       followAboveTheme(followTheme);
 
@@ -680,7 +704,7 @@ export const diagramView = $view(
             }
           }
 
-          if (previewStarted) void sameStep();
+          if (previewStarted && !virtualized) void sameStep();
           return true;
         },
 
@@ -697,7 +721,8 @@ export const diagramView = $view(
 
         destroy: () => {
           editorDisposed = true;
-          visibilityObserver?.disconnect();
+          stopViewportObserver?.();
+          stopViewportObserver = null;
           previewResizeObserver?.disconnect();
 
           representNumber++;
@@ -708,5 +733,10 @@ export const diagramView = $view(
           distinguishAgainFollowDone(followTheme);
         },
       };
-    },
+}
+
+export const diagramView = $view(
+  imageTableSpec.node,
+  () => (initialNode: PMNode, view: EditorView, getPos: () => number | undefined) =>
+    createFullDiagramView(initialNode, view, getPos),
 );

@@ -44,6 +44,7 @@ export function githubOcticonGlyph(name: string): string {
 }
 
 function createGithubDocsDecorations(doc: PMNode): DecorationSet {
+  if (!doc.textContent.includes("{%")) return DecorationSet.empty;
   const decorations: Decoration[] = [];
   const topLevel: { node: PMNode; position: number }[] = [];
   doc.forEach((node, offset) => topLevel.push({ node, position: offset }));

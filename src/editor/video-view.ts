@@ -69,6 +69,8 @@ import { api } from "@/bridge/ipc";
 import { t } from "@/i18n";
 import { extension } from "./file-kind";
 import { automaticImageName } from "./image-kind";
+import { shouldHydrateNearViewport } from "./large-doc";
+import { observeNearViewport } from "./viewport-visibility";
 
 
 
@@ -185,22 +187,15 @@ function createElement(isVisionFrequency: boolean): viewItem {
 
     const box = document.createElement("span");
     box.className = "nota-image";
-    const source = document.createElement("textarea");
-    source.rows = 1;
-    source.wrap = "soft";
-    source.className = "nota-image-source";
-    source.spellcheck = false;
-    source.autocomplete = "off";
-    source.setAttribute("aria-label", "Image Markdown source");
     const sourceIcon = document.createElement("span");
     sourceIcon.className = "nota-image-source-icon";
     sourceIcon.setAttribute("aria-hidden", "true");
     const img = document.createElement("img");
-    box.append(sourceIcon, source, img, errorBody, deleteBody);
+    box.append(sourceIcon, img, errorBody, deleteBody);
     return {
       dom: box,
       mediaBody: img,
-      sourceBody: source,
+      sourceBody: null,
       errorBody,
       deleteBody,
       isVisionFrequency: false,
@@ -234,9 +229,13 @@ function createElement(isVisionFrequency: boolean): viewItem {
 }
 
 function setMediaError(item3: viewItem, message: string | null): void {
-  item3.errorBody.textContent = message ?? "";
-  item3.errorBody.hidden = !message;
-  item3.dom.classList.toggle("has-media-error", Boolean(message));
+  const text = message ?? "";
+  if (item3.errorBody.textContent !== text) item3.errorBody.textContent = text;
+  if (item3.errorBody.hidden !== !message) item3.errorBody.hidden = !message;
+  const hasError = Boolean(message);
+  if (item3.dom.classList.contains("has-media-error") !== hasError) {
+    item3.dom.classList.toggle("has-media-error", hasError);
+  }
 }
 
 
@@ -251,7 +250,12 @@ function setMediaError(item3: viewItem, message: string | null): void {
 
 
 
-function writeAttribute(item3: viewItem, node: PMNode, documentPath: string | null): void {
+function writeAttribute(
+  item3: viewItem,
+  node: PMNode,
+  documentPath: string | null,
+  loadMedia = true,
+): void {
   const src = text2(node.attrs.src);
   const alt = text2(node.attrs.alt);
   const title = text2(node.attrs.title);
@@ -269,6 +273,11 @@ function writeAttribute(item3: viewItem, node: PMNode, documentPath: string | nu
   );
 
   const localLocal = localLocalImageSliceAbsoluteCorrectPath(src, documentPath);
+  if (!loadMedia) {
+    item3.represent += 1;
+    item3.mediaBody.removeAttribute("src");
+    return;
+  }
   if (!localLocal) {
     setMediaError(item3, null);
     item3.mediaBody.setAttribute("src", src);
@@ -304,8 +313,9 @@ function writeAttribute(item3: viewItem, node: PMNode, documentPath: string | nu
 }
 
 function resizeImageSource(source: HTMLTextAreaElement): void {
+  if (!source.isConnected) return;
   source.style.height = "0px";
-  if (source.isConnected && source.scrollHeight > 0) {
+  if (source.scrollHeight > 0) {
     source.style.height = `${source.scrollHeight}px`;
   }
 }
@@ -376,7 +386,10 @@ export function visionFrequencyView(documentPath: string | null = null) {
       ): NodeView => {
       const initial = createElement(IsVideoSource(text2(initialNode.attrs.src)));
       const isVisionFrequency = initial.isVisionFrequency;
-      writeAttribute(initial, initialNode, documentPath);
+      const viewportManaged = shouldHydrateNearViewport(view.state.doc.content.size);
+      let near = !viewportManaged;
+      let stopViewportObserver: (() => void) | null = null;
+      writeAttribute(initial, initialNode, documentPath, near);
       let currentNode = initialNode;
       const focusEditorWithoutScroll = () => {
         view.dom.focus({ preventScroll: true });
@@ -407,9 +420,34 @@ export function visionFrequencyView(documentPath: string | null = null) {
       });
       initial.mediaBody.addEventListener("load", () => setMediaError(initial, null));
 
+      if (viewportManaged) {
+        stopViewportObserver = observeNearViewport(initial.dom, view, (isNear) => {
+          if (!isNear || near) return;
+          near = true;
+          writeAttribute(initial, currentNode, documentPath, true);
+          stopViewportObserver?.();
+          stopViewportObserver = null;
+        });
+      }
+
+      const ensureSourceBody = (): HTMLTextAreaElement => {
+        if (initial.sourceBody) return initial.sourceBody;
+        const source = document.createElement("textarea");
+        source.rows = 1;
+        source.wrap = "soft";
+        source.className = "nota-image-source";
+        source.spellcheck = false;
+        source.autocomplete = "off";
+        source.setAttribute("aria-label", "Image Markdown source");
+        initial.dom.insertBefore(source, initial.mediaBody);
+        initial.sourceBody = source;
+        bindSourceBodyEvents(source);
+        return source;
+      };
+
       const showSource = (): void => {
         initial.dom.classList.add("is-selected");
-        if (!initial.sourceBody) return;
+        const sourceBody = ensureSourceBody();
         if (!text2(currentNode.attrs.alt)) {
           const position2 = getPos();
           if (position2 !== undefined) {
@@ -422,16 +460,16 @@ export function visionFrequencyView(documentPath: string | null = null) {
           }
         }
         const sourceValue = imageMarkdownSource(currentNode);
-        initial.sourceBody.value = sourceValue;
-        resizeImageSource(initial.sourceBody);
+        sourceBody.value = sourceValue;
+        resizeImageSource(sourceBody);
         const selection = imageSourceSelectionRange(
           sourceValue,
           currentNode.attrs,
         );
         requestAnimationFrame(() => {
-          if (!initial.sourceBody) return;
-          initial.sourceBody.focus({ preventScroll: true });
-          initial.sourceBody.setSelectionRange(selection.start, selection.end);
+          if (!sourceBody.isConnected) return;
+          sourceBody.focus({ preventScroll: true });
+          sourceBody.setSelectionRange(selection.start, selection.end);
         });
       };
 
@@ -479,53 +517,57 @@ export function visionFrequencyView(documentPath: string | null = null) {
         removeMedia();
       };
 
-      initial.sourceBody?.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          commitSource(true);
-        } else if (event.key === "Escape") {
-          event.preventDefault();
-          initial.sourceBody!.value = imageMarkdownSource(currentNode);
-          resizeImageSource(initial.sourceBody!);
-          focusEditorWithoutScroll();
-        }
-      });
-      initial.sourceBody?.addEventListener("input", () => {
-        if (!initial.sourceBody) return;
-        resizeImageSource(initial.sourceBody);
-        if (initial.sourceBody.value.trim() === "") {
-          removeImageFromEmptySource();
-          return;
-        }
-        const parsed = parseImageMarkdownSource(initial.sourceBody.value);
-        if (!parsed) {
-          initial.represent++;
-          setMediaError(initial, null);
-          initial.mediaBody.hidden = true;
-          initial.deleteBody.hidden = true;
-          initial.dom.classList.add("has-invalid-source");
-          return;
-        }
-        initial.mediaBody.hidden = false;
-        initial.deleteBody.hidden = false;
-        initial.dom.classList.remove("has-invalid-source");
-        const position2 = getPos();
-        if (position2 === undefined) return;
-        view.dispatch(
-          view.state.tr.setNodeMarkup(position2, undefined, {
-            ...currentNode.attrs,
-            ...parsed,
-          }),
-        );
-      });
-      initial.sourceBody?.addEventListener("blur", () => commitSource(false));
-      initial.sourceBody?.addEventListener("blur", () => {
-        queueMicrotask(() => {
-          if (initial.dom.isConnected && !initial.dom.contains(document.activeElement)) {
-            initial.dom.classList.remove("is-selected");
+      function bindSourceBodyEvents(source: HTMLTextAreaElement): void {
+        source.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commitSource(true);
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            source.value = imageMarkdownSource(currentNode);
+            resizeImageSource(source);
+            focusEditorWithoutScroll();
           }
         });
-      });
+        source.addEventListener("input", () => {
+          resizeImageSource(source);
+          if (source.value.trim() === "") {
+            removeImageFromEmptySource();
+            return;
+          }
+          const parsed = parseImageMarkdownSource(source.value);
+          if (!parsed) {
+            initial.represent++;
+            setMediaError(initial, null);
+            initial.mediaBody.hidden = true;
+            initial.deleteBody.hidden = true;
+            initial.dom.classList.add("has-invalid-source");
+            return;
+          }
+          initial.mediaBody.hidden = false;
+          initial.deleteBody.hidden = false;
+          initial.dom.classList.remove("has-invalid-source");
+          const position2 = getPos();
+          if (position2 === undefined) return;
+          view.dispatch(
+            view.state.tr.setNodeMarkup(position2, undefined, {
+              ...currentNode.attrs,
+              ...parsed,
+            }),
+          );
+        });
+        source.addEventListener("blur", () => commitSource(false));
+        source.addEventListener("blur", () => {
+          queueMicrotask(() => {
+            if (
+              initial.dom.isConnected &&
+              !initial.dom.contains(document.activeElement)
+            ) {
+              initial.dom.classList.remove("is-selected");
+            }
+          });
+        });
+      }
 
       return {
         dom: initial.dom,
@@ -538,7 +580,7 @@ export function visionFrequencyView(documentPath: string | null = null) {
 
           if (IsVideoSource(text2(newValueNode.attrs.src)) !== isVisionFrequency) return false;
           currentNode = newValueNode;
-          writeAttribute(initial, newValueNode, documentPath);
+          writeAttribute(initial, newValueNode, documentPath, near);
           return true;
         },
         stopEvent: (event) =>
@@ -561,6 +603,10 @@ export function visionFrequencyView(documentPath: string | null = null) {
             initial.sourceBody.value = imageMarkdownSource(currentNode);
             resizeImageSource(initial.sourceBody);
           }
+        },
+        destroy: () => {
+          stopViewportObserver?.();
+          stopViewportObserver = null;
         },
         };
       },

@@ -319,6 +319,7 @@ export function blinkingCaretPlugin(): Plugin {
 
       let frame = 0;
       let blinkTimer = 0;
+      let scrollTimer = 0;
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const stopBlink = () => {
         if (blinkTimer) window.clearInterval(blinkTimer);
@@ -341,6 +342,18 @@ export function blinkingCaretPlugin(): Plugin {
       };
       const safeArrange = () => {
         if (!frame) frame = requestAnimationFrame(refreshNewValue);
+      };
+      const afterScroll = () => {
+        if (frame) {
+          cancelAnimationFrame(frame);
+          frame = 0;
+        }
+        hideCursor(cursor);
+        if (scrollTimer) window.clearTimeout(scrollTimer);
+        scrollTimer = window.setTimeout(() => {
+          scrollTimer = 0;
+          if (!view.isDestroyed) safeArrange();
+        }, 80);
       };
       const windowBlur = () => {
         hideCursor(cursor);
@@ -383,9 +396,9 @@ export function blinkingCaretPlugin(): Plugin {
       view.dom.addEventListener("compositionstart", beginComposition);
       view.dom.addEventListener("compositionupdate", beginComposition);
       view.dom.addEventListener("compositionend", endComposition);
-      rollActionContainer?.addEventListener("scroll", safeArrange, { passive: true });
+      rollActionContainer?.addEventListener("scroll", afterScroll, { passive: true });
       window.addEventListener("resize", safeArrange);
-      window.addEventListener("scroll", safeArrange, true);
+      window.addEventListener("scroll", afterScroll, true);
       window.addEventListener("blur", windowBlur);
       window.addEventListener("focus", safeArrange);
       document.addEventListener("selectionchange", safeArrange);
@@ -396,6 +409,7 @@ export function blinkingCaretPlugin(): Plugin {
         update: safeArrange,
         destroy() {
           if (frame) cancelAnimationFrame(frame);
+          if (scrollTimer) window.clearTimeout(scrollTimer);
           stopBlink();
           view.dom.removeEventListener("focusin", safeArrange);
           view.dom.removeEventListener("focusout", safeArrange);
@@ -403,9 +417,9 @@ export function blinkingCaretPlugin(): Plugin {
           view.dom.removeEventListener("compositionupdate", beginComposition);
           view.dom.removeEventListener("compositionend", endComposition);
           view.dom.classList.remove(imeComposingClass);
-          rollActionContainer?.removeEventListener("scroll", safeArrange);
+          rollActionContainer?.removeEventListener("scroll", afterScroll);
           window.removeEventListener("resize", safeArrange);
-          window.removeEventListener("scroll", safeArrange, true);
+          window.removeEventListener("scroll", afterScroll, true);
           window.removeEventListener("blur", windowBlur);
           window.removeEventListener("focus", safeArrange);
           document.removeEventListener("selectionchange", safeArrange);

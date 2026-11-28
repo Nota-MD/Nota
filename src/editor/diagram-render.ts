@@ -60,6 +60,12 @@ let renderIndex = 0;
 
 let renderChain: Promise<unknown> = Promise.resolve();
 
+let initializedThemeKey = "";
+
+export function mermaidConfigurationKey(theme: ImageTableTheme, mindmap: boolean): string {
+  return `${theme.key}|${mindmap ? "mindmap" : "diagram"}`;
+}
+
 function arrangeQueue<T>(taskTask: () => Promise<T>): Promise<T> {
 
   const result2 = renderChain.then(taskTask, taskTask);
@@ -115,42 +121,43 @@ export async function render(source2: string, theme: ImageTableTheme): Promise<R
 
 
 
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "base",
-      fontFamily: theme.fontFamily,
-      fontSize: theme.fontSize,
-      flowchart: {
-        // WebKitGTK can keep a zero-sized foreignObject for edge labels even
-        // when Chrome reports a valid box. Native SVG text follows the same
-        // viewBox and remains visible across WebViews and document themes.
-        htmlLabels: false,
-      },
-      themeVariables: mindmap
-        ? thinkDimensionGuideImageConfigureColor(theme.mode, theme.accent)
-        : diagramThemeVariables(theme),
-
-
-
-      themeCSS: mindmap
-        ? `${labelCss}
-           .mindmap-edges path, .mindmap-edges .edge {
-             stroke: ${theme.mode === "dark" ? "#9dadbf" : "#60768c"} !important;
-             stroke-width: 3px !important;
-           }
-           .mindmap-node text,
-           .mindmap-node tspan {
-             text-anchor: middle !important;
-             dominant-baseline: middle;
-           }
-           .mindmap-node foreignObject > div,
-           .mindmap-node .nodeLabel,
-           .mindmap-node .labelBkg {
-             text-align: center !important;
-             justify-content: center !important;
-           }`
-        : labelCss,
-    });
+    const configurationKey = mermaidConfigurationKey(theme, mindmap);
+    if (initializedThemeKey !== configurationKey) {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: "base",
+        fontFamily: theme.fontFamily,
+        fontSize: theme.fontSize,
+        flowchart: {
+          // WebKitGTK can keep a zero-sized foreignObject for edge labels even
+          // when Chrome reports a valid box. Native SVG text follows the same
+          // viewBox and remains visible across WebViews and document themes.
+          htmlLabels: false,
+        },
+        themeVariables: mindmap
+          ? thinkDimensionGuideImageConfigureColor(theme.mode, theme.accent)
+          : diagramThemeVariables(theme),
+        themeCSS: mindmap
+          ? `${labelCss}
+             .mindmap-edges path, .mindmap-edges .edge {
+               stroke: ${theme.mode === "dark" ? "#9dadbf" : "#60768c"} !important;
+               stroke-width: 3px !important;
+             }
+             .mindmap-node text,
+             .mindmap-node tspan {
+               text-anchor: middle !important;
+               dominant-baseline: middle;
+             }
+             .mindmap-node foreignObject > div,
+             .mindmap-node .nodeLabel,
+             .mindmap-node .labelBkg {
+               text-align: center !important;
+               justify-content: center !important;
+             }`
+          : labelCss,
+      });
+      initializedThemeKey = configurationKey;
+    }
 
     const editNumber = `nota-mermaid-${++renderIndex}`;
     try {

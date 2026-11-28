@@ -422,6 +422,17 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
   let aboveCountSnapshotKeyName = "";
 
   let aboveCountMode: WritingMode = writingModes;
+  let typewriterFrame = 0;
+  const scheduleTypewriterCenter = (view: EditorView) => {
+    if (typewriterFrame) cancelAnimationFrame(typewriterFrame);
+    typewriterFrame = requestAnimationFrame(() => {
+      typewriterFrame = 0;
+      if (!view.dom.isConnected) return;
+      const position3 = view.coordsAtPos(view.state.selection.main.head);
+      if (!position3) return;
+      rollToCorrectMiddle(view.scrollDOM, position3.top, position3.bottom);
+    });
+  };
   const { field: writeWorkField, extensionExtend: writeWorkExtensionExtend } = writingModeExtensionExtend(writingModes);
 
   let aboveCountPreview: changePreview | null = review ?? null;
@@ -483,10 +494,7 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
 
       const justOpen = mode2.typewriter && !aboveCountMode.typewriter;
       if (mode2.typewriter && (justOpen || u.selectionSet || u.docChanged)) {
-
-
-        const position3 = u.view.coordsAtPos(u.state.selection.main.head);
-        if (position3) rollToCorrectMiddle(u.view.scrollDOM, position3.top, position3.bottom);
+        scheduleTypewriterCenter(u.view);
       }
       aboveCountMode = mode2;
 
@@ -578,8 +586,7 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
 
       view.dom.classList.toggle(dedicatedNoteClass, mode2.focus);
       if (mode2.typewriter) {
-        const position3 = view.coordsAtPos(view.state.selection.main.head);
-        if (position3) rollToCorrectMiddle(view.scrollDOM, position3.top, position3.bottom);
+        scheduleTypewriterCenter(view);
       }
     },
     runCommand: (name: EditorCommand, payload?: CommandPayload) =>

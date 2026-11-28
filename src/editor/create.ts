@@ -53,7 +53,11 @@ import { DefaultInlineExtensionFlags } from "./inline-marks";
 import { DefaultPunctuationSettings } from "./smart-punctuation";
 
 
-import { rollToCurrentLine, setWritingMode, type WritingMode } from "./writing-modes";
+import {
+  scheduleCurrentLineCenter,
+  setWritingMode,
+  type WritingMode,
+} from "./writing-modes";
 
 
 import {
@@ -188,12 +192,15 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     options,
     vimInput: options.vimInput,
   });
+  if (options.onViewReady) {
+    editor.action((ctx) => options.onViewReady?.(ctx.get(editorViewCtx)));
+  }
 
 
 
 
   if (!readOnly && options.writingModes?.typewriter) {
-    editor.action((ctx) => rollToCurrentLine(ctx.get(editorViewCtx)));
+    editor.action((ctx) => scheduleCurrentLineCenter(ctx.get(editorViewCtx)));
   }
 
   const clusterFocus = () =>
@@ -523,6 +530,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
 
     destroy: () => {
       editor.destroy();
+      root.replaceChildren();
     },
   };
 }

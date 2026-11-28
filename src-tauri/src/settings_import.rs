@@ -152,6 +152,14 @@ pub fn inspect(package: &str) -> Result<PackageInventory> {
 }
 
 pub(crate) fn apply_embedded_bootstrap(resource_dir: &Path) -> Result<Option<ImportReport>> {
+    let paths = PackagePaths::current()?;
+    apply_embedded_bootstrap_with_paths(resource_dir, &paths)
+}
+
+fn apply_embedded_bootstrap_with_paths(
+    resource_dir: &Path,
+    paths: &PackagePaths,
+) -> Result<Option<ImportReport>> {
     let profile_path = resource_dir.join(crate::distribution_profile::PROFILE_RESOURCE);
     if !profile_path.is_file() {
         return Ok(None);
@@ -182,7 +190,6 @@ pub(crate) fn apply_embedded_bootstrap(resource_dir: &Path) -> Result<Option<Imp
         return Ok(None);
     }
 
-    let paths = PackagePaths::current()?;
     let marker = paths
         .config
         .join(format!(".distribution-bootstrap-{id}-{revision}.done"));
@@ -190,7 +197,7 @@ pub(crate) fn apply_embedded_bootstrap(resource_dir: &Path) -> Result<Option<Imp
         return Ok(None);
     }
     let package = resource_dir.join("distribution").join(resource);
-    let validated = validate(&package.display().to_string(), &paths)?;
+    let validated = validate(&package.display().to_string(), paths)?;
     let include = validated
         .inventory
         .items
@@ -216,7 +223,7 @@ pub(crate) fn apply_embedded_bootstrap(resource_dir: &Path) -> Result<Option<Imp
         package: package.display().to_string(),
         include,
     };
-    let mut prepared = prepare_with_paths(&request, &paths)?;
+    let mut prepared = prepare_with_paths(&request, paths)?;
     prepared.commit()?;
     if let Some(settings) = prepared.imported_settings() {
         settings.save_to(&paths.config.join("settings.toml"))?;

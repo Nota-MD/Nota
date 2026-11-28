@@ -22,6 +22,7 @@
 
 import { lazy, Suspense } from "react";
 
+import { api } from "@/bridge/ipc";
 import type { TotalJoin } from "@/ui/focus-summary";
 import type { CommandPaletteWiring } from "@/ui/CommandPalette";
 import type { Dialogs } from "@/ui/useDialogs";
@@ -71,7 +72,6 @@ export function AppDialogs({
   onSetDebugMode,
   windowPresentation,
   firstRunSeen,
-  onFirstRunDone,
   commandPalette,
 }: {
   dialog: Dialogs;
@@ -94,7 +94,6 @@ export function AppDialogs({
   onSetDebugMode: (enabled: boolean) => void;
   windowPresentation: "full" | "embedded" | "external";
   firstRunSeen: boolean;
-  onFirstRunDone: () => void;
   commandPalette: CommandPaletteWiring | null;
 }) {
   const { confirmReq, answerConfirm, promptReq, answerPrompt, windowPickReq, answerWindowPick } = dialog;
@@ -169,8 +168,16 @@ export function AppDialogs({
         <FirstRunGuide
           presentation={windowPresentation === "full" ? "full" : "embedded"}
           onDone={() => {
-            closeFirstRun();
-            if (!firstRunSeen) onFirstRunDone();
+            if (firstRunSeen) {
+              closeFirstRun();
+              return;
+            }
+            void api.settings
+              .completeOnboarding()
+              .then(closeFirstRun)
+              .catch((error) => {
+                console.error("[nota] Could not complete onboarding:", error);
+              });
           }}
         />
       )}

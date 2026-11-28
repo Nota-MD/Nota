@@ -95,11 +95,13 @@ test("license is embedded in the guide like the notice", () => {
 });
 
 test("dismissal persists the one-time marker", () => {
-  const app = source("src/App.tsx");
   const dialogs = source("src/ui/AppDialogs.tsx");
-  assert(app.includes("onboarding_seen: true"), "dismissal does not persist");
   assert(dialogs.includes("firstRunSeen"), "dialogs do not receive the seen state");
-  assert(dialogs.includes("onFirstRunDone"), "dialogs cannot commit dismissal");
+  assert(
+    dialogs.includes(".completeOnboarding()") &&
+      dialogs.includes(".then(closeFirstRun)"),
+    "dialogs do not wait for the persisted dismissal",
+  );
 });
 
 test("About can reopen the guide", () => {

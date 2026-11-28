@@ -646,8 +646,11 @@ html[data-focus-dim="stronger"] {
   --focus-dim: 0.1;
 }
 
-.editor-mount .ProseMirror > :not(.nota-focus-path),
-.editor-mount .ProseMirror .nota-focus-container > :not(.nota-focus-path) {
+.editor-mount .ProseMirror.nota-focus-mode > :not(.nota-focus-path),
+.editor-mount
+  .ProseMirror.nota-focus-mode
+  .nota-focus-container
+  > :not(.nota-focus-path) {
   opacity: var(--focus-dim);
   transition: opacity var(--duration-fast) var(--ease-out);
 }

@@ -76,6 +76,18 @@ Create the in-process settings window first and fall back to a standalone
 process only when creation fails. This keeps the startup path consistent across
 platforms while preserving the Windows WebView2 fallback.
 
+## Utility window state boundaries
+
+Utility processes may intentionally run without `AppState`. The shared
+`on_page_load` callback must use `try_state` before reading application state;
+an unconditional state lookup panics before the window can report ready. Keep
+the debug-log child independent of settings and plugin initialization.
+
+On Linux, launch utility windows through `/proc/self/exe`. A development rebuild
+can replace the executable while Nota is running; `current_exe()` may then return
+a path ending in ` (deleted)`, and launching About, Settings or the log window
+fails even though the running process is healthy.
+
 ## Release size
 
 Measure binary and installer sizes after every release-profile change. Keep
@@ -134,6 +146,13 @@ Window geometry, menu visibility, and title-bar mode must be derived from
 actual window state. A cached setting is not enough when users move between
 normal, maximized, and full-screen modes.
 
+## Editor mount ownership
+
+React StrictMode may start two editor effects in succession. Attach the
+Milkdown mount before creating the editor, and let destroy remove only that
+editor instance. Never clear the shared editor mount from an old instance:
+the cleanup can run after the replacement editor has mounted.
+
 ## Plugin security
 
 The developer bridge is remote-control authority. Require developer mode,
@@ -159,6 +178,15 @@ Session recovery must preserve document order, active tab, cursor where safe,
 and unsaved drafts without overwriting source files. Close, discard, and save
 actions must be explicit and mutually exclusive.
 
+## Settings persistence
+
+Treat settings writes as cross-process transactions. Merge a small patch into
+the latest on-disk settings instead of writing a stale full snapshot from a
+main, Settings or About window. Write through a same-directory temporary file,
+flush it, and atomically replace the target. Distribution bootstrap imports run
+only when no user settings or completion marker exists; they must never be
+reapplied on later launches.
+
 ## Dual-engine E2E
 
 Chromium and WebKitGTK disagree about contenteditable caret placement, NBSP
@@ -176,6 +204,13 @@ window scaling, and front matter.
 When text and overlays share a region, define which layer owns the caret and
 which layer owns hit testing. Pointer capture and native selection can otherwise
 fight after every redraw.
+
+## Panel motion
+
+Do not animate sidebar width or flex-basis. Those properties force layout on
+every frame. Reserve the editor width once, position side panels absolutely, and
+animate transform on the compositor. Keep pointer-driven resizing direct and
+without transition.
 
 ## Testing strategy
 

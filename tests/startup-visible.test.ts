@@ -98,6 +98,29 @@ testCase("编辑器聚焦后才宣告 ready", () => {
   assertValue(ready > editable, "markEditorReady 必须排在聚焦和可编辑面确认之后");
 });
 
+testCase("Milkdown 根节点在创建视图前接入文档", () => {
+  const source = readFileSync(join(process.cwd(), "src/editor/assemble.ts"), "utf8");
+  const attach = source.indexOf("root.replaceChildren(mount)");
+  const create = source.indexOf("const editor = await Editor.make()");
+  assertValue(attach >= 0, "缺少 Milkdown 根节点接入");
+  assertValue(
+    create >= 0 && attach < create,
+    "Milkdown 在游离节点中创建，WebKit 不会挂载 ProseMirror",
+  );
+});
+
+testCase("旧编辑器销毁不会清空替代实例的挂载点", () => {
+  const source = readFileSync(join(process.cwd(), "src/editor/create.ts"), "utf8");
+  const destroy = source.indexOf("destroy: () => {");
+  const destroyEnd = source.indexOf("};", destroy);
+  const block = source.slice(destroy, destroyEnd);
+  assertValue(destroy >= 0 && destroyEnd > destroy, "缺少编辑器销毁实现");
+  assertValue(
+    !block.includes("root.replaceChildren()"),
+    "旧实例销毁会清空 React 严格模式下新实例的挂载点",
+  );
+});
+
 testCase("窗口同时等待界面主题和文档主题", () => {
   const source = readFileSync(join(process.cwd(), "src/ui/useBootReveal.ts"), "utf8");
   assertValue(source.includes("documentThemeReady"), "揭幕没有等待文档主题");

@@ -1,4 +1,6 @@
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -168,10 +170,59 @@ impl Settings {
         }
         let text = toml::to_string_pretty(self)
             .map_err(|e| NotaError::Config(format!("Could not serialize settings: {e}")))?;
-        std::fs::write(path, text).map_err(|source| NotaError::Write {
-            path: path.to_path_buf(),
-            source,
-        })
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|value| value.as_nanos())
+            .unwrap_or(0);
+        let temporary = path.with_file_name(format!(
+            ".{}.nota-tmp-{}-{suffix}",
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("settings.toml"),
+            std::process::id()
+        ));
+        let write_result = (|| -> std::io::Result<()> {
+            let mut file = std::fs::File::create(&temporary)?;
+            file.write_all(text.as_bytes())?;
+            file.sync_all()?;
+            replace_file(&temporary, path)
+        })();
+        if let Err(source) = write_result {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(NotaError::Write {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn replace_file(temporary: &Path, target: &Path) -> std::io::Result<()> {
+    std::fs::rename(temporary, target)
+}
+
+#[cfg(target_os = "windows")]
+fn replace_file(temporary: &Path, target: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt as _;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let source: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+    let moved = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if moved == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
     }
 }
 
@@ -232,6 +283,30 @@ mod tests {
         assert!(!dir.join("settings.toml.bak").exists(), "\u{4ec0}\u{4e48}\u{90fd}\u{6ca1}\u{8bfb}\u{5230}\u{ff0c}\u{6ca1}\u{4ec0}\u{4e48}\u{53ef}\u{5907}\u{4efd}");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn saving_settings_atomically_replaces_existing_content() {
+        let dir =
+            std::env::temp_dir().join(format!("nota-settings-atomic-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.toml");
+        std::fs::write(&path, "document_theme = \"old\"\n").unwrap();
+
+        let mut next = Settings::load_from(&path).unwrap();
+        next.document_theme = "ibm-document".to_owned();
+        next.general.onboarding_seen = true;
+        next.save_to(&path).unwrap();
+
+        let reloaded = Settings::load_from(&path).unwrap();
+        assert_eq!(reloaded.document_theme, "ibm-document");
+        assert!(reloaded.general.onboarding_seen);
+        assert!(std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(std::result::Result::ok)
+            .all(|entry| !entry.file_name().to_string_lossy().contains(".nota-tmp-")));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

@@ -83,7 +83,10 @@ fn opening_fence(line: &str) -> Option<Fence> {
     if marker != '`' && marker != '~' {
         return None;
     }
-    let length = line.chars().take_while(|character| *character == marker).count();
+    let length = line
+        .chars()
+        .take_while(|character| *character == marker)
+        .count();
     if length < 3 {
         return None;
     }
@@ -463,9 +466,7 @@ mod tests {
 
     #[test]
     fn longer_and_tilde_fences_protect_markdown_code_blocks() {
-        let long = parse_success(
-            "````nota-diff\n- ```c\n+ ```cpp\n````\n",
-        );
+        let long = parse_success("````nota-diff\n- ```c\n+ ```cpp\n````\n");
         assert_eq!(long.body_2, "");
         assert_eq!(long.broken_line, 0);
         assert_eq!(long.change.len(), 1);
@@ -476,9 +477,7 @@ mod tests {
             "```cpp\n"
         );
 
-        let tilde = parse_success(
-            "~~~nota-diff\n- old\n+ new\n~~~\n",
-        );
+        let tilde = parse_success("~~~nota-diff\n- old\n+ new\n~~~\n");
         assert_eq!(tilde.change.len(), 1);
         assert_eq!(
             app_2("old\n", &tilde.change).expect("tilde fence should apply"),

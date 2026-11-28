@@ -28,6 +28,49 @@ pub fn nota_settings_set(
 }
 
 #[tauri::command]
+pub fn nota_settings_patch(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    patch: serde_json::Value,
+) -> Result<Settings> {
+    let mut base = serde_json::to_value(Settings::load()?)
+        .map_err(|error| NotaError::other(format!("Could not encode current settings: {error}")))?;
+    merge_json(&mut base, patch);
+    let next: Settings = serde_json::from_value(base)
+        .map_err(|error| NotaError::other(format!("Could not apply settings patch: {error}")))?;
+    save_settings(&app, &state, next.clone())?;
+    Ok(next)
+}
+
+#[tauri::command]
+pub fn nota_settings_complete_onboarding(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Settings> {
+    let mut next = Settings::load()?;
+    if next.general.onboarding_seen {
+        return Ok(next);
+    }
+    next.general.onboarding_seen = true;
+    save_settings(&app, &state, next.clone())?;
+    Ok(next)
+}
+
+fn merge_json(base: &mut serde_json::Value, patch: serde_json::Value) {
+    match (base, patch) {
+        (serde_json::Value::Object(base_map), serde_json::Value::Object(patch_map)) => {
+            for (key, value) in patch_map {
+                merge_json(
+                    base_map.entry(key).or_insert(serde_json::Value::Null),
+                    value,
+                );
+            }
+        }
+        (base, patch) => *base = patch,
+    }
+}
+
+#[tauri::command]
 pub fn nota_settings_problem(state: State<'_, AppState>) -> Option<String> {
     state.settings_problem.clone()
 }
@@ -412,4 +455,51 @@ pub(crate) fn save_settings(
     app.emit("nota:settings-changed", &settings_snapshot)
         .map_err(|e| NotaError::other(format!("Could not broadcast settings update: {e}")))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge_json;
+
+    #[test]
+    fn settings_patch_preserves_unmentioned_theme_fields() {
+        let mut base = serde_json::json!({
+            "document_theme": "ibm-document",
+            "appearance": {
+                "accent": "#0062ff",
+                "dock_width": 320
+            },
+            "general": {
+                "language": "zh-CN",
+                "onboarding_seen": false
+            }
+        });
+        merge_json(
+            &mut base,
+            serde_json::json!({
+                "general": {
+                    "onboarding_seen": true
+                }
+            }),
+        );
+        assert_eq!(base["document_theme"], "ibm-document");
+        assert_eq!(base["appearance"]["accent"], "#0062ff");
+        assert_eq!(base["appearance"]["dock_width"], 320);
+        assert_eq!(base["general"]["language"], "zh-CN");
+        assert_eq!(base["general"]["onboarding_seen"], true);
+    }
+
+    #[test]
+    fn settings_patch_replaces_explicit_scalar_values() {
+        let mut base = serde_json::json!({
+            "appearance": { "ui_style": "adwaita" }
+        });
+        merge_json(
+            &mut base,
+            serde_json::json!({
+                "appearance": { "ui_style": "macos" }
+            }),
+        );
+        assert_eq!(base["appearance"]["ui_style"], "macos");
+    }
 }

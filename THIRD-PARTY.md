@@ -1,6 +1,6 @@
 # 第三方组件
 
-> 最后核对：**2026-11-23**
+> 最后核对：**2026-11-28**
 >
 > ⚠️ **2026-10-06 那一次：每一项都补上了仓库/主页链接**（用户：「**鸣谢里加上各个项目的仓库**」，并贴了 Typora 的鸣谢页当参照）。
 > 链接**不是凭印象写的**：Rust 那半从 `cargo metadata` 里读每个 crate 的 `repository` 字段，前端那半读 `node_modules/<包>/package.json` 的 `repository`。
@@ -19,6 +19,23 @@
 > 下面的许可证字段是**从上列命令与已安装的 `node_modules` 里读出来的**，不是凭印象写的。
 
 ---
+
+## 0. Implementation and spirit references
+
+These projects are recorded separately from runtime dependencies. They shaped Nota's
+behavior, implementation or engineering philosophy, but the table states exactly
+which material was consulted and whether source code was copied.
+
+| Reference | Role in Nota | Public source | Code copied | License boundary |
+|---|---|---|---|---|
+| [Typora](https://typora.io/) | Primary interaction and WYSIWYG-editor experience reference: headings, tables, links, table of contents, source editing, themes and surrounding editor behavior | [Official default themes](https://github.com/typora/typora-default-themes), [official theme toolkit](https://github.com/typora/typora-theme-toolkit), [theme website source](https://github.com/typora/theme.typora.io) | No Typora core application code. Nota implements compatible behavior with its own Milkdown/ProseMirror architecture and tests | Typora's core application is proprietary. Its public theme/toolkit repositories declare no separate reuse license, so they are treated as interoperability and behavior references, not vendored dependencies |
+| [Textus](https://github.com/CatVinci-Studio/Textus) | Concrete implementation and performance reference for local-first editing, link-source reveal, Vim input, large-document rendering and test strategy | [CatVinci-Studio/Textus](https://github.com/CatVinci-Studio/Textus) at the reviewed revision `915edf972d756a2a135e5a8ddd00a959c713f5a7` | Selected MIT-licensed patterns were adapted where sections 13 and 14 below say so. Other performance work is an independent implementation against the same benchmark corpus | MIT License. Copyright and permission text are retained below. Nota's schema integration, comments, fixes and tests remain Nota-specific |
+| [BSD](https://www.bsd.org/) | Freedom-oriented software culture and the engineering ethos behind Nota's BSD-2-Clause distribution | [FreeBSD source](https://github.com/freebsd/freebsd-src), [NetBSD source](https://github.com/NetBSD/src), [OpenBSD source](https://github.com/openbsd/src) | No BSD operating-system source code or mascot artwork is bundled | Reference and spirit only. Nota's own source license is the BSD 2-Clause text in `LICENSE`; no third-party BSD-project endorsement is implied |
+| [AT&T Unix](https://www.tuhs.org/) | Unix-philosophy reference: small composable mechanisms, plain-text ownership, clear boundaries and tooling that remains inspectable | [Unix Heritage Society archive](https://www.tuhs.org/Archive/), [Research Unix source tree](https://www.tuhs.org/cgi-bin/utree.pl?file=V7) | No historical AT&T Unix source code is included or adapted | Historical and conceptual reference only. The archive's source has its own historical licensing constraints and is not redistributed by Nota |
+
+`BSD` and `AT&T Unix` are not additional dependencies. They are recorded because
+Nota's public license, portability choices and preference for transparent local
+files are directly informed by that lineage.
 
 ## 1. Rust 直接依赖（`src-tauri/Cargo.toml`）
 

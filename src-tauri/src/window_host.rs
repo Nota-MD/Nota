@@ -135,9 +135,7 @@ pub async fn launch(role: WindowRole, path: Option<&Path>) -> Result<u32> {
             return Ok(pid);
         }
     }
-    let program = std::env::current_exe().map_err(|error| {
-        NotaError::other(format!("Could not locate the Nota executable: {error}"))
-    })?;
+    let program = launch_program()?;
     let ready_path = ready_path();
     let _ = std::fs::remove_file(&ready_path);
     let mut command = crate::proc::background_command(&program);
@@ -183,6 +181,20 @@ pub async fn launch(role: WindowRole, path: Option<&Path>) -> Result<u32> {
     })
     .await
     .map_err(|error| NotaError::other(format!("Window readiness worker failed: {error}")))?
+}
+
+fn launch_program() -> Result<PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        // The executable path may end in " (deleted)" after a development rebuild.
+        return Ok(PathBuf::from("/proc/self/exe"));
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        std::env::current_exe().map_err(|error| {
+            NotaError::other(format!("Could not locate the Nota executable: {error}"))
+        })
+    }
 }
 
 pub fn signal_ready() {
@@ -246,5 +258,11 @@ mod tests {
             None
         );
         assert_eq!(requested_role(args(&["nota"])), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_utility_processes_use_the_running_executable() {
+        assert_eq!(launch_program().unwrap(), PathBuf::from("/proc/self/exe"));
     }
 }

@@ -54,51 +54,39 @@
 
 
 .plugin-dock {
-
-
-  position: relative;
+  position: absolute;
+  z-index: 11;
+  inset: 0 0 0 auto;
   width: var(--dock-width);
-  flex: none;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--border);
   background: var(--bg-subtle);
   min-height: 0;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  --dock-slide: var(--dock-width);
   box-sizing: border-box;
+  contain: layout paint style;
+  transform: translate3d(0, 0, 0);
+  visibility: visible;
+  will-change: transform;
   transition:
-    width calc(var(--duration-fast) * 1.6) var(--ease-out),
-    border-color calc(var(--duration-fast) * 1.6) var(--ease-out),
-    opacity calc(var(--duration-fast) * 1.6) var(--ease-out);
-  animation: dock-in calc(var(--duration-fast) * 1.6) var(--ease-out);
+    transform var(--panel-motion-duration) var(--ease-out),
+    opacity calc(var(--panel-motion-duration) * 0.72) var(--ease-out),
+    visibility 0s linear;
+  animation: dock-enter var(--panel-motion-duration) var(--ease-out);
 }
 
 .plugin-dock.plugin-dock-collapsed,
 .plugin-dock.plugin-dock-collapsed[data-wide="true"] {
-  width: 0;
-  min-width: 0;
-  overflow: hidden;
-  border-left-color: transparent;
   opacity: 0;
   pointer-events: none;
+  transform: translate3d(100%, 0, 0);
+  visibility: hidden;
+  animation: none;
+  transition:
+    transform var(--panel-motion-duration) var(--ease-out),
+    opacity calc(var(--panel-motion-duration) * 0.72) var(--ease-out),
+    visibility 0s linear var(--panel-motion-duration);
 }
 
 .plugin-dock-collapsed .dock-resizer {
@@ -125,13 +113,13 @@ body.dock-collapse-armed::after {
   pointer-events: none;
 }
 
-@keyframes dock-in {
+@keyframes dock-enter {
   from {
-    margin-right: calc(-1 * var(--dock-slide));
-    opacity: 0.35;
+    transform: translate3d(100%, 0, 0);
+    opacity: 0;
   }
   to {
-    margin-right: 0;
+    transform: translate3d(0, 0, 0);
     opacity: 1;
   }
 }
@@ -139,6 +127,7 @@ body.dock-collapse-armed::after {
 
 
 @media (prefers-reduced-motion: reduce) {
+  .sidebar,
   .plugin-dock {
     animation: none;
     transition: none;
@@ -430,8 +419,6 @@ body.dock-collapse-armed::after {
 
 .plugin-dock[data-wide="true"] {
   width: min(560px, 45vw);
-
-  --dock-slide: min(560px, 45vw);
 }
 
 

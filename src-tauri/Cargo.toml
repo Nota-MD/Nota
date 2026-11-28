@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.19.0-beta"
+version = "0.19.1-beta"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota - a WYSIWYG Markdown editor with Lua extensions"
@@ -104,6 +104,7 @@ webview2-com = "0.39"
 windows-core = "0.62"
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
+    "Win32_Storage_FileSystem",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }

@@ -39,7 +39,6 @@ pub struct PluginInfo {
     pub language_ok: bool,
 
     pub settings: Vec<PluginSetting>,
-
 }
 
 #[derive(Debug, Clone, Serialize)]

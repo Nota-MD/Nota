@@ -548,14 +548,21 @@ ui_mode = "dark"
 ### 5.4 读写口径
 
 - `nota_settings_get` 直接克隆内存里那一份。
-- `nota_settings_set` 是**整份替换**并落盘：先改内存 → 落盘失败则**把内存改回去**
-  再返回错误。否则会出现"界面上是新的、重开又变回去"这种最难解释的状态。
-- 为什么是整份替换而不是逐项 patch：设置项还少，patch 语义（"没给的字段不动"还是
-  "没给的字段恢复默认"）会变成一个新的、没人想要的理解负担。
+- `nota_settings_patch` is the normal write path. It reads the latest on-disk
+  settings, recursively merges the supplied patch, saves the result and returns
+  the committed value. This prevents a stale Settings or About process from
+  replacing a newer theme selection with an old full snapshot.
+- `nota_settings_complete_onboarding` changes only `general.onboarding_seen`
+  from the latest on-disk settings and returns only after the write succeeds.
+- `nota_settings_set` remains a compatibility path for complete replacements
+  and uses the same persistence rules.
+- Settings files are written through a same-directory temporary file, flushed,
+  then atomically replaced. On Windows the replacement uses
+  `MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`.
 - 启动时读失败**不回滚启动**：一份坏掉的 `settings.toml` 不该让人连界面都进不去，
   退回默认值 + 在控制台说明（`lib.rs::run`）。
 
-⚠️ `nota_settings_set` **改了 `strict_markdown` 之后要连带做两件事**（`commands/settings.rs`）：
+⚠️ Settings writes that change `strict_markdown` must also do two things (`commands/settings.rs`):
 调 `set_strict_markdown()` 把文档表里所有文档的**推导标题重算一遍**（标签页标题是后端
 按当前口径从正文算的），并把 `settings` 锁**先放下**再动 `documents`——锁序是
 `plugins → documents → settings`，反着拿会死锁。

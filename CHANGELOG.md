@@ -4,6 +4,33 @@ Nota keeps short release-line notes. Full evidence, defect identifiers and
 historical details are in
 [`docs/07-feature-status.md`](docs/07-feature-status.md).
 
+## 0.19.1-beta
+
+- Settings updates from the main window, Settings window and About window now
+  merge into the latest on-disk settings. A stale window can no longer restore
+  an older theme or overwrite newer preferences.
+- Settings files are flushed and atomically replaced. Windows uses a
+  write-through replacement so an interrupted save cannot leave a partial file.
+- Completing first-run onboarding now changes only the onboarding marker.
+- Distribution Profile bootstrap settings are applied once on first launch and
+  are not restored over user preferences on later launches or updates.
+- Fixed a startup race between React StrictMode cleanup and the replacement
+  Milkdown editor. The editor mount is attached before creation, and an old
+  editor no longer clears the new mount.
+- Sidebar and dock panels now animate on the compositor with transforms. The
+  editor reserves its width once instead of recalculating layout every frame.
+- Focus mode applies dimming only while focus mode is enabled and limits it to
+  the current caret path.
+- Inline LaTeX previews keep the formula on one line instead of wrapping into a
+  tall, narrow column.
+- The debug-log window no longer panics when its utility process has no main
+  application state.
+- Linux utility windows now launch through the running executable, so About,
+  Settings and the debug log still open after a development rebuild replaces
+  the on-disk binary.
+- Linux release AppImages isolate bundled GIO modules and avoid loading a
+  Wayland input module after the GTK hook selects X11.
+
 ## 0.19.0-beta
 
 - Settings packages can include installable `.nota-plugin` packages alongside

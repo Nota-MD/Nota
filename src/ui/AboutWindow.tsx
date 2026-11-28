@@ -39,7 +39,8 @@ export function AboutWindow() {
     if (!settings) return;
     const next = { ...settings, ...patch };
     setSettings(next);
-    await api.settings.set(next);
+    const saved = await api.settings.patch(patch);
+    setSettings(saved);
   }, [settings]);
 
   useAppearance(settings, updateSettings);

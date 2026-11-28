@@ -376,7 +376,8 @@ export default function App() {
       const next = { ...settings, ...patch };
       setSettings(next);
       try {
-        await api.settings.set(next);
+        const saved = await api.settings.patch(patch);
+        setSettings(saved);
 
 
 
@@ -822,7 +823,7 @@ export default function App() {
           />
         </div>
 
-        <div className="app-body">
+        <div className="app-body" data-sidebar-open={sidebarOpen ? "true" : undefined} data-dock-open={dockOpen ? "true" : undefined}>
           {
 
 
@@ -985,7 +986,7 @@ export default function App() {
           debugMode={settings?.general.debug_mode ?? false}
           windowPresentation={settings?.appearance.settings_window_style ?? "embedded"}
           onSetDebugMode={(enabled) => settings && void updateSettings({ general: { ...settings.general, debug_mode: enabled } })}
-          firstRunSeen={settings?.general.onboarding_seen ?? true} onFirstRunDone={() => settings && void updateSettings({ general: { ...settings.general, onboarding_seen: true } })}
+          firstRunSeen={settings?.general.onboarding_seen ?? true}
           commandPalette={dialog.commandPaletteOpen ? { menus: menu, disabled: disabledCommands, checks: menuChecks, themes, currentTheme: slot.id, onPick: onNativePick, onClose: dialog.closeCommandPalette } : null}
         />
         {/* Native context menu replacement: portals to `document.body`, follows `AppDialogs` overlays, and renders `null` when closed. */}

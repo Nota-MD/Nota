@@ -4462,6 +4462,22 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         const panel = await waitFor<HTMLElement>(".nota-math-inline .nota-math-panel");
         const delimiters = [...panel.querySelectorAll<HTMLElement>(".nota-math-delim")];
         const input = await waitFor<HTMLInputElement>(".nota-math-inline .nota-math-source");
+        const preview = await waitFor<HTMLElement>(
+          "body > .nota-math-preview.nota-math-preview-floating.nota-math-preview-visible",
+        );
+        const previewMath = await waitFor<HTMLElement>(
+          "body > .nota-math-preview.nota-math-preview-floating .katex",
+        );
+        const previewMathBox = previewMath.getBoundingClientRect();
+        assert(
+          previewMathBox.width > previewMathBox.height,
+          `inline LaTeX preview collapsed into a wrapped column: ${previewMathBox.width.toFixed(1)}x${previewMathBox.height.toFixed(1)}`,
+        );
+        assert(
+          getComputedStyle(previewMath).whiteSpace === "nowrap",
+          "inline LaTeX preview still permits internal line wrapping",
+        );
+        assert(preview.getBoundingClientRect().width > 0, "inline LaTeX preview has no visible width");
         assertEqual(delimiters.length, 2, "inline formula did not expose two delimiters");
         const left = delimiters[0]!.getBoundingClientRect();
         const right = delimiters[1]!.getBoundingClientRect();

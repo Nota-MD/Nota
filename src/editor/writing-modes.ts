@@ -66,6 +66,8 @@ export const focusPathClass = "nota-focus-path";
 
 export const focusContainerClass = "nota-focus-container";
 
+export const focusModeClass = "nota-focus-mode";
+
 
 
 
@@ -170,24 +172,33 @@ export function writingModePlugin(initialStart: WritingMode = defaultWritingMode
             return m?.focus ? computeFocusPath(state) : null;
           },
         },
-        view: () => ({
-          update: (view, prevState) => {
-            const current2 = writingModeKey.getState(view.state);
-            if (!current2) return;
-            const before2 = writingModeKey.getState(prevState);
-
-
-            const wantRoll =
-              current2.typewriter &&
-              (!before2?.typewriter ||
-                view.state.selection.head !== prevState.selection.head ||
-                view.state.doc !== prevState.doc);
-            if (wantRoll) scheduleCurrentLineCenter(view);
-
-
-            return false;
-          },
-        }),
+        view: (editorView) => {
+          const syncFocusClass = (state: EditorState) => {
+            editorView.dom.classList.toggle(
+              focusModeClass,
+              Boolean(writingModeKey.getState(state)?.focus),
+            );
+          };
+          syncFocusClass(editorView.state);
+          return {
+            update: (view, prevState) => {
+              const current2 = writingModeKey.getState(view.state);
+              if (!current2) return;
+              syncFocusClass(view.state);
+              const before2 = writingModeKey.getState(prevState);
+              const wantRoll =
+                current2.typewriter &&
+                (!before2?.typewriter ||
+                  view.state.selection.head !== prevState.selection.head ||
+                  view.state.doc !== prevState.doc);
+              if (wantRoll) scheduleCurrentLineCenter(view);
+              return false;
+            },
+            destroy: () => {
+              editorView.dom.classList.remove(focusModeClass);
+            },
+          };
+        },
       }),
   );
 }

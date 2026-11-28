@@ -385,6 +385,11 @@ Milkdown（ProseMirror）自己拥有那块 `contenteditable`；React 只负责"
 | 切换模式前读一次滚动比例，新实例聚焦后优先恢复这个值 | 模式一变编辑器会重建；只用会话里的“打开文档位置”会让用户从当前阅读处跳回旧位置。比例比像素更耐受字号、正文宽度和分屏变化 |
 
 `handle.focus()` 在建好之后立刻调一次；`ready` 为假时显示「正在准备编辑器…」。
+⚠️ **挂载点有所有权**：`assemble.ts` 必须先把 `.nota-editor-root` 接入
+`.editor-mount`，再调用 `Editor.create()`。旧实例的 `destroy()` 只销毁自己的
+Milkdown 实例，**绝不能**再执行 `root.replaceChildren()`；StrictMode 的旧清理
+可能晚于新实例挂载，清空共享根节点会让新实例在 `finishEditorBootstrap` 检查时
+看起来“输入面没有挂上”。
 
 ⚠️ 这一整套（React 不碰编辑区 DOM）**存在的理由就是保护 IME 组合态**。
 中文输入的 IME 组合态**已由用户实测通过**（2026-09-23，`docs/07` BUG-5），

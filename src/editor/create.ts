@@ -530,7 +530,6 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
 
     destroy: () => {
       editor.destroy();
-      root.replaceChildren();
     },
   };
 }

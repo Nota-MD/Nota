@@ -139,7 +139,6 @@ pub enum Capability {
 
     #[serde(rename = "data.own")]
     DataOwn,
-
 }
 
 impl Capability {
@@ -274,7 +273,6 @@ pub struct Manifest {
     pub update: Option<UpdateSpec>,
 
     pub settings: Vec<SettingDecl>,
-
 }
 
 impl Manifest {

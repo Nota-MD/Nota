@@ -91,6 +91,17 @@ jobs:
 
       - run: npm install --no-audit --no-fund
 
+      - name: Patch Linux AppImage runtime hook
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          hook="$RUNNER_TEMP/linuxdeploy-plugin-gtk.sh"
+          curl -fsSL --retry 5 --retry-all-errors \
+            https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh \
+            -o "$hook"
+          node tools/patch-linuxdeploy-gtk-hook.mjs "$hook"
+          mkdir -p "$HOME/.cache/tauri"
+          install -m 0755 "$hook" "$HOME/.cache/tauri/linuxdeploy-plugin-gtk.sh"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           # tauri-action expects the token even for unsigned package builds.

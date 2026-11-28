@@ -151,6 +151,11 @@ Linux 显示后端默认交给 GDK 自动选择；启动日志会记录
 ⚠️ **两条判定都落在 `lib.rs`，不往 `single_instance.rs` 里搬**：
 `single_instance.rs` 只负责"第二份转交给第一份"，不负责解释 `--new-window`。
 
+Utility roles (`settings`, `about`, and `debug-log`) bypass the main application
+runtime. The debug-log role intentionally has no `AppState`, so the shared
+`on_page_load` hook must guard state access with `try_state`; otherwise the
+window panics before its ready handshake and appears not to open.
+
 
 ### ② `setup()` 里的几步
 

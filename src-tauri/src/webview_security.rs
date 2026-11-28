@@ -20,9 +20,7 @@ pub fn configure(
     #[cfg(target_os = "windows")]
     window
         .with_webview(move |webview| unsafe {
-            use webview2_com::Microsoft::Web::WebView2::Win32::{
-                ICoreWebView2Settings3,
-            };
+            use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
             use windows_core::Interface as _;
 
             let controller = webview.controller();

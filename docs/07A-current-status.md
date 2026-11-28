@@ -11,7 +11,7 @@ Feature completeness remains authoritative in
 
 | Item | Current state |
 |---|---|
-| Source version | `0.19.0-beta` |
+| Source version | `0.19.1-beta` |
 | Supported release platforms | Linux and Windows; macOS unsigned preview packages |
 | macOS | DMG builds are produced; runtime acceptance is partially confirmed and still needs final review |
 | Extensions | Official extensions ship from `Nota-plugins`; installers do not bundle them |

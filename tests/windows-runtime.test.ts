@@ -83,8 +83,12 @@ testCase("Utility windows use dedicated HTML entries", () => {
   const hostSource = read("src-tauri/src/window_host.rs");
   assertValue(
     hostSource.indexOf("settings_window_host::focus_existing()") <
-      hostSource.indexOf("let program = std::env::current_exe()"),
+      hostSource.indexOf("let program = launch_program()"),
     "opening Settings does not focus an existing Settings process first",
+  );
+  assertValue(
+    hostSource.includes('PathBuf::from("/proc/self/exe")'),
+    "Linux utility windows may retain a deleted development binary path",
   );
   assertValue(
     runtime.indexOf("if standalone_settings_window {") <

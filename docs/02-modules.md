@@ -2030,6 +2030,10 @@ WebView，并在 60ms 后再确认一次；只调 Tauri 的顶层 `set_focus()` 
 主题装载、插件加载与失败各一条；按键、滚动、正文、选区和凭据不进入日志。
 `--debug-log` 仍保留为完全不启动 WebView 的快照模式：写入临时 `.log` 后交给
 系统默认文本查看器，供 WebView 本身无法初始化时排障。
+The debug-log child deliberately skips `AppState` and plugin initialization.
+The shared `on_page_load` hook must therefore use `try_state` and configure
+WebView security only when application state exists; an unconditional lookup
+panics before the ready handshake.
 
 ### 测试
 

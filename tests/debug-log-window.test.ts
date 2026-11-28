@@ -101,6 +101,19 @@ testCase("统一窗口页加载后报告 ready 并显式把 GTK 输入焦点交�
   contains(lib, "window_host::signal_ready", "统一窗口页面加载后没有报告 ready");
 });
 
+testCase("日志窗口不依赖主应用状态", () => {
+  const lib = read("src-tauri/src/lib.rs");
+  const pageLoad = lib.slice(
+    lib.indexOf(".on_page_load(move |webview, payload| {"),
+    lib.indexOf("if let Some(role) = window_role.filter"),
+  );
+  contains(pageLoad, "app.try_state::<AppState>()", "日志页会无条件读取 AppState");
+  assertValue(
+    !pageLoad.includes("app.state::<AppState>()"),
+    "日志进程没有 AppState，页面加载回调会 panic",
+  );
+});
+
 testCase("后端日志同时写入持久文件，并提供增量读取命令", () => {
   const log = read("src-tauri/src/log.rs");
   const commands = read("src-tauri/src/commands/diagnostics.rs");

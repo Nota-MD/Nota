@@ -44,9 +44,13 @@ The profile controls:
 ## Bootstrap
 
 When `bootstrap.backup` is present, the embedded settings package is validated
-and applied once before `Settings::load()`. Existing profiles are never
-overwritten. Credentials and trusted signing keys must not be embedded in a
-public organization build.
+and applied once before `Settings::load()` on the first profile launch. A
+successful import writes a revisioned completion marker. Later launches and
+updates preserve the user's current settings, themes, extension selections and
+onboarding state; the embedded package is not re-applied. If either user
+settings or the completion marker already exists, bootstrap is skipped.
+Credentials and trusted signing keys must not be embedded in a public
+organization build.
 
 Embedded extension packages are installed through the normal package validation
 path. They do not gain capabilities beyond their `plugin.toml` declaration.

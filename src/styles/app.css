@@ -250,9 +250,24 @@ button {
 }
 
 .app-body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+  --dock-active-width: var(--dock-width);
+}
+
+.app-body:has(.plugin-dock[data-wide="true"]) {
+  --dock-active-width: min(560px, 45vw);
+}
+
+.app-body[data-sidebar-open="true"] > .app-main {
+  margin-left: calc(var(--sidebar-width) + var(--sidebar-gutter));
+}
+
+.app-body[data-dock-open="true"] > .app-main {
+  margin-right: var(--dock-active-width);
 }
 
 

@@ -75,6 +75,7 @@
 
 
   --duration-fast: 120ms;
+  --panel-motion-duration: 220ms;
 
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);

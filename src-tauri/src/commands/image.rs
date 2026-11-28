@@ -279,7 +279,9 @@ fn copy_image_file(source: &str, target: &str) -> Result<String> {
     let source_2 = image_source_path(source)?;
     let target_2 = image_target_path(target)?;
     if source_2 == target_2 {
-        return Err(NotaError::other("The image source and destination are the same"));
+        return Err(NotaError::other(
+            "The image source and destination are the same",
+        ));
     }
     std::fs::copy(&source_2, &target_2)
         .map_err(|error| NotaError::other(format!("Could not copy the image: {error}")))?;
@@ -298,8 +300,9 @@ fn move_image_file(source: &str, target: &str) -> Result<String> {
     if std::fs::rename(&source_2, &target_2).is_err() {
         std::fs::copy(&source_2, &target_2)
             .map_err(|error| NotaError::other(format!("Could not move the image: {error}")))?;
-        std::fs::remove_file(&source_2)
-            .map_err(|error| NotaError::other(format!("Could not remove the old image: {error}")))?;
+        std::fs::remove_file(&source_2).map_err(|error| {
+            NotaError::other(format!("Could not remove the old image: {error}"))
+        })?;
     }
     Ok(target_2.to_string_lossy().into_owned())
 }

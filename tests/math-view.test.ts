@@ -683,6 +683,10 @@ await testCase("行内公式只有 `$` 弱化，源码保持强调色，预览�
     /body > \.nota-math-preview\.nota-math-preview-floating\s*\{[^}]*background:\s*var\(--bg-raised\)/s.test(css),
     "行内公式预览仍是与主题割裂的黑色浮层",
   );
+  assertion(
+    /body > \.nota-math-preview\.nota-math-preview-floating > \.katex,[\s\S]*?white-space:\s*nowrap\s*!important;/s.test(css),
+    "行内公式预览允许 KaTeX 在内部间距处拆行",
+  );
   equal(
     JSON.stringify(inlinePreviewCenter({
       left: 100,

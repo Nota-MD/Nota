@@ -159,3 +159,59 @@ fn extension_package_is_inspected_and_staged_separately() {
     drop(prepared);
     cleanup_directory(&root);
 }
+
+#[test]
+fn embedded_bootstrap_is_applied_only_once() {
+    let root = test_root("embedded-bootstrap");
+    let paths = test_paths(&root);
+    let resource = root.join("resource");
+    let distribution = resource.join("distribution");
+    fs::create_dir_all(&distribution).unwrap();
+    let package = package_with(
+        &root,
+        &[
+            (
+                "program/settings.toml",
+                b"document_theme = \"org-theme\"\n[general]\nonboarding_seen = false\n",
+            ),
+            ("themes/org-theme/theme.css", b":root { color: black; }\n"),
+        ],
+    );
+    fs::copy(&package, distribution.join("bootstrap.nota-backup")).unwrap();
+    fs::write(
+        distribution.join("distribution.json"),
+        serde_json::json!({
+            "id": "test-org",
+            "bootstrap": {
+                "revision": 1,
+                "allowExtensionSettings": false
+            },
+            "resources": {
+                "bootstrap": "bootstrap.nota-backup"
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    assert!(apply_embedded_bootstrap_with_paths(&resource, &paths)
+        .unwrap()
+        .is_some());
+    let settings_path = paths.config.join("settings.toml");
+    let installed = fs::read_to_string(&settings_path).unwrap();
+    assert!(installed.contains("org-theme"));
+    assert!(paths
+        .config
+        .join("themes/document/org-theme/theme.css")
+        .is_file());
+
+    fs::write(&settings_path, "document_theme = \"user-theme\"\n").unwrap();
+    assert!(apply_embedded_bootstrap_with_paths(&resource, &paths)
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        fs::read_to_string(&settings_path).unwrap(),
+        "document_theme = \"user-theme\"\n"
+    );
+    cleanup_directory(&root);
+}

@@ -269,8 +269,18 @@ testCase("专注模式只标记光标路径，不逐块生成压暗装饰", () =
     "路径装饰没有直接使用解析后的节点位置",
   );
   assertValue(
-    css.includes(".ProseMirror .nota-focus-container > :not(.nota-focus-path)"),
+    /\.ProseMirror\.nota-focus-mode\s+\.nota-focus-container\s*>\s*:not\(\.nota-focus-path\)/.test(
+      css,
+    ),
     "CSS 没有按路径容器压暗兄弟块",
+  );
+  assertValue(
+    modes.includes("focusModeClass") && modes.includes("nota-focus-mode"),
+    "专注模式没有把开启状态写到编辑器根节点",
+  );
+  assertValue(
+    css.includes(".ProseMirror.nota-focus-mode > :not(.nota-focus-path)"),
+    "压暗规则没有限定在专注模式开启状态",
   );
 });
 

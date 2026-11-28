@@ -312,6 +312,9 @@ export const api = {
   settings: {
     get: () => invoke<Settings>("nota_settings_get"),
     set: (settings: Settings) => invoke<void>("nota_settings_set", { settings }),
+    patch: (patch: Partial<Settings>) => invoke<Settings>("nota_settings_patch", { patch }),
+    completeOnboarding: () =>
+      invoke<Settings>("nota_settings_complete_onboarding"),
     exportInventory: () =>
       invoke<SettingsExportInventory>("nota_settings_export_inventory"),
     exportPackage: (request: SettingsExportRequest) =>

@@ -498,6 +498,8 @@ pub fn run() {
             commands::workspace::nota_workspace_excerpts,
             commands::settings::nota_settings_get,
             commands::settings::nota_settings_set,
+            commands::settings::nota_settings_patch,
+            commands::settings::nota_settings_complete_onboarding,
             commands::window::nota_window_open_devtools,
             commands::window::nota_window_open_debug_log,
             commands::window::nota_window_show_main,
@@ -716,19 +718,15 @@ pub fn run() {
 
         .on_page_load(move |webview, payload| {
             let app = webview.app_handle();
-            let general = app
-                .state::<AppState>()
-                .settings
-                .lock()
-                .unwrap()
-                .general
-                .clone();
-            if let Err(error) = webview_security::configure(
-                app,
-                general.debug_mode,
-                general.webview_default_shortcuts,
-            ) {
-                crate::debug_log!("[nota] WebView security configuration failed: {error}");
+            if let Some(state) = app.try_state::<AppState>() {
+                let general = state.settings.lock().unwrap().general.clone();
+                if let Err(error) = webview_security::configure(
+                    app,
+                    general.debug_mode,
+                    general.webview_default_shortcuts,
+                ) {
+                    crate::debug_log!("[nota] WebView security configuration failed: {error}");
+                }
             }
             if let Some(role) = window_role.filter(|role| role.utility()) {
                 if webview.label() != "main" {

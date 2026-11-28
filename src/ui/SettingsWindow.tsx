@@ -77,7 +77,8 @@ export function SettingsWindow() {
       const next = { ...settings, ...patch };
       setSettings(next);
       try {
-        await api.settings.set(next);
+        const saved = await api.settings.patch(patch);
+        setSettings(saved);
       } catch (error) {
         setSettings(previous);
         toast(t("Could not save the settings: {0}", String(error)), "error");

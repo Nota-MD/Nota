@@ -325,6 +325,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
   const mount = document.createElement("div");
   mount.className = "nota-editor-root";
   mount.style.display = "contents";
+  root.replaceChildren(mount);
 
   const editor = await Editor.make()
     .config((ctx) => {
@@ -724,6 +725,5 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
 
     .use(readOnly ? [] : [previewPlugin(options.review ?? null, options.onReviewEscape ?? (() => {}))])
     .create();
-  root.replaceChildren(mount);
   return editor;
 }

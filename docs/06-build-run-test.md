@@ -249,7 +249,10 @@ dmg 只能在对应的机器上打——**交叉那一步 Tauri 不做**。
 helper cannot be built against Ubuntu 22.04's GTK 4.6. This raises the practical
 glibc baseline for released Linux binaries.
 
-The release workflow patches Tauri's linuxdeploy GTK hook before packaging.
+The release workflow patches Tauri's linuxdeploy GTK hook after packaging,
+rewrites the AppDir, and replaces the draft release asset. Patching the Tauri
+tool cache before packaging is not sufficient because the bundler can copy a
+fresh hook into the AppDir.
 The hook forces GDK to X11, so it must also replace an inherited
 `GTK_IM_MODULE=wayland` with the bundled XIM module. It also restricts GIO to
 the modules inside the AppDir. Without those two steps, a Debian or Fedora host

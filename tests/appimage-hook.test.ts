@@ -49,18 +49,18 @@ testCase("patched GTK hook isolates GIO and avoids the Wayland input module on X
   }
 });
 
-testCase("release workflow patches the cached GTK hook before Tauri packages AppImage", () => {
+testCase("release workflow repairs the packaged AppDir and replaces the release asset", () => {
   const workflow = readFileSync(".github/workflows/release.yml", "utf8");
-  const patch = workflow.indexOf("Patch Linux AppImage runtime hook");
   const bundle = workflow.indexOf("tauri-apps/tauri-action");
-  assert(patch >= 0 && bundle > patch, "release workflow uses the unpatched GTK hook");
+  const repair = workflow.indexOf("Repair Linux AppImage runtime hook");
+  assert(bundle >= 0 && repair > bundle, "release workflow packages before repairing the AppImage");
   assert(
-    workflow.includes("node tools/patch-linuxdeploy-gtk-hook.mjs"),
-    "release workflow does not invoke the hook patch",
+    workflow.includes("bash tools/repair-linux-appimage.sh"),
+    "release workflow does not repair the packaged AppImage",
   );
   assert(
-    workflow.includes("$HOME/.cache/tauri/linuxdeploy-plugin-gtk.sh"),
-    "release workflow does not seed the Tauri tool cache",
+    workflow.includes('gh release upload "$GITHUB_REF_NAME" "$image" --clobber'),
+    "release workflow leaves the original AppImage asset in place",
   );
 });
 

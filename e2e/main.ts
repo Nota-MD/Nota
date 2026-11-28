@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 
 import type { Document as NotaDocument } from "@/bridge/ipc";
 import { createEditor, type EditorHandle } from "@/editor/create";
+import { createSourceEditor } from "@/editor/source";
 import { applyDocTheme } from "@/styles/doc-theme";
 import { imageOnlyFromClipboardHtml } from "@/ui/useImageInsert";
 import { PanelMarkdown } from "@/ui/panel-markdown";
@@ -4066,6 +4067,27 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "HTML image dimensions survive the image model",
+    async run() {
+      const svg =
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1254\" height=\"1254\" viewBox=\"0 0 1254 1254\"><rect width=\"1254\" height=\"1254\" fill=\"red\"/></svg>";
+      const image =
+        `data:image/svg+xml;base64,${btoa(svg)}`;
+      await mount(`<p align="center"><img src="${image}" alt="sized" width="92" /></p>`);
+      const rendered = await waitFor<HTMLImageElement>(".nota-image img");
+      assertEqual(rendered.getAttribute("width"), "92", "HTML image width was discarded");
+      const box = rendered.getBoundingClientRect();
+      assert(
+        Math.abs(box.width - 92) <= 1 && Math.abs(box.height - 92) <= 1,
+        `sized HTML image rendered at ${box.width.toFixed(1)}x${box.height.toFixed(1)}`,
+      );
+      assert(
+        serialized().includes('width="92"'),
+        "saving the sized image discarded its width",
+      );
+    },
+  },
+  {
     name: "Typora regression: typing an auto-paired image destination creates an image node",
     async run() {
       await mount("", {
@@ -4455,13 +4477,22 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         p { margin: 0; text-indent: 1.55em; }
         #write :is(p):lang(zh) { line-height: 1.68; line-break: strict; }
       `);
+      const previousMathFont = document.body.style.getPropertyValue("--font-math");
+      const previousLetterSpacing = document.body.style.letterSpacing;
+      const previousWordSpacing = document.body.style.wordSpacing;
+      const previousLineHeight = document.body.style.lineHeight;
+      document.body.style.setProperty("--font-math", "monospace");
+      document.body.style.letterSpacing = "0.12em";
+      document.body.style.wordSpacing = "0.2em";
+      document.body.style.lineHeight = "2";
       try {
-        await mount("$\\LaTeX$");
+        await mount("$\\sum_{1}^{2}\\LaTeX$");
         await openInlineMath();
         await nextFrames();
         const panel = await waitFor<HTMLElement>(".nota-math-inline .nota-math-panel");
         const delimiters = [...panel.querySelectorAll<HTMLElement>(".nota-math-delim")];
         const input = await waitFor<HTMLInputElement>(".nota-math-inline .nota-math-source");
+        const ruler = await waitFor<HTMLElement>(".nota-math-inline .nota-math-ruler");
         const preview = await waitFor<HTMLElement>(
           "body > .nota-math-preview.nota-math-preview-floating.nota-math-preview-visible",
         );
@@ -4477,6 +4508,17 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
           getComputedStyle(previewMath).whiteSpace === "nowrap",
           "inline LaTeX preview still permits internal line wrapping",
         );
+        const previewStyle = getComputedStyle(previewMath);
+        assert(
+          previewStyle.fontFamily.toLowerCase().includes("katex_main"),
+          `inline LaTeX preview lost KaTeX metrics: ${previewStyle.fontFamily}`,
+        );
+        assertEqual(previewStyle.letterSpacing, "normal", "inline LaTeX inherited document letter spacing");
+        assert(
+          previewStyle.wordSpacing === "normal" || previewStyle.wordSpacing === "0px",
+          `inline LaTeX inherited document word spacing: ${previewStyle.wordSpacing}`,
+        );
+        assertEqual(previewStyle.lineHeight, "normal", "inline LaTeX inherited document line height");
         assert(preview.getBoundingClientRect().width > 0, "inline LaTeX preview has no visible width");
         assertEqual(delimiters.length, 2, "inline formula did not expose two delimiters");
         const left = delimiters[0]!.getBoundingClientRect();
@@ -4489,8 +4531,11 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
           `inline formula has a layout gap: left=${leftGap.toFixed(2)}px right=${rightGap.toFixed(2)}px ` +
             `source=${source.width.toFixed(2)}px`,
         );
-        assert(source.width < 100, `source input kept a character-column width: ${source.width.toFixed(2)}px`);
-
+        const rulerWidth = ruler.getBoundingClientRect().width;
+        assert(
+          Math.abs(source.width - rulerWidth) < 2,
+          `source input width ${source.width.toFixed(2)}px drifted from its ruler ${rulerWidth.toFixed(2)}px`,
+        );
         input.value = "";
         input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
         await nextFrames();
@@ -4504,6 +4549,49 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         );
       } finally {
         applyDocTheme(null);
+        document.body.style.setProperty("--font-math", previousMathFont);
+        document.body.style.letterSpacing = previousLetterSpacing;
+        document.body.style.wordSpacing = previousWordSpacing;
+        document.body.style.lineHeight = previousLineHeight;
+      }
+    },
+  },
+  {
+    name: "empty source mode keeps only its placeholder",
+    async run() {
+      editor?.destroy();
+      editor = null;
+      editorHost.replaceChildren();
+      const pane = document.createElement("div");
+      pane.className = "editor-pane editor-pane-source";
+      const root = document.createElement("div");
+      root.className = "editor-mount";
+      pane.append(root);
+      editorHost.append(pane);
+      const source = createSourceEditor({ root, initialMarkdown: "" });
+      try {
+        source.focusAtStart();
+        await nextFrames(3);
+        const line = await waitFor<HTMLElement>(".cm-line");
+        const placeholder = await waitFor<HTMLElement>(".cm-placeholder");
+        const active = await waitFor<HTMLElement>(".cm-activeLine");
+        const lineBox = line.getBoundingClientRect();
+        const placeholderBox = placeholder.getBoundingClientRect();
+        assert(lineBox.height >= placeholderBox.height, `empty source line collapsed: ${lineBox.height}px`);
+        const activeStyle = getComputedStyle(active);
+        assert(
+          activeStyle.backgroundColor === "rgba(0, 0, 0, 0)" ||
+            activeStyle.backgroundColor === "transparent",
+          `empty source active line painted a strip: ${activeStyle.backgroundColor}`,
+        );
+        assertEqual(activeStyle.borderBottomWidth, "0px", "empty source active line has a border");
+        assertEqual(activeStyle.boxShadow, "none", "empty source active line has a shadow");
+        const placeholderStyle = getComputedStyle(placeholder);
+        assertEqual(placeholderStyle.borderBottomWidth, "0px", "source placeholder has a border");
+        assertEqual(placeholderStyle.boxShadow, "none", "source placeholder has a shadow");
+      } finally {
+        source.destroy();
+        editorHost.replaceChildren();
       }
     },
   },

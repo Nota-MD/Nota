@@ -72,6 +72,8 @@ interface MdastNode {
   value?: string | null;
   zoom?: number;
   syntax?: "markdown" | "html";
+  width?: string;
+  height?: string;
   children?: MdastNode[];
 }
 
@@ -83,6 +85,8 @@ export function imageFromHtmlOnly(
   title: string;
   zoom: number;
   syntax: "html";
+  width: string;
+  height: string;
 } | null {
   const image = /^\s*(?:<(p|div|span)\b[^>]*>\s*)?<img\b([^>]*?)\/?>\s*(?:<\/\1>\s*)?$/i.exec(
     source,
@@ -109,6 +113,8 @@ export function imageFromHtmlOnly(
     title: attributes.get("title") ?? "",
     zoom: Number.isFinite(parsedZoom) && parsedZoom > 0 ? parsedZoom : 100,
     syntax: "html",
+    width: attributes.get("width")?.trim() ?? "",
+    height: attributes.get("height")?.trim() ?? "",
   };
 }
 
@@ -131,7 +137,9 @@ export function normalizeImageHtmlNodes(node: MdastNode): void {
             alt: parsed.alt,
             title: parsed.title,
             zoom: parsed.zoom,
-            syntax: "markdown",
+            syntax: parsed.width || parsed.height ? "html" : "markdown",
+            width: parsed.width,
+            height: parsed.height,
           };
           return node.type === "root"
             ? { type: "paragraph", children: [image] }
@@ -152,7 +160,9 @@ export function normalizeImageHtmlNodes(node: MdastNode): void {
             alt: parsed.alt,
             title: parsed.title,
             zoom: parsed.zoom,
-            syntax: "markdown",
+              syntax: parsed.width || parsed.height ? "html" : "markdown",
+              width: parsed.width,
+              height: parsed.height,
           };
           return node.type === "root"
             ? { type: "paragraph", children: [image] }

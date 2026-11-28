@@ -274,6 +274,24 @@ testCase("Milkdown 的 image-only paragraph(html) uses the Markdown image model"
   equal(image?.syntax, "markdown", "image uses the Markdown source model");
 });
 
+testCase("HTML image dimensions survive conversion", () => {
+  const source = '<p align="center"><img src="a.svg" width="92"></p>';
+  const tree: MarkdownNode = {
+    type: "root",
+    children: [
+      {
+        type: "paragraph",
+        children: [{ type: "html", value: source }],
+      },
+    ],
+  };
+  blockHTMLConvertReplace(tree);
+  const image = tree.children?.[0]?.children?.[0];
+  equal(image?.type, "image", "sized HTML image becomes an image node");
+  equal(image?.syntax, "html", "sized HTML image keeps HTML serialization");
+  equal(image?.width, "92", "image width survives conversion");
+});
+
 testCase("Milkdown 的 non-image paragraph(html) still becomes a block", () => {
   const source = '<p align="center">plain</p>';
   const tree: MarkdownNode = {

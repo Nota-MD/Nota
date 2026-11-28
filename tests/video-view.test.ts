@@ -371,6 +371,8 @@ testCase("HTML containing only an image uses the Markdown image model", () => {
       title: "Title",
       zoom: 100,
       syntax: "html",
+      width: "",
+      height: "",
     }),
     "standalone image tag",
   );
@@ -384,6 +386,8 @@ testCase("HTML containing only an image uses the Markdown image model", () => {
       title: "",
       zoom: 100,
       syntax: "html",
+      width: "",
+      height: "",
     }),
     "paragraph image wrapper",
   );
@@ -395,6 +399,8 @@ testCase("HTML containing only an image uses the Markdown image model", () => {
       title: "",
       zoom: 100,
       syntax: "html",
+      width: "",
+      height: "",
     }),
     "div image wrapper",
   );
@@ -409,6 +415,21 @@ testCase("HTML containing only an image uses the Markdown image model", () => {
     "HTML zoom",
   );
   equal(
+    JSON.stringify(
+      imageFromHtmlOnly('<img src="a.png" alt="Sized" width="92" height="48" />'),
+    ),
+    JSON.stringify({
+      src: "a.png",
+      alt: "Sized",
+      title: "",
+      zoom: 100,
+      syntax: "html",
+      width: "92",
+      height: "48",
+    }),
+    "HTML image size",
+  );
+  equal(
     htmlImageSource({
       src: "a&b.png",
       alt: 'A "quote"',
@@ -418,6 +439,19 @@ testCase("HTML containing only an image uses the Markdown image model", () => {
     }),
     '<img src="a&amp;b.png" alt="A &quot;quote&quot;" style="zoom:150%;" />',
     "HTML serialization",
+  );
+  equal(
+    htmlImageSource({
+      src: "a.png",
+      alt: "Sized",
+      title: "",
+      width: "92",
+      height: "48",
+      syntax: "html",
+      zoom: 100,
+    }),
+    '<img src="a.png" alt="Sized" width="92" height="48" />',
+    "HTML image size serialization",
   );
   const tree = fromMarkdown(
     '<img src="a.png" alt="Example" title="Title" />',

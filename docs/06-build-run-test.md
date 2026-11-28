@@ -370,9 +370,11 @@ rm -rf src-tauri/icons/android src-tauri/icons/ios   # 这两个不要
 跟"透明 + 浅卡片"长得一样），只有落到深色任务栏的用户那儿才现形
 （用户朋友 2026-10-11 报的「图标裁切问题：没有裁切好透明底」正是这个）。
 
-⚠️ `nota.svg` 里写的是 `width="100%" height="100%"` + `viewBox="0 0 1254 1254"`，
-**故意不给固定像素**——这样 Chrome 会按窗口尺寸整幅缩放（给 1024 就出 1024），
-而不是**按原尺寸画完再裁**。少了这一条，出图会是被裁掉一角的。
+`nota.svg` declares the numeric intrinsic size `1254x1254` together with
+`viewBox="0 0 1254 1254"`. WebKitGTK treats percentage SVG dimensions loaded
+through an image data URL as zero-sized, which made Markdown images disappear.
+The explicit dimensions keep direct icon generation and WebView image loading
+both reliable while the viewBox preserves proportional scaling.
 
 ⚠️ `tauri icon` 会把 `android/` 和 `ios/` 也一并生成，而 Nota 不做移动端，
 留着会让人以为 Nota 有手机版。

@@ -335,6 +335,9 @@ const notaTheme = EditorView.theme({
   "&.cm-focused .cm-activeLine": {
     backgroundColor: "color-mix(in srgb, var(--fg) 5%, transparent)",
   },
+  "&.cm-focused:has(.cm-placeholder) .cm-activeLine": {
+    backgroundColor: "transparent",
+  },
   ".cm-gutters": {
     backgroundColor: "transparent",
     color: "var(--fg-faint)",

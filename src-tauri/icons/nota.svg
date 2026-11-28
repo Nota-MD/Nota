@@ -20,17 +20,16 @@
 
   # 出图两步（见 `docs/06` §2.4「图标」）
 
-  ⚠️ `width="100%" height="100%"` ＋ `viewBox` 是**必须的写法**：给死像素
-  （原件写的是 `width="1254" height="1254"`）时 Chrome 会**按原尺寸画完再裁**，
-  512 的窗口里出一张被裁掉一角的图（实拍过）。这一条是老母版留下的，
-  换图时**别丢**。
+  SVG must carry a numeric intrinsic size as well as its viewBox. WebKitGTK
+  treats percentage dimensions on an SVG loaded through an image data URL as
+  zero-sized, which leaves Markdown images completely invisible.
 
   ⚠️ Chrome 无头截图**总会给一张白底**（那个 "default background color" 开关
   在新无头模式下不生效，实测），所以那一步出来的 PNG 四角是白的——
   出图脚本里**跟着补一刀**把外面那圈白抠成透明（`docs/06` §2.4 那条命令里
   写着怎么做）。
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" width="1254" height="1254">
   <title>Nota · 斜纹 N</title>
   <defs>
     <filter id="drop" x="-15%" y="-15%" width="130%" height="130%">

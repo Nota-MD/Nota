@@ -1,7 +1,7 @@
 {
   "name": "nota",
   "private": true,
-  "version": "0.19.1-beta",
+  "version": "0.19.2-beta",
   "type": "module",
   "description": "Nota - a WYSIWYG Markdown editor with Lua extensions (Tauri + ProseMirror)",
   "license": "BSD-2-Clause",

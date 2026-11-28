@@ -4,6 +4,20 @@ Nota keeps short release-line notes. Full evidence, defect identifiers and
 historical details are in
 [`docs/07-feature-status.md`](docs/07-feature-status.md).
 
+## 0.19.2-beta
+
+- Formula previews now keep KaTeX's own font metrics, normal letter spacing,
+  normal word spacing and normal line height even when the active document
+  theme uses a monospaced math fallback or aggressive typography.
+- The `\LaTeX` logo and sum limits in inline previews no longer spread into the
+  malformed two-row shape visible under those themes.
+- HTML images now retain explicit `width` and `height` attributes when they are
+  converted to the editor image model and when the document is serialized.
+- SVG images with percentage-only dimensions no longer disappear in WebKitGTK.
+  The Nota icon carries a numeric intrinsic size while keeping its viewBox.
+- Empty source mode no longer paints the active-line background behind the
+  Markdown placeholder.
+
 ## 0.19.1-beta
 
 - Settings updates from the main window, Settings window and About window now

@@ -485,8 +485,16 @@
 
 
 .editor-mount .ProseMirror .nota-math-render .katex,
-.editor-mount .ProseMirror .nota-math-preview .katex {
-  font-family: var(--font-math);
+.editor-mount .ProseMirror .nota-math-preview .katex,
+body > .nota-math-preview.nota-math-preview-floating > .katex {
+  font-family: "KaTeX_Main", var(--font-math) !important;
+  font-feature-settings: normal !important;
+  font-kerning: normal !important;
+  font-variant: normal !important;
+  font-variant-ligatures: normal !important;
+  letter-spacing: normal !important;
+  line-height: normal !important;
+  word-spacing: normal !important;
 }
 
 

@@ -148,7 +148,9 @@ export function blockHTMLConvertReplace(tree: MarkdownNode): void {
           alt: imageValue.alt,
           title: imageValue.title,
           zoom: imageValue.zoom,
-          syntax: "markdown",
+          syntax: imageValue.width || imageValue.height ? "html" : "markdown",
+          width: imageValue.width,
+          height: imageValue.height,
         };
         children[index] =
           node.type === "root" ? { type: "paragraph", children: [image] } : image;
@@ -172,7 +174,9 @@ export function blockHTMLConvertReplace(tree: MarkdownNode): void {
               alt: imageValue.alt,
               title: imageValue.title,
               zoom: imageValue.zoom,
-              syntax: "markdown",
+              syntax: imageValue.width || imageValue.height ? "html" : "markdown",
+              width: imageValue.width,
+              height: imageValue.height,
             };
             children[index] =
               node.type === "root"

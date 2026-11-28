@@ -266,7 +266,13 @@ function writeAttribute(
   item3.mediaBody.dataset.notaSource = src;
   item3.mediaBody.dataset.notaImageSyntax = text2(node.attrs.syntax) || "markdown";
   const zoom = Number(node.attrs.zoom ?? 100);
+  const width = text2(node.attrs.width);
+  const height = text2(node.attrs.height);
   item3.mediaBody.dataset.notaImageZoom = String(zoom);
+  if (width) item3.mediaBody.setAttribute("width", width);
+  else item3.mediaBody.removeAttribute("width");
+  if (height) item3.mediaBody.setAttribute("height", height);
+  else item3.mediaBody.removeAttribute("height");
   item3.dom.style.setProperty(
     "--nota-image-zoom",
     String(Number.isFinite(zoom) && zoom > 0 ? zoom / 100 : 1),
@@ -342,8 +348,15 @@ export function imageMarkdownSource(node: PMNode): string {
     title: text2(node.attrs.title),
     syntax: node.attrs.syntax === "html" ? "html" : "markdown",
     zoom: Number(node.attrs.zoom ?? 100),
+    width: text2(node.attrs.width),
+    height: text2(node.attrs.height),
   };
-  if (attributes.syntax === "html" || attributes.zoom !== 100) {
+  if (
+    attributes.syntax === "html" ||
+    attributes.zoom !== 100 ||
+    attributes.width ||
+    attributes.height
+  ) {
     return htmlImageSource(attributes);
   }
   const src = attributes.src;

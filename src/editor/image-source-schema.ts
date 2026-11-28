@@ -9,6 +9,8 @@ export interface ImageSourceAttributes {
   title: string;
   syntax: ImageSourceSyntax;
   zoom: number;
+  width?: string;
+  height?: string;
 }
 
 interface MarkdownImageNode {
@@ -17,6 +19,8 @@ interface MarkdownImageNode {
   title?: string | null;
   syntax?: ImageSourceSyntax;
   zoom?: number;
+  width?: string | number | null;
+  height?: string | number | null;
 }
 
 function attribute(value: unknown): string {
@@ -31,12 +35,15 @@ export function htmlImageSource(attributes: Partial<ImageSourceAttributes>): str
   const src = attribute(attributes.src);
   const alt = attribute(attributes.alt);
   const title = attribute(attributes.title);
+  const width = attribute(attributes.width);
+  const height = attribute(attributes.height);
   const zoom = Number(attributes.zoom ?? 100);
   const style =
     Number.isFinite(zoom) && zoom > 0 && zoom !== 100
       ? ` style="zoom:${zoom}%;"`
       : "";
-  return `<img src="${src}" alt="${alt}"${title ? ` title="${title}"` : ""}${style} />`;
+  const size = `${width ? ` width="${width}"` : ""}${height ? ` height="${height}"` : ""}`;
+  return `<img src="${src}" alt="${alt}"${title ? ` title="${title}"` : ""}${size}${style} />`;
 }
 
 function sourceSyntax(value: unknown): ImageSourceSyntax {
@@ -60,6 +67,8 @@ export const imageSourceSyntaxSpec = imageSchema.extendSchema(
         ...spec.attrs,
         syntax: { default: "markdown", validate: "string" },
         zoom: { default: 100, validate: "number" },
+        width: { default: "", validate: "string" },
+        height: { default: "", validate: "string" },
       },
       parseDOM: [
         {
@@ -79,6 +88,8 @@ export const imageSourceSyntaxSpec = imageSchema.extendSchema(
               zoom: sourceZoom(
                 dom.getAttribute("data-nota-image-zoom") ?? styleZoom,
               ),
+              width: dom.getAttribute("width") ?? "",
+              height: dom.getAttribute("height") ?? "",
             };
           },
         },
@@ -94,6 +105,8 @@ export const imageSourceSyntaxSpec = imageSchema.extendSchema(
           ...output[1],
           "data-nota-image-syntax": sourceSyntax(node.attrs.syntax),
           "data-nota-image-zoom": String(sourceZoom(node.attrs.zoom)),
+          width: String(node.attrs.width ?? "") || undefined,
+          height: String(node.attrs.height ?? "") || undefined,
         };
         const zoom = sourceZoom(node.attrs.zoom);
         if (zoom !== 100) {
@@ -114,6 +127,8 @@ export const imageSourceSyntaxSpec = imageSchema.extendSchema(
             title: node.title ?? "",
             syntax: sourceSyntax(node.syntax),
             zoom: sourceZoom(node.zoom),
+            width: String(node.width ?? ""),
+            height: String(node.height ?? ""),
           });
         }) as ParserRunner,
       },
@@ -122,7 +137,9 @@ export const imageSourceSyntaxSpec = imageSchema.extendSchema(
         runner: ((state: Parameters<SerializerRunner>[0], node: PMNode) => {
           const syntax = sourceSyntax(node.attrs.syntax);
           const zoom = sourceZoom(node.attrs.zoom);
-          if (syntax === "html" || zoom !== 100) {
+          const width = String(node.attrs.width ?? "");
+          const height = String(node.attrs.height ?? "");
+          if (syntax === "html" || zoom !== 100 || width || height) {
             state.addNode(
               "html",
               undefined,
@@ -131,6 +148,8 @@ export const imageSourceSyntaxSpec = imageSchema.extendSchema(
                 alt: String(node.attrs.alt ?? ""),
                 title: String(node.attrs.title ?? ""),
                 zoom,
+                width,
+                height,
               }),
             );
             return;
